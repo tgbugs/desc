@@ -54,7 +54,8 @@ class relType(relatable):   #note that inheritance is being treated implicitly; 
         self.name = name
         self.constraint = constraint
 
-class identityRelation(relType):
+#class identityRelation(relType): #we do not do this because we want to
+#pretend that these classes are actually types so we can make fake generics
 
 
 

@@ -28,6 +28,8 @@
         #probably going to need to subtype these based on the function we use to output them eg text vs pictures
     #asdf
 
+#note: open scene graph, panda3d <- apparently panda3d can be build w/ python3 support
+
 from uuid import uuid4
 
 class relatable:
@@ -47,22 +49,27 @@ class relatable:
 
     #def __hash__(self): #may want to make this the UUID?
 
-class relType(relatable):   #note that inheritance is being treated implicitly; different types should NOT use inheritance? or should they?
                             #the issue here is whether the code of the program is considered data or not >_<
+class relType(relatable):   #note that inheritance is being treated implicitly; different types should NOT use inheritance? or should they?
     """ """
-    def __init__(self , name:str , constraint = lambda left,right = None ):
+    def __init__(self , name:str , constraint = lambda left,right = False ):
         self.name = name
-        self.constraint = constraint
+        self.constraint = constraint #sanity check?
+
+    def __call__(self , left , right ):
+        return self.constraint( left , right )
 
 #class identityRelation(relType): #we do not do this because we want to
 #pretend that these classes are actually types so we can make fake generics
+
+#what is the minimal data stucture needed to state that a diagram commutes?
 
 
 
 class relationship(relatable):
     def __init__(self, relType:relType, left:relatable , right:relatable , kwargs** ):
         super().__init__()
-        self.type_ = relType(left #could just be a string?
+        self.type_ = relType(left,right) #could just be a string?
         self.left = left #table + key OR the whole object?
         self.right = right #we *could* make this the whole object but that gets inefficient
         #passing left and right as ints seems like a bad idea... since we don't know the actual identity of the objects
@@ -72,3 +79,15 @@ class relationship(relatable):
 
 #initial types
 IDENTITY_RELATION = relType('identity') #vs equality relation??
+
+
+
+class Object:
+    """ ologs! """
+    def __init__(self, type_):
+        self.type_ = type_
+
+
+class Morphism:
+    def __init__(self, origin, target, aspect):
+

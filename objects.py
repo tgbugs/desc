@@ -62,7 +62,6 @@ class relType(relatable):   #note that inheritance is being treated implicitly; 
 #class identityRelation(relType): #we do not do this because we want to
 #pretend that these classes are actually types so we can make fake generics
 
-#what is the minimal data stucture needed to state that a diagram commutes?
 
 
 
@@ -81,13 +80,27 @@ class relationship(relatable):
 IDENTITY_RELATION = relType('identity') #vs equality relation??
 
 
+#the problem is that BOTH parent and child objects need to know about eachother AND how they relate to eachother so we need pointers in both directions AND to the relationship
+#namely occurences and tokens need to know... I guess we could user the MRO and use python's inheritance...
+
+#ologs?
+#what is the minimal data stucture needed to state that a diagram commutes?
 
 class Object:
     """ ologs! """
-    def __init__(self, type_):
+    def __init__(self, type_:str ):
         self.type_ = type_
 
-
 class Morphism:
-    def __init__(self, origin, target, aspect):
+    def __init__(self, origin:Object, target:Object, aspect:str ):
+        self.origin = origin
+        self.target = target
+        self.aspect = aspect
 
+class PathEquivalence:
+    #could simply declare pairs of morphisms to be equivalent?
+    pass
+
+class CommutativeDiagram:
+    def __init__(self, objects:set(Object) , morphisms:set(Morphism) , evidence:ObjectInstance = None ):
+        self.

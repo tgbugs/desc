@@ -9,6 +9,16 @@
 
 #utf-8 decoding problems somehwere... looks like it is in core.NodePath
 #rebuild with symbols optimize=0
+#the issue is in panda/src/pgraph/nodePath.c most likely?
+#maybe it is actually in built/tmp/libp3graph_igate.cxx??
+
+#specifically >> 
+#if PY_MAJOR_VERSION >= 3
+        return PyUnicode_FromStringAndSize(return_value.data(), (Py_ssize_t)return_value.length());
+#<< specifically
+
+#really it seems that pickle.dumps is the problem because it dumps to bytes not unicode
+
 
 
 """

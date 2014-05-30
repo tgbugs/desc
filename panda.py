@@ -4,11 +4,14 @@
 #install is a freeking mess
 
 #must install with --no-ode because there is some weird error with python3.4
-#not sure why...
+#not sure why... it works fine on athena
 
 
 #utf-8 decoding problems somehwere... looks like it is in core.NodePath
 #rebuild with symbols optimize=0
+#FOUND YOU! tis in incremental/panda/src/pgraph/nodePath.cxx
+    #actually in nodePath.h under get_tag
+
 
 
 """
@@ -24,5 +27,6 @@ The right way to do this is as follows:
 1) run makepanda/makepanda.py with the version of python you want panda3d to use
 2) run python makepanda/installpanda.py --destdir=/home/user/.local/ --prefix=/
 3) add /home/user/.local/lib64/panda3d to LD_LIBRARY_PATH
-export PYTHON_PATH=$PYTHON_PATH:~/.local/share/panda3d/direct:~/.local/share/panda3d/pandac
+un needed
+#export PYTHONPATH=$PYTHONPATH:~/.local/share/panda3d/direct:~/.local/share/panda3d/pandac
 """

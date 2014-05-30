@@ -6,6 +6,8 @@ from direct.task import Task
 from pandac.PandaModules import *
 from direct.showbase import ShowBase
 
+MAPPATH='/home/tgillesp/.local/share/panda3d/models/maps/'
+PATH='/home/tgillesp/.local/share/panda3d/models/'
 SEQUENCE_TYPES=(tuple,list)
 atLeast16=PandaSystem.getMajorVersion()*10+PandaSystem.getMinorVersion()>=16
 asList=lambda nc: nc if atLeast16 else nc.asList()
@@ -263,7 +265,7 @@ class DropDownMenu(DirectObject):
       menuEvents=messenger.find('menu-')
       if menuEvents:
          menuEvent=menuEvents.keys()
-         activeMenu=menuEvents[menuEvent[0]].values()[0][0].im_self
+         activeMenu=list(menuEvents[list(menuEvent)[0]].values())[0][0].im_self
          activeMenu.destroy(delParents=True)
 
   def __reverseItems(self):
@@ -531,7 +533,7 @@ class PopupMenu(DirectObject):
           tri.addPolygonVertex(vi)
       tri.triangulate()
       prim = GeomTriangles(Geom.UHStatic)
-      for i in xrange(tri.getNumTriangles()):
+      for i in range(tri.getNumTriangles()):
           prim.addVertices(tri.getTriangleV0(i),
                            tri.getTriangleV1(i),
                            tri.getTriangleV2(i))
@@ -563,7 +565,7 @@ class PopupMenu(DirectObject):
              shortcutSepPos=t.find('>')
              if shortcutSepPos>-1:
                 if haveSubmenu:
-                   print "\nA SHORTCUT KEY POINTING TO A SUBMENU IS NON-SENSE, DON'T YOU AGREE ?"
+                   print("\nA SHORTCUT KEY POINTING TO A SUBMENU IS NON-SENSE, DON'T YOU AGREE ?")
                 else:
                    shortcutText=NodePath( OnscreenText(
                         parent=self.menu, text=t[shortcutSepPos+1:], font=self.font,
@@ -953,8 +955,11 @@ if __name__ == '__main__':
 
    os.chdir(sys.path[0])
 
-   modelsPath=filter(lambda p: p.getBasename().find('models')>-1, [getModelPath().getDirectory(i) for i in range(getModelPath().getNumDirectories())])
-   getModelPath().appendPath(modelsPath[0].getFullpath()+'/maps')
+   temp = [getModelPath().getDirectory(i) for i in range(getModelPath().getNumDirectories())]
+   getThing = lambda p: p.getBasename().find('models')>-1
+   modelsPath = [ i for i in temp if getThing(i)]
+   print(modelsPath)
+   getModelPath().appendPath('~/.local'+modelsPath[0].getFullpath()+'/maps')
 
    thickness=1
    gameSlots={}
@@ -964,23 +969,23 @@ if __name__ == '__main__':
 
    def func1():
        model.setR(model,-20)
-       print 'func 1'
+       print('func 1')
 
    def func2(a,b,c):
        model.setR(model,20)
-       print 'func 2 args :', a,b,c
+       print('func 2 args :', a,b,c)
 
    def func3():
        model.setScale(model,.8)
-       print 'func 3'
+       print('func 3')
 
    def func4():
        model.setScale(model,1.25)
-       print 'func 4'
+       print('func 4')
 
    def func5():
        model.clearTransform()
-       print 'func 5'
+       print('func 5')
 
    def addTexture(stage,path):
        tex=loader.loadTexture(path)
@@ -1004,14 +1009,14 @@ if __name__ == '__main__':
        render.setState(RenderState.makeEmpty())
        model.setState(RenderState.makeEmpty())
        func5()
-       print 'NEW GAME'
+       print('NEW GAME')
 
    def loadGame(slot):
-       print 'LOADED from slot',slot+1
+       print('LOADED from slot',slot+1)
 
    def saveGame(slot):
        gameSlots[slot]=1
-       print 'SAVED to slot',slot+1
+       print('SAVED to slot',slot+1)
 
    def changeThickness(t):
        global thickness
@@ -1043,7 +1048,7 @@ if __name__ == '__main__':
        0, # separator
        ('Prefe_rence',0,lambda:0),
        0, # separator
-       ('E_xit>Escape','lilsmiley.rgba',exit),
+       ('E_xit>Escape',MAPPATH+'lilsmiley.rgba',exit),
        )
 
    def createViewMenuItems():
@@ -1068,7 +1073,7 @@ if __name__ == '__main__':
        ('Music _box',0,changeModel,'samples/Music-Box/models/MusicBox'),
        ('_Panda',0,changeModel,'panda-model'),
        ('_Ralph',0,changeModel,'samples/Roaming-Ralph/models/ralph'),
-       ('_Smiley',0,changeModel,'smiley'),
+       ('_Smiley',0,changeModel,'smiley.egg.pz'),
        ('_TV man',0,changeModel,'samples/Teapot-on-TV/models/mechman_idle'),
        )
 
@@ -1129,30 +1134,30 @@ if __name__ == '__main__':
             ('Rotate 20 deg _CCW',0,func1),
             ('Rotate 20 deg C_W',0,func2, 0,1,2), # appends some arguments (0,1,2)
             0, # separator
-            ('_Shrink>Ctrl+S','envir-tree2.png',func3),
-            ('_Grow>Ctrl+G','envir-tree1.png',func4),
+            ('_Shrink>Ctrl+S',MAPPATH+'envir-tree2.png',func3),
+            ('_Grow>Ctrl+G',MAPPATH+'envir-tree1.png',func4),
             0, # separator
-            ('_Reset transform','envir-mountain1.png',func5),
+            ('_Reset transform',MAPPATH+'envir-mountain1.png',func5),
             0, # separator
             ('Multitextures stage _2',0, (
-                ('Grid','grid.rgb',addTexture,2,'grid.rgb'),
-                ('Ground','envir-ground.jpg',addTexture,2,'envir-ground.jpg'),
-                ('Rock','envir-rock1.jpg',addTexture,2,'envir-rock1.jpg'),
-                ('Toontown map','4map.rgb',addTexture,2,'4map.rgb'),
+                ('Grid',MAPPATH+'grid.rgb',addTexture,2,MAPPATH+'grid.rgb'),
+                ('Ground',MAPPATH+'envir-ground.jpg',addTexture,2,MAPPATH+'envir-ground.jpg'),
+                ('Rock',MAPPATH+'envir-rock1.jpg',addTexture,2,MAPPATH+'envir-rock1.jpg'),
+                ('Toontown map',MAPPATH+'4map.rgb',addTexture,2,MAPPATH+'4map.rgb'),
                 0, # separator
                 ('_Clear',0,removeTexture if model.findTextureStage('2') else 0,2),
             )),
             ('Multitextures stage _3',0, (
-                ('Noise','noise.rgb',addTexture,3,'noise.rgb'),
-                ('Controls','shuttle_controls_1.rgb',addTexture,3,'shuttle_controls_1.rgb'),
-                ('Text glyphs','cmtt12.rgb',addTexture,3,'cmtt12.rgb'),
+                ('Noise',MAPPATH+'noise.rgb',addTexture,3,MAPPATH+'noise.rgb'),
+                ('Controls',MAPPATH+'shuttle_controls_1.rgb',addTexture,3,MAPPATH+'shuttle_controls_1.rgb'),
+                ('Text glyphs',MAPPATH+'cmtt12.rgb',addTexture,3,MAPPATH+'cmtt12.rgb'),
                 0, # separator
                 ('_Clear',0,removeTexture if model.findTextureStage('3') else 0,3),
             )),
             ('Multitextures stage _4',0, (
-                ('Tree','envir-tree2.png',addTexture,4,'envir-tree2.png'),
-                ('Bamboo','envir-bamboo.png',addTexture,4,'envir-bamboo.png'),
-                ('Mountain','envir-mountain2.png',addTexture,4,'envir-mountain2.png'),
+                ('Tree',MAPPATH+'envir-tree2.png',addTexture,4,MAPPATH+'envir-tree2.png'),
+                ('Bamboo',MAPPATH+'envir-bamboo.png',addTexture,4,MAPPATH+'envir-bamboo.png'),
+                ('Mountain',MAPPATH+'envir-mountain2.png',addTexture,4,MAPPATH+'envir-mountain2.png'),
                 0, # separator
                 ('_Clear',0,removeTexture if model.findTextureStage('4') else 0,4),
             )),
@@ -1197,9 +1202,9 @@ if __name__ == '__main__':
             # pass empty sequence to make a disabled item with submenu
             ("But I'm disabled",0, []),
             # disabled items, pass 0 for the command
-            ('_Disabled item>shortcut1','lilsmiley.rgba',0),
+            ('_Disabled item>shortcut1',MAPPATH+'lilsmiley.rgba',0),
             0, # separator
-            ('E_xit>Escape','lilsmiley.rgba',exit),
+            ('E_xit>Escape',MAPPATH+'lilsmiley.rgba',exit),
           ),
           #~ font=loader.loadFont('fonts/Medrano.ttf'),
           baselineOffset=-.35,
@@ -1230,9 +1235,8 @@ if __name__ == '__main__':
        )
 
    def menuBarMoved():
-       print 'menuBarMoved'
-
-   model=loader.loadModel('smiley').find('**/+GeomNode')
+       print('menuBarMoved')
+   model=loader.loadModel(PATH+'smiley.egg.pz').find('**/+GeomNode')
    model.reparentTo(render.attachNewNode('modelParent'))
    model.setTransparency(1)
    model.getParent().hprInterval(5,Vec3(360,0,0)).loop()

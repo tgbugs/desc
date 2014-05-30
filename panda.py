@@ -90,13 +90,14 @@ in order to actually get panda3d to find the bloody Python.h and libpython3.4 we
     C_INCLUDE_PATH
     CPLUS_INCLUDE_PATH
     LD_LIBRARY_PATH #but, for now it works for nvidia and I'm not going to worry about it
+    #turns out the NVIDIACG problem is that CGGL is ALSO required but listed nowhere...
 
 #to clean previous install
 rm -r ~/.local/lib64/python3.x/site-packages/panda3d
 rm -r ~/.local/lib64/panda3d
 rm -r ~/.local/share/panda3d
 
-#NOTE: --no-ode will cause segfaults on athena >_< ??
+#NOTE: --no-ode will cause segfaults on athena >_< ?? FALSE
 python makepanda/makepanda.py --everything --threads 8 --optimize 3 --verbose --no-od
 python makepanda/installpanda.py --destdir=/home/tgillesp/.local/ --prefix=/
 

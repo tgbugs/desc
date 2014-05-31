@@ -8,7 +8,7 @@ from direct.task.Task import Task
 from panda3d.core import TextNode
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
-#from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
+from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
 from panda3d.core import GeomLines, GeomLinestrips #useful for nodes
 from panda3d.core import GeomPoints
 from panda3d.core import Texture, GeomNode
@@ -106,6 +106,7 @@ def makePoints(n=1000):
         #color.addData4f(.1,.1,.1,1)
 
     #pointCloud = GeomLinestrips(Geom.UHStatic) #this is fucking cool!
+    #pointCloud = GeomTristrips(Geom.UHStatic) #this is fucking cool!
     pointCloud = GeomPoints(Geom.UHStatic)
     pointCloud.addConsecutiveVertices(0,n) #warning may error since n-1?
     pointCloud.closePrimitive()
@@ -122,6 +123,50 @@ def makePoints(n=1000):
 #sceneLight = render.attachNewNode(light)
 #render.setLight(sceneLight)
 
+def selectBox(): #may not be the best way?
+    points = (
+        (1,1,0),
+        (1,1,0),
+        (1,1,0),
+    )
+
+class HasSelectables: #mixin see chessboard example
+    def __init__(self):
+        #selection detection
+        self.picker = CollisionRraverser()
+        self.pq = CollisionHandlerQueue()
+        self.pickerNode = CollisionNode('mouseRay')
+        self.pickerNP = camera.attachNewNode(self.pickerNode)
+        self.pickerNode.setFromCollideMask(BitMask32.bit(1))
+        self.pickerRay = CollisionRay()
+        self.pickerNode.addCollider(self.pickerNP, self.pq)
+
+        #box selection detection HINT: start with drawing the 2d thing yo!
+
+        #mouse handling
+        self.accept("mouse1", self.clickHandler)
+        self.accept("mouse1-up", self.releaseHandler)
+
+        #dragging
+        self.dragTask = taskMgr.add(self.dragTask, 'dragTask')
+
+    def clickHandler(self):
+        pass
+
+    def releaseHandler(self):
+        pass
+
+    def dragTask(self, task):
+        pass
+
+
+    def clickSelectObject(self): #shif to multiselect... ?? to unselect invidiual??
+        pass
+
+    def dragSelectObjects(self): #always drag in the plane of the camera
+        pass
+
+
 class PointsTest(DirectObject):
     def __init__(self,num=99999,its=99):
         self.num = num
@@ -137,11 +182,11 @@ class PointsTest(DirectObject):
 
 
 
-        #self.cloudGeom=makePoints(9999999)
+        cloudGeom=makePoints(self.num) #save us the pain in this version make it the same one probably a more efficient way to do this
+        #pointcloud
         self.clouds=[]
         for i in range(its):
             cloudNode = GeomNode('points')
-            cloudGeom=makePoints(self.num)
             cloudNode.addGeom(cloudGeom) #ooops dont forget this!
             self.clouds.append(cloudNode)
 
@@ -151,26 +196,26 @@ class PointsTest(DirectObject):
         #cloud.hprInterval(1.5,Point3(360,360,360)).loop()
 
         self.timer = globalClock.getRealTime()
-        #taskMgr.add(self.spawnTask,'newInput')
+        taskMgr.add(self.spawnTask,'newInput')
 
     def spawnTask(self, task):
         #every frame move a point and change its color
         #self.cloudGeom
-        dt = .01
+        dt = .05
         now = globalClock.getRealTime()
         if now - self.timer > dt:
             self.timer = now
-            self.update()
+            for i in range(np.random.randint(1,10)):
+                self.update()
         return Task.cont
 
     def update(self):
-        if self.cloud:
-            self.cloud.detachNode()
+        #if self.cloud:
+            #self.cloud.detachNode()
         self.cloud = render.attachNewNode(self.clouds[np.random.randint(0,self.its)])
-        pass
+        self.cloud.setPos(*np.random.randint(-1000,1000,3))
 
 base = ShowBase()
 base.setBackgroundColor(0,0,0)
-pt = PointsTest(99999,1)
+pt = PointsTest(999,99999)
 run()
-

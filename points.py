@@ -7,7 +7,7 @@ from direct.task.Task import Task
 from panda3d.core import TextNode
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
-#from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
+from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
 from panda3d.core import GeomLines, GeomLinestrips #useful for nodes
 from panda3d.core import GeomPoints
 from panda3d.core import Texture, GeomNode
@@ -50,7 +50,8 @@ def makePoints(n=1000):
         color.addData4f(*clr4)
         #color.addData4f(.1,.1,.1,1)
 
-    pointCloud = GeomLinestrips(Geom.UHStatic) #this is fucking cool!
+    #pointCloud = GeomLinestrips(Geom.UHStatic) #this is fucking cool!
+    pointCloud = GeomTristrips(Geom.UHStatic) #this is fucking cool!
     #pointCloud = GeomPoints(Geom.UHStatic)
     #pointCloud.addVerticies(*range(n))
     pointCloud.addConsecutiveVertices(0,n) #warning may error since n-1?
@@ -88,7 +89,7 @@ class PointsTest(DirectObject):
         cloudNode.addGeom(self.cloudGeom) #ooops dont forget this!
 
         cloud = render.attachNewNode(cloudNode)
-        #cloud.hprInterval(1.5,Point3(360,360,360)).loop()
+        cloud.hprInterval(20,Point3(360,0,0)).loop() #scale this with zoom
 
         taskMgr.add(self.spawnTask,'newInput')
 

@@ -58,22 +58,24 @@ def makeGrid(rng = 1000, spacing = 10): #FIXME make this scale based on zoom???
     verts = GeomVertexWriter(vertexData, 'vertex')
     color = GeomVertexWriter(vertexData, 'color')
 
+    ctup = (.3,.3,.3,1)
+
     for i,d in enumerate(xs):
         switch1 = (-1) ** i * rng
         switch2 = (-1) ** i * -rng
         #print(d,switch1,0)
         verts.addData3f(d, switch1, 0)
         verts.addData3f(d, switch2, 0)
-        color.addData4f(1,1,1,.2)
-        color.addData4f(1,1,1,.2)
+        color.addData4f(*ctup)
+        color.addData4f(*ctup)
 
     for i,d in enumerate(ys):
         switch1 = (-1) ** i * rng
         switch2 = (-1) ** i * -rng
         verts.addData3f(switch1, d, 0)
         verts.addData3f(switch2, d, 0)
-        color.addData4f(1,1,1,.2)
-        color.addData4f(1,1,1,.2)
+        color.addData4f(*ctup)
+        color.addData4f(*ctup)
 
     gridLines = GeomLinestrips(Geom.UHStatic)
     gridLines.addConsecutiveVertices(0, vertexData.getNumRows())

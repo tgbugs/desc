@@ -83,7 +83,7 @@ class PointsTest(DirectObject):
         self.accept("escape", sys.exit)
 
         cloudNode = GeomNode('points')
-        #self.cloudGeom=makePoints(9999999)
+        #self.cloudGeom=makePoints(999999)
         self.cloudGeom=makePoints(9999)
         cloudNode.addGeom(self.cloudGeom) #ooops dont forget this!
 

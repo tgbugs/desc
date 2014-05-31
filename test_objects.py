@@ -30,6 +30,17 @@ def genLabelText(text, i): #FIXME
   return OnscreenText(text = text, pos = (-1.3, .95-.05*i), fg=(1,1,1,1),
                       align = TextNode.ALeft, scale = .05)
 
+#get the data from the database? or rather let people set their own custom prefs for whole classes of things on the fly and save it somewhere?
+
+
+def getRelRenderProperties(relateable):
+    """ Get or save the properties for all relatable types, initially they should all just be set to a default """
+    #need to figure out exactly how we are going to do this...
+
+def makeObject(relateable):
+
+
+
 def makePoints(n=1000):
     """ make a cloud of points that are a single node VS branching and making subnodes to control display """
 
@@ -68,14 +79,6 @@ def makePoints(n=1000):
 #sceneLight = render.attachNewNode(light)
 #render.setLight(sceneLight)
 
-def makeTriStrip(): #don't need, will use GeomPoint
-    pass
-
-def make_object():
-    pass
-
-def addObject(obj:Geom):
-    pass
 
 class PointsTest(DirectObject):
     def __init__(self):

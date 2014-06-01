@@ -77,6 +77,9 @@
     nvidia-cg-toolkit
     eigen
 
+#python deps for some parts:
+    pip install --user Pmw #this is the megawidgets package
+
 must ./configure --enable-shared when building python
 in order to actually get panda3d to find the bloody Python.h and libpython3.4 we need to???
     modify makepandacore.py (there is probably somewhere correct to do this)
@@ -91,6 +94,7 @@ in order to actually get panda3d to find the bloody Python.h and libpython3.4 we
     CPLUS_INCLUDE_PATH
     LD_LIBRARY_PATH #but, for now it works for nvidia and I'm not going to worry about it
     #turns out the NVIDIACG problem is that CGGL is ALSO required but listed nowhere...
+    edit the config to fix model-path man!
 
 #to clean previous install
 rm -r ~/.local/lib64/python3.x/site-packages/panda3d

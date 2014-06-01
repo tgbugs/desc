@@ -16,6 +16,10 @@ from panda3d.core import Point3,Vec3,Vec4
 
 from panda3d.core import AmbientLight
 
+#tools
+#from panda3d.core import loadPrcFileData
+#loadPrcFileData("", "want-directtools #t")
+#loadPrcFileData("", "want-tk #t")
 
 import sys
 from threading import Thread
@@ -144,6 +148,10 @@ class HasSelectables: #mixin see chessboard example
         self.pickerNode.addCollider(self.pickerNP, self.pq)
 
         #box selection detection HINT: start with drawing the 2d thing yo!
+
+        self.__shift__ = False
+        self.accept("shift", self.shiftOn)
+        self.accept("shift-up", self.shiftOff)
 
         #mouse handling
         self.accept("mouse1", self.clickHandler)

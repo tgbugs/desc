@@ -110,6 +110,7 @@ class BoxSel(DirectObject):
         cx,cy,cz = self.__baseBox__.getPos()
         self.__baseBox__.setSx(x-cx)
         self.__baseBox__.setSy(y-cy)
+        self.__baseBox__.setSz(y-cz)
         return task.cont
 
 

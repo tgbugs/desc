@@ -31,6 +31,8 @@ from IPython import embed
 import numpy as np
 
 
+from dragsel import BoxSel
+
 
 def genLabelText(text, i): #FIXME
   return OnscreenText(text = text, pos = (-1.3, .95-.05*i), fg=(1,1,1,1),
@@ -48,6 +50,7 @@ def makeObject(relateable):
 
 
 def makeGrid(rng = 1000, spacing = 10): #FIXME make this scale based on zoom???
+    ctup = (.3,.3,.3,1)
     xs = np.arange(-rng,rng+1,spacing)
     ys = xs
 
@@ -58,7 +61,6 @@ def makeGrid(rng = 1000, spacing = 10): #FIXME make this scale based on zoom???
     verts = GeomVertexWriter(vertexData, 'vertex')
     color = GeomVertexWriter(vertexData, 'color')
 
-    ctup = (.3,.3,.3,1)
 
     for i,d in enumerate(xs):
         switch1 = (-1) ** i * rng
@@ -217,5 +219,6 @@ class PointsTest(DirectObject):
 
 base = ShowBase()
 base.setBackgroundColor(0,0,0)
+bs = BoxSel()
 pt = PointsTest(999,99999)
 run()

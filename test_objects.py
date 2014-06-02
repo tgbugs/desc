@@ -177,13 +177,8 @@ class HasSelectables: #mixin see chessboard example
         pass
 
 
-class PointsTest(DirectObject):
-    def __init__(self,num=99999,its=99):
-        self.num = num
-        self.its = its
-        self.escapeText = genLabelText("ESC: Quit", 0)
-        self.accept("escape", sys.exit)
-
+class Grid3d(DirectObject):
+    def __init__(self):
         #grid
         gridNode = GeomNode('grid')
         gridGeom = makeGrid()
@@ -191,6 +186,12 @@ class PointsTest(DirectObject):
         grid = render.attachNewNode(gridNode)
 
 
+class PointsTest(DirectObject):
+    def __init__(self,num=99999,its=99):
+        self.num = num
+        self.its = its
+        self.escapeText = genLabelText("ESC: Quit", 0)
+        self.accept("escape", sys.exit)
 
         cloudGeom=makePoints(self.num) #save us the pain in this version make it the same one probably a more efficient way to do this
         #pointcloud
@@ -227,6 +228,8 @@ class PointsTest(DirectObject):
 
 base = ShowBase()
 base.setBackgroundColor(0,0,0)
-bs = BoxSel()
+grid = Grid3d()
+#bs = BoxSel()
 pt = PointsTest(999,99999)
+embed()
 run()

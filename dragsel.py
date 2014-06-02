@@ -118,6 +118,7 @@ class BoxSel(DirectObject):
         #self.__baseBox__.setSy(y-cy)
         self.__baseBox__.setSz(y-cz) #so it turns out that 'z' is what we want???
         self.pos.setText('%1.3f, %1.3f'%(x,y))
+        embed()
         return task.cont
 
 

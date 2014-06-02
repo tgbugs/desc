@@ -226,10 +226,13 @@ class PointsTest(DirectObject):
         self.cloud = render.attachNewNode(self.clouds[np.random.randint(0,self.its)])
         self.cloud.setPos(*np.random.randint(-1000,1000,3))
 
-base = ShowBase()
-base.setBackgroundColor(0,0,0)
-grid = Grid3d()
-#bs = BoxSel()
-pt = PointsTest(999,99999)
-embed()
-run()
+def main():
+    base = ShowBase()
+    base.setBackgroundColor(0,0,0)
+    grid = Grid3d()
+    #bs = BoxSel()
+    pt = PointsTest(999,99999)
+    run()
+
+if __name__ == '__main__':
+    main()

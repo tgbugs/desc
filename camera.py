@@ -263,14 +263,18 @@ class CameraControl(DirectObject):
 
         return cross * norm
 
-
     def pan(self, task):
         x,y = base.mouseWatcherNode.getMouse()
         sx,sy = getattr(self,'__%s_s__'%(task.getName()))
         dx = (x - sx) * self.XGAIN * self.__winx__ * 10
         dy = (y - sy) * self.YGAIN * self.__winy__ * 10
-        self.cameraBase.setPos(self.cameraBase,dx,0,dy)
+        #cx,cy,cz = self.camera.getPos()
+        self.camera.setPos(self.camera,dx,0,dy)
         setattr(self, '__%s_s__'%task.getName(), (x,y)) #reset each frame to compensate for moving from own position
+        #nx,ny,nz = self.camera.getPos()
+        #dx2, dy2, dz2 = nx-cx, ny-cy, nz-cz
+        #self.camera.setPos(cx,cz,cy)
+        #self.cameraBase.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
         return task.cont
 
     def zoom_in_slow(self, task, speed = 10):

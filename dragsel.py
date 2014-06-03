@@ -66,8 +66,6 @@ class BoxSel(DirectObject):
 
         self.__mouseDown__ = False
 
-        self.pos = genLabelText('hello',2)
-
         #setup the selection box
         #self.__startNode__ = render2d.attachNewNode(PandaNode()) #empty node
         boxNode = GeomNode('selectBox')
@@ -117,14 +115,15 @@ class BoxSel(DirectObject):
         self.__baseBox__.setSx(x-cx)
         #self.__baseBox__.setSy(y-cy)
         self.__baseBox__.setSz(y-cz) #so it turns out that 'z' is what we want???
-        self.pos.setText('%1.3f, %1.3f'%(x,y))
-        embed()
+        #embed()
         return task.cont
 
 
 def main():
+    from util import Utils
     base = ShowBase()
     base.disableMouse()
+    ut = Utils()
     dt = BoxSel()
     run()
 

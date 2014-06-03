@@ -32,6 +32,8 @@ keybinds = {
         'roll':'shift-mouse2',
         'zoom_in':'wheel_up',
         'zoom_out':'wheel_down',
+        'zoom_in_slow':'shift-wheel_up',
+        'zoom_out_slow':'shift-wheel_down',
     },
     'zmode': {
         'pitch':'', #not needed the mouse does this
@@ -39,6 +41,91 @@ keybinds = {
         'roll':'mouse2',
     }
 }
+
+def makeCameraTarget():
+    colors = (
+        (0,0,1,1),
+        (1,0,0,1),
+        (0,1,0,1),
+        (0,0,1,1),
+        (1,0,0,1),
+        (0,1,0,1),
+    )
+    points = (
+        (0,0,1),
+        (-1,0,0),
+        (0,-1,0),
+        (0,0,-1),
+        (1,0,0),
+        (0,1,0),
+        (0,0,1),
+    )
+
+    fmt = GeomVertexFormat.getV3c4() #3 component vertex, w/ 4 comp color
+    #fmt = GeomVertexFormat.getV3() #3 component vertex, w/ 4 comp color
+    vertexData = GeomVertexData('points', fmt, Geom.UHStatic)
+
+    verts = GeomVertexWriter(vertexData, 'vertex')
+    color = GeomVertexWriter(vertexData, 'color')
+
+    for p,c in zip(points,colors):
+        verts.addData3f(*p)
+        color.addData4f(*c)
+
+    targetTris = GeomTristrips(Geom.UHStatic)
+    targetTris.addConsecutiveVertices(0,6)
+    targetTris.addVertex(0)
+    targetTris.addVertex(1)
+    targetTris.addVertex(3)
+    targetTris.addVertex(5)
+    targetTris.addVertex(2)
+    targetTris.addVertex(4)
+    targetTris.addVertex(0)
+    targetTris.closePrimitive()
+
+    target = Geom(vertexData)
+    target.addPrimitive(targetTris)
+    return target
+
+
+def makeEquiTri():
+    colors = (
+        (1,1,1,1),
+        (1,0,0,1),
+        (0,0,1,1),
+        (0,1,0,1),
+        (1,1,1,1),
+        (1,0,0,1),
+    )
+    points = (
+        (-1,0,0),
+        (1,0,0),
+        (0,3**.5/2,3**.5),
+        (0,3**.5,0),
+        #(-1,0,0),
+        #(1,0,0),
+    )
+
+    fmt = GeomVertexFormat.getV3c4() #3 component vertex, w/ 4 comp color
+    #fmt = GeomVertexFormat.getV3() #3 component vertex, w/ 4 comp color
+    vertexData = GeomVertexData('points', fmt, Geom.UHStatic)
+
+    verts = GeomVertexWriter(vertexData, 'vertex')
+    color = GeomVertexWriter(vertexData, 'color')
+
+    for p,c in zip(points,colors):
+        verts.addData3f(*p)
+        color.addData4f(*c)
+
+    targetTris = GeomTristrips(Geom.UHStatic)
+    targetTris.addConsecutiveVertices(0,4)
+    targetTris.addVertex(0)
+    targetTris.addVertex(1)
+    targetTris.closePrimitive()
+
+    target = Geom(vertexData)
+    target.addPrimitive(targetTris)
+    return target
 
 
 class CameraControl(DirectObject):
@@ -49,8 +136,15 @@ class CameraControl(DirectObject):
         if self.camera == None:
             self.camera = base.camera
 
-        self.cameraTarget = NodePath('cameraTarget') #utility node for pan, rot, zoom, reattach
-        self.cameraTarget.reparentTo(render) #XXX note, when moving cam target we need to make sure the camera doesnt move too...
+        #XXX note, when moving cam target we need to make sure the camera doesnt move too...
+        cameraBase = GeomNode('cameraBase') #utility node for pan
+        targetGeom = makeCameraTarget()
+        cameraBase.addGeom(targetGeom)
+        self.cameraBase = render.attachNewNode(cameraBase)
+        #self.cameraBase.setTwoSided(True) #backface culling issue with my tristrip fail
+
+        self.cameraTarget = NodePath('cameraTarget') #utility node for rot, zoom, reattach
+        self.cameraTarget.reparentTo(self.cameraBase)
         self.camera.reparentTo(self.cameraTarget)
 
         #keybind setup
@@ -175,17 +269,23 @@ class CameraControl(DirectObject):
         sx,sy = getattr(self,'__%s_s__'%(task.getName()))
         dx = (x - sx) * self.XGAIN * self.__winx__ * 10
         dy = (y - sy) * self.YGAIN * self.__winy__ * 10
-        self.cameraTarget.setPos(self.cameraTarget,dx,0,dy)
+        self.cameraBase.setPos(self.cameraBase,dx,0,dy)
         setattr(self, '__%s_s__'%task.getName(), (x,y)) #reset each frame to compensate for moving from own position
         return task.cont
 
-    def zoom_in(self, task): #FIXME zoom_in and zoom_out still get custom xys even thought they don't use them!
-        self.camera.setPos(self.camera,0,100,0)
+    def zoom_in_slow(self, task, speed = 10):
+        return self.zoom_in(task, speed) #hehe this will work because it just passes the task :)
+
+    def zoom_out_slow(self, task, speed = 10):
+        return self.zoom_out(task, speed)
+
+    def zoom_in(self, task, speed = 100): #FIXME zoom_in and zoom_out still get custom xys even thought they don't use them!
+        self.camera.setPos(self.camera,0,speed,0)
         taskMgr.remove(task.getName())
         return task.cont
 
-    def zoom_out(self, task):
-        self.camera.setPos(self.camera,0,-100,0)
+    def zoom_out(self, task, speed = 100):
+        self.camera.setPos(self.camera,0,-speed,0)
         taskMgr.remove(task.getName()) #we do it this way instead of addOnce because we want to add all the tasks in one go
         return task.cont
 

@@ -2,7 +2,7 @@ from direct.gui.DirectButton import DirectButton
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
-#from panda3d.core import PandaNode,NodePath
+from panda3d.core import NodePath
 from panda3d.core import TextNode
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
@@ -14,6 +14,7 @@ from panda3d.core import Point3,Vec3,Vec4
 
 from numpy import sign
 
+from collections import defaultdict
 import sys
 from threading import Thread
 from IPython import embed
@@ -23,14 +24,14 @@ keybinds = {
         #'':'mouse1',
         #'':'mouse2',
         #'':'mouse3',
-        #'pan':'mouse3',
         #'zoom':'mouse2', #this should allow L->R to zoom out etc up down is too awkward
-        #'rotate':'mouse1',
-        'pitch':'mouse3',
-        'yaw':'mouse1',
-        'roll':'mouse2',
-        #'zoom in':'wheel_up',
-        #'zoom out':'wheel_down',
+        #'pitch':'shift-mouse3',
+        'rotate':'mouse3',
+        'pan':'shift-mouse3',
+        'look':'mouse2', #note mouse 2 is middle mouse
+        'roll':'shift-mouse2',
+        'zoom_in':'wheel_up',
+        'zoom_out':'wheel_down',
     },
     'zmode': {
         'pitch':'', #not needed the mouse does this
@@ -43,19 +44,39 @@ keybinds = {
 class CameraControl(DirectObject):
     """ adds controls to a given camera, usually base.camera"""
     def __init__(self,camera=None):
+        #camera setup
         self.camera = camera
         if self.camera == None:
             self.camera = base.camera
-        for function,key in keybinds['view'].items():
-            #self.accept(key,taskMgr.add,(getattr(self,function),function+'Task'))
-            self.accept(key, self.makeTask, [function,])
-            if key in {'mouse1','mouse2','mouse3'}:
-                self.accept(key+'-up', self.endTask, [function,])
 
-        self.XGAIN = 1
-        self.YGAIN = 1
+        self.cameraTarget = NodePath('cameraTarget') #utility node for pan, rot, zoom, reattach
+        self.cameraTarget.reparentTo(render) #XXX note, when moving cam target we need to make sure the camera doesnt move too...
+        self.camera.reparentTo(self.cameraTarget)
+
+        #keybind setup
+        self.__ends__=defaultdict(list)
 
         self.accept("escape", sys.exit)
+
+        for function,key in keybinds['view'].items():
+            #self.accept(key,taskMgr.add,(getattr(self,function),function+'Task'))
+            self.accept(key, self.makeTask, [function])
+            keytest=key.split('-')[-1]
+            print(keytest)
+            if keytest in {'mouse1','mouse2','mouse3'}:
+                self.addEndTask(keytest,function)
+                self.accept(keytest+'-up', self.endTask, [keytest,function])
+
+        #gains #TODO tweak me!
+        self.XGAIN = .01
+        self.YGAIN = .01
+
+        #window setup
+        self.getWindowSize()
+        self.accept('window-event', self.getWindowSize)
+        
+
+
         #self.accept('mouse1') #mouse 1 by itself does selection?
         #self.accpet('mouse3') #pan
         #self.accpet('mouse2')
@@ -84,27 +105,34 @@ class CameraControl(DirectObject):
         self.__ch__=None
         self.__cp__=None
         self.__cr__=None
+        self.__cth__=None
+        self.__ctp__=None
 
         pass
 
-    def getWindowSize(self):
-        return base.win.getX
+    def getWindowSize(self,wat=None):
+        self.__winx__ = base.win.getXSize()
+        self.__winy__ = base.win.getYSize()
+        print(self.__winx__,self.__winy__)
 
     def makeTask(self, function):
+        """ ye old task spawner """
         x,y = base.mouseWatcherNode.getMouse()
-        #setattr(self, '__%sTask_sx__'%function, x)
-        #setattr(self, '__%sTask_sy__'%function, y)
         setattr(self, '__%sTask_s__'%function, (x,y)) #this should be faster
         taskMgr.add(getattr(self,function), function+'Task')
 
-    def endTask(self, function):
-        taskMgr.remove(function+'Task')
-        #setattr(self, '__%sTask_sx__'%function, None)
-        #setattr(self, '__%sTask_sy__'%function, None)
-        setattr(self, '__%sTask_s__'%function, None) #this should be faster
-        self.__ch__=None
+    def addEndTask(self,key,function):
+        self.__ends__[key].append(function)
+
+    def endTask(self, key, function):
+        for func in self.__ends__[key]:
+            taskMgr.remove(func+'Task')
+            setattr(self, '__%sTask_s__'%func, None) #this should be faster
+        self.__ch__=None #FIXME this seems hackish
         self.__cp__=None
         self.__cr__=None
+        self.__cth__=None
+        self.__ctp__=None
 
     def getMouseDdDt(self, name): #XXX deprecated
         """ use gain to adjust pixels per degree
@@ -126,54 +154,89 @@ class CameraControl(DirectObject):
     def getMouseDdDf(self,name):
         x,y = base.mouseWatcherNode.getMouse()
         sx,sy = getattr(self,'__%s_s__'%(name))
-        #if i != si:
-            #setattr(self, '__%s_s%s__'%(name,dim), i)
-        dx = (x - sx) * self.XGAIN
-        dy = (y - sy) * self.YGAIN
+        dx = (x - sx) * self.XGAIN * self.__winx__
+        dy = (y - sy) * self.YGAIN * self.__winy__
         return dx, dy
+
+    def getMouseCross(self,name): #FIXME may need to do this incrementally as we started with...
+        x,y = base.mouseWatcherNode.getMouse()
+        sx,sy = getattr(self,'__%s_s__'%(name))
+
+        dx = (x - sx) * self.XGAIN * self.__winx__
+        dy = (y - sy) * self.YGAIN * self.__winy__
+        norm = (dx**2 + dy**2)**.5
+        cross = x * sy - y * sx
+
+        return cross * norm
+
+
+    def pan(self, task):
+        x,y = base.mouseWatcherNode.getMouse()
+        sx,sy = getattr(self,'__%s_s__'%(task.getName()))
+        dx = (x - sx) * self.XGAIN * self.__winx__ * 10
+        dy = (y - sy) * self.YGAIN * self.__winy__ * 10
+        self.cameraTarget.setPos(self.cameraTarget,dx,0,dy)
+        setattr(self, '__%s_s__'%task.getName(), (x,y)) #reset each frame to compensate for moving from own position
+        return task.cont
+
+    def zoom_in(self, task): #FIXME zoom_in and zoom_out still get custom xys even thought they don't use them!
+        self.camera.setPos(self.camera,0,100,0)
+        taskMgr.remove(task.getName())
+        return task.cont
+
+    def zoom_out(self, task):
+        self.camera.setPos(self.camera,0,-100,0)
+        taskMgr.remove(task.getName()) #we do it this way instead of addOnce because we want to add all the tasks in one go
+        return task.cont
+
+    def rotate(self, task):
+        dx,dy = self.getMouseDdDf(task.getName())
+        if self.__cth__ == None:
+            self.__cth__ = self.cameraTarget.getH()
+        if self.__ctp__ == None:
+            self.__ctp__ = self.cameraTarget.getP()
+        self.cameraTarget.setH(self.__cth__ - dx * 10)
+        self.cameraTarget.setP(self.__ctp__ + dy * 10)
+        return task.cont
 
     #if we are in camera mode
     def pitch(self, task):
         dx,dy = self.getMouseDdDf(task.getName())
-        if self.__cp__ == None:
-            self.__cp__ = self.camera.getP()
-        self.camera.setP(self.__cp__ - dy)
         print('got pitch',dy)
         return task.cont
 
-    def yaw(self, task): #AKA heading in hpr
+    def look(self, task): #AKA heading in hpr
         dx,dy = self.getMouseDdDf(task.getName())
         if self.__ch__ == None:
             self.__ch__ = self.camera.getH()
+        if self.__cp__ == None:
+            self.__cp__ = self.camera.getP()
         self.camera.setH(self.__ch__ - dx)
-        print('got yaw',dx)
+        self.camera.setP(self.__cp__ + dy) #FIXME when we're clicking this might should be inverted?
         return task.cont
 
     def roll(self, task):
-        dx,dy = self.getMouseDdDf(task.getName())
+        """ ALWAYS roll with respect to axis of rotation"""
         if self.__cr__ == None:
-            self.__cr__ = self.camera.getR()
-        #ccw vs cw, determined in the ++ quadrant of r2
-        #ul = ccw, dr = cw
-        #norm + sign
-        #assume ccw = -, cw = +
-        r=sign(dx)*-sign(dy)*(dx**2 + dy**2)**.5
+            self.__cr__ = self.cameraTarget.getR()
+        #cross product idiot
+        cross = self.getMouseCross(task.getName())
 
-        self.camera.setR(self.__cr__ - r)
-        print('got roll',r)
+        self.cameraTarget.setR(self.__cr__ - cross * 10 )
         return task.cont
 
 
 
 def main():
     from direct.showbase.ShowBase import ShowBase
-    from test_objects import Grid3d
+    from test_objects import Grid3d,Axis3d
     from util import Utils
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
     ut = Utils()
     cc = CameraControl()
     grid = Grid3d()
+    axis = Axis3d()
     base.disableMouse()
     run()
 

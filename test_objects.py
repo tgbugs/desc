@@ -91,6 +91,55 @@ def makeGrid(rng = 1000, spacing = 10): #FIXME make this scale based on zoom???
     grid.addPrimitive(gridLines)
     return grid
 
+def makeAxis(): #FIXME make this scale based on zoom???
+    colors = (
+        (1,0,0,1),
+        (0,1,0,1),
+        (0,0,1,1),
+
+        (1,0,0,1),
+        (0,1,0,1),
+        (0,0,1,1),
+    )
+    points = (
+        (0,0,0),
+        (0,0,0),
+        (0,0,0),
+        (1,0,0),
+        (0,1,0),
+        (0,0,1),
+    )
+
+    fmt = GeomVertexFormat.getV3c4() #3 component vertex, w/ 4 comp color
+    #fmt = GeomVertexFormat.getV3() #3 component vertex, w/ 4 comp color
+    vertexData = GeomVertexData('points', fmt, Geom.UHStatic)
+
+    verts = GeomVertexWriter(vertexData, 'vertex')
+    color = GeomVertexWriter(vertexData, 'color')
+
+
+    for p,c in zip(points,colors):
+        verts.addData3f(*p)
+        color.addData4f(*c)
+
+    axisX = GeomLinestrips(Geom.UHStatic)
+    axisX.addVertices(0,3)
+    axisX.closePrimitive()
+
+    axisY = GeomLinestrips(Geom.UHStatic)
+    axisY.addVertices(1,4)
+    axisY.closePrimitive()
+
+    axisZ = GeomLinestrips(Geom.UHStatic)
+    axisZ.addVertices(2,5)
+    axisZ.closePrimitive()
+
+    axis = Geom(vertexData)
+    axis.addPrimitive(axisX)
+    axis.addPrimitive(axisY)
+    axis.addPrimitive(axisZ)
+    return axis
+
 def makePoints(n=1000):
     """ make a cloud of points that are a single node VS branching and making subnodes to control display """
 
@@ -184,6 +233,16 @@ class Grid3d(DirectObject):
         gridNode.addGeom(gridGeom)
         grid = render.attachNewNode(gridNode)
 
+class Axis3d(DirectObject): #FIXME not the best way to do this, making all these new direct objects if they need to be controlled
+    def __init__(self, scale=10):
+        axisNode = GeomNode('axis')
+        axisGeom = makeAxis()
+        axisNode.addGeom(axisGeom)
+        axis = render.attachNewNode(axisNode)
+        axis.setScale(scale,scale,scale)
+        axis.setRenderModeThickness(2)
+
+
 
 class PointsTest(DirectObject):
     def __init__(self,num=99999,its=99):
@@ -227,12 +286,16 @@ class PointsTest(DirectObject):
 
 def main():
     from util import Utils
+    from camera import CameraControl
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
     ut = Utils()
     grid = Grid3d()
-    #bs = BoxSel()
+    axis = Axis3d()
+    cc = CameraControl()
+    bs = BoxSel()
     pt = PointsTest(999,99999)
+    base.disableMouse()
     run()
 
 if __name__ == '__main__':

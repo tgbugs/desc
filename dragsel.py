@@ -118,7 +118,6 @@ class BoxSel(DirectObject):
         #embed()
         return task.cont
 
-
 def main():
     from util import Utils
     base = ShowBase()

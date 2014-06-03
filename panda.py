@@ -116,3 +116,8 @@ un needed
 #export PYTHONPATH=$PYTHONPATH:~/.local/share/panda3d/direct:~/.local/share/panda3d/pandac
 """
 
+#windows install:
+    #run the installer, do NOT use the panda python
+    #add C:\Panda-1.8.1 to PYTHONPATH (may not be needed if the below works
+    #add C:\Panda-1.8.1 and C:\Panda-1.8.1\bin lines to C:\Python27\Lib\site-packages\panda.pth
+    #should be good to go at this point

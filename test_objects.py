@@ -39,7 +39,7 @@ from dragsel import BoxSel
 
 
 def genLabelText(text, i): #FIXME
-  return OnscreenText(text = text, pos = (-1.3, .95-.05*i), fg=(1,1,1,1),
+  return OnscreenText(text = text, pos = (.025, -.05*i), fg=(1,1,1,1),
                       align = TextNode.ALeft, scale = .05)
 
 #get the data from the database? or rather let people set their own custom prefs for whole classes of things on the fly and save it somewhere?
@@ -253,36 +253,64 @@ class PointsTest(DirectObject):
 
         cloudGeom=makePoints(self.num) #save us the pain in this version make it the same one probably a more efficient way to do this
         #pointcloud
-        self.clouds=[]
-        for i in range(its):
-            cloudNode = GeomNode('points')
-            cloudNode.addGeom(cloudGeom) #ooops dont forget this!
-            self.clouds.append(cloudNode)
+        #self.clouds=[]
+        self.cloudNode = GeomNode('points')
+        self.cloudNode.addGeom(cloudGeom) #ooops dont forget this!
+        self.cloud = render.attachNewNode(self.cloudNode)
+        self.cloud.setPos(10,10,10)
+        #for i in range(its):
+            #self.clouds.append(cloudNode)
+        self.its = its
 
-        self.cloud = None
-        self.update()
+        self.counter = 0
+        self.count = genLabelText('%s'%self.counter,3)
+        self.count.reparentTo(base.a2dTopLeft)
+        self.poses = np.random.randint(-1000,1000,(its,3))
+        #self.cloud = None
         #self.cloud = render.attachNewNode(cloudNode)
         #cloud.hprInterval(1.5,Point3(360,360,360)).loop()
+        inst=render.attachNewNode('clound-%s'%self.counter)
+        for i in range(its):
+            inst=inst.attachNewNode('clound-%s'%self.counter)
+            inst.setPos(*self.poses[self.counter])
+            self.cloud.instanceTo(inst)
+            self.counter += 1
 
-        self.timer = globalClock.getRealTime()
-        taskMgr.add(self.spawnTask,'newInput')
+        
+        self.update()
+
+        #self.timer = globalClock.getRealTime()
+        taskMgr.add(self.spawnTask,'MOAR')
+
 
     def spawnTask(self, task):
         #every frame move a point and change its color
         #self.cloudGeom
-        dt = .05
-        now = globalClock.getRealTime()
-        if now - self.timer > dt:
-            self.timer = now
-            for i in range(np.random.randint(1,10)):
-                self.update()
-        return Task.cont
+        #dt = .05
+        #now = globalClock.getRealTime()
+        #if now - self.timer > dt:
+            #self.timer = now
+            #for i in range(np.random.randint(1,10)):
+                #self.update()
+        #return Task.cont
+        self.update()
+        return task.cont
 
     def update(self):
         #if self.cloud:
             #self.cloud.detachNode()
-        self.cloud = render.attachNewNode(self.clouds[np.random.randint(0,self.its)])
-        self.cloud.setPos(*np.random.randint(-1000,1000,3))
+        #self.cloud = render.attachNewNode(self.clouds[np.random.randint(0,self.its)])
+        if self.counter < self.its-100:
+            for i in range(1000):
+
+                inst=render.attachNewNode('clound-%s'%self.counter)
+                inst.setPos(*self.poses[self.counter])
+                self.cloud.instanceTo(inst)
+                self.counter += 1
+            self.count.setText('%s'%self.counter)
+        else:
+            taskMgr.remove('MOAR')
+            
 
 def main():
     from util import Utils
@@ -294,7 +322,13 @@ def main():
     axis = Axis3d()
     cc = CameraControl()
     bs = BoxSel()
-    pt = PointsTest(999,99999)
+    #pt = PointsTest(999,99999)
+    #pt = PointsTest(1,9999999)
+    #pt = PointsTest(1,999999) #SLOW AS BALLS: IDEA: render faraway nodes as static meshes and transform them to live as we get closer!
+    #pt = PointsTest(9999999,1)
+    #pt = PointsTest(1,99999) #still slow :/
+    #pt = PointsTest(1,9999) #still slow :/ #deep trees segfault!
+    pt = PointsTest(1,4000) #still slow :/ #this one is ok
     base.disableMouse()
     run()
 

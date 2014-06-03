@@ -34,6 +34,9 @@ keybinds = {
         'zoom_out':'wheel_down',
         'zoom_in_slow':'shift-wheel_up',
         'zoom_out_slow':'shift-wheel_down',
+        'zoom_in_fast':'control-wheel_up',
+        'zoom_out_fast':'control-wheel_down',
+        'home':'h',
     },
     'zmode': {
         'pitch':'', #not needed the mouse does this
@@ -145,6 +148,7 @@ class CameraControl(DirectObject):
 
         self.cameraTarget = NodePath('cameraTarget') #utility node for rot, zoom, reattach
         self.cameraTarget.reparentTo(self.cameraBase)
+        #self.cameraTarget.reparentTo(render)
         self.camera.reparentTo(self.cameraTarget)
 
         #keybind setup
@@ -263,11 +267,17 @@ class CameraControl(DirectObject):
 
         return cross * norm
 
+    def home(self, task):
+        self.camera.lookAt(self.cameraBase)
+        taskMgr.remove(task.getName())
+        return task.cont
+
     def pan(self, task):
+        """ I don't like it, it's weird! """
         x,y = base.mouseWatcherNode.getMouse()
         sx,sy = getattr(self,'__%s_s__'%(task.getName()))
-        dx = (x - sx) * self.XGAIN * self.__winx__ * 10
-        dy = (y - sy) * self.YGAIN * self.__winy__ * 10
+        dx = (x - sx) * self.XGAIN * self.__winx__ * 15
+        dy = (y - sy) * self.YGAIN * self.__winy__ * 15
         #cx,cy,cz = self.camera.getPos()
         self.camera.setPos(self.camera,dx,0,dy)
         setattr(self, '__%s_s__'%task.getName(), (x,y)) #reset each frame to compensate for moving from own position
@@ -275,6 +285,7 @@ class CameraControl(DirectObject):
         #dx2, dy2, dz2 = nx-cx, ny-cy, nz-cz
         #self.camera.setPos(cx,cz,cy)
         #self.cameraBase.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
+        #self.cameraTarget.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
         return task.cont
 
     def zoom_in_slow(self, task, speed = 10):
@@ -282,6 +293,13 @@ class CameraControl(DirectObject):
 
     def zoom_out_slow(self, task, speed = 10):
         return self.zoom_out(task, speed)
+
+    def zoom_in_fast(self, task, speed = 1000):
+        return self.zoom_in(task, speed) #hehe this will work because it just passes the task :)
+
+    def zoom_out_fast(self, task, speed = 1000):
+        return self.zoom_out(task, speed)
+
 
     def zoom_in(self, task, speed = 100): #FIXME zoom_in and zoom_out still get custom xys even thought they don't use them!
         self.camera.setPos(self.camera,0,speed,0)

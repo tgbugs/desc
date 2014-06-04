@@ -25,9 +25,22 @@ import sys
 from IPython import embed
 
 import multiprocessing as mp
-from multiprocessing import Pipe
+from multiprocessing import Pipe,Process
 #from queue import Queue #warning on py2...
 #import threading #not what we need due to GIL >_<
+
+def spawn(f):
+    def fun(pipe,x):
+        pipe.send(f(x))
+        pipe.close()
+    return fun
+def parmap(f,X):
+    """ Function to make multiprocessing work correctly """
+    pipe=[Pipe() for x in X]
+    proc=[Process(target=spawn(f),args=(c,x)) for x,(p,c) in zip(X,pipe)]
+    [p.start() for p in proc]
+    [p.join() for p in proc]
+    return [p.recv() for (p,c) in pipe]
 
 #for points
 #nodePath.setRenderModePerspective()
@@ -148,6 +161,13 @@ def makeBins(ndarray,nbins=1000):
         raise TypeError('we dont know what to do with 5d and above data yet')
 
 
+def processWrap(func):
+    """ needed to fix multiprocessing on windows """
+    def wrap(*args):
+        return func(*args)
+    return wrap
+
+
 
 def convertToPoints(target): #FIXME works under python2 now...
     """
@@ -191,8 +211,9 @@ def convertToPoints(target): #FIXME works under python2 now...
         #print('pong',out)
         #q.put(out)
 
-        pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
-        #return cloudNode
+        #pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
+        #pipe.close()
+        return cloudNode
 
     if target.ndim > 2:
         raise TypeError('Format should be a list length n of vectors (4d max) ')
@@ -210,19 +231,23 @@ def convertToPoints(target): #FIXME works under python2 now...
     pipes = [Pipe() for q in range(ncores)]
     output = {} #we can probably just merge the dicts after the fact?
     #q = Queue()
+    inp=[]
     for i in range(ncores):
         #output[i]=makeGeom(chunks[i],ctup,i,None)
         #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
-
-        p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1]))
-        p.start()
-        processes.append(p)
+        #p = mp.Process(target=processWrap(makeGeom), args=(chunks[i],ctup,i,pipes[i][1]))
+        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1]))
+        #p.start()
+        #processes.append(p)
+        inp.append([chunks[i],ctup,i,None])
+    output = parmap(makeGeom,inp)
 
     #print(pipes[0][0].recv())
-    for i in range(ncores):
-        output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named
+    #for i in range(ncores):
+        #output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named
+
     #[output.update(pipes[i][0].recv()) for i in range(ncores)]
-    [p.join() for p in processes] #FIXME this probably should go elsewhere? like in a class that handles these things?
+    #[p.join() for p in processes] #FIXME this probably should go elsewhere? like in a class that handles these things?
     print(output)
 
     #out = q.get()

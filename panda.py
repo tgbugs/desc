@@ -102,7 +102,7 @@ rm -r ~/.local/lib64/panda3d
 rm -r ~/.local/share/panda3d
 
 #NOTE: --no-ode will cause segfaults on athena >_< ?? FALSE
-python makepanda/makepanda.py --everything --threads 8 --optimize 3 --verbose --no-od
+python makepanda/makepanda.py --everything --threads 8 --optimize 3 --verbose --no-ode
 python makepanda/installpanda.py --destdir=/home/tgillesp/.local/ --prefix=/
 
 #then you meed to

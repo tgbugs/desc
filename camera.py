@@ -311,7 +311,7 @@ class CameraControl(DirectObject):
         taskMgr.remove(task.getName()) #we do it this way instead of addOnce because we want to add all the tasks in one go
         return task.cont
 
-    def rotate(self, task):
+    def rotate(self, task): #FIXME disregard orientation acqurie proper mouse movements!
         dx,dy = self.getMouseDdDf(task.getName())
         if self.__cth__ == None:
             self.__cth__ = self.cameraTarget.getH()

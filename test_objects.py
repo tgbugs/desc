@@ -24,8 +24,10 @@ from panda3d.core import AmbientLight
 import sys
 from IPython import embed
 
-import threading
+import multiprocessing as mp
+from multiprocessing import Pipe
 #from queue import Queue #warning on py2...
+#import threading #not what we need due to GIL >_<
 
 #for points
 #nodePath.setRenderModePerspective()
@@ -134,7 +136,20 @@ def makeAxis(): #FIXME make this scale based on zoom???
     axis.addPrimitive(axisZ)
     return axis
 
-def convertToPoints(ndarray,project=False,nbins=1000):
+def makeBins(ndarray,nbins=1000):
+    if ndarray.shape[1] == 4 or nbins > 1:
+        target = ndarray[ndarray[:,-1].argsort()][:,:-1]
+
+    binWidth = target.shape[0]//nbins
+    zipped = zip(range(0,chunk.shape[0]-binWidth,binWidth), #FIXME this may leave final vals out check!
+                 range(binWidth,chunk.shape[0],binWidth))
+
+    if ndarray.shape[1] > 4:
+        raise TypeError('we dont know what to do with 5d and above data yet')
+
+
+
+def convertToPoints(target): #FIXME works under python2 now...
     """
         take an np.ndarray and convert it to a point cloud
         this will probably be faster than trying to make them
@@ -147,13 +162,11 @@ def convertToPoints(ndarray,project=False,nbins=1000):
     #TODO dtypes should be annotated! or should they...
     #if you dtype an existing array, you probably will need to c=c[:,0] to fix wrapping
         #FIXME unfrotunately this breaks slicing >_<
-    #dumps = Queue()
-    output = {} #not fast, but whatever
-    def makeGeom(array,n):
+
+    def makeGeom(array,ctup,i,pipe):
         fmt = GeomVertexFormat.getV3c4()
         vertexData = GeomVertexData('poitns', fmt, Geom.UHStatic)
         points = array
-        ctup = np.random.rand(4)
 
         verts = GeomVertexWriter(vertexData, 'vertex')
         color = GeomVertexWriter(vertexData, 'color')
@@ -168,36 +181,74 @@ def convertToPoints(ndarray,project=False,nbins=1000):
 
         cloudGeom = Geom(vertexData)
         cloudGeom.addPrimitive(points)
-        cloudNode = GeomNode('bin %s'%n)
+        cloudNode = GeomNode('bin %s'%(i))
         cloudNode.addGeom(cloudGeom)
-        output[n] = cloudNode
+        #embed()
+        #output[i] = cloudNode
+        #print('ping',{i:cloudNode})
+        #pipe.send((i,))
+        #out = q.get()
+        #print('pong',out)
+        #q.put(out)
 
-    if ndarray.ndim > 2:
+        pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
+        #return cloudNode
+
+    if target.ndim > 2:
         raise TypeError('Format should be a list length n of vectors (4d max) ')
-    if ndarray.shape[1] > 4:
-        raise TypeError('we dont know what to do with 5d and above data yet')
 
-    if ndarray.shape[1] == 4 or project:
-        target = ndarray[ndarray[:,-1].argsort()][:,:-1]
-        binWidth = ndarray.shape[0]//nbins
-        zipped = zip(
-            range(0,target.shape[0]-binWidth,binWidth), #FIXME this may leave final vals out check!
-            range(binWidth,target.shape[0],binWidth))
-        n = 0
-        for start,stop in zipped:
-            mkBinThread = threading.Thread(target=makeGeom, args=(target[start:stop],n))
-            mkBinThread.start()
-            n += 1
-        mkBinThread.join() #FIXME this can fail
+    ncores = 8
+    chunk_size = target.shape[0]//ncores
+    czip = zip(range(0,target.shape[0]-chunk_size,chunk_size),
+               range(chunk_size,target.shape[0],chunk_size))
+    chunks = []
+    for start,stop in czip:
+        chunks.append(target[start:stop]) #may not need to do this if I can generate it from i?
+
+    ctup = np.random.rand(4)
+    processes = []
+    pipes = [Pipe() for q in range(ncores)]
+    output = {} #we can probably just merge the dicts after the fact?
+    #q = Queue()
+    for i in range(ncores):
+        #output[i]=makeGeom(chunks[i],ctup,i,None)
+        #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
+
+        p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1]))
+        p.start()
+        processes.append(p)
+
+    #print(pipes[0][0].recv())
+    for i in range(ncores):
+        output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named
+    #[output.update(pipes[i][0].recv()) for i in range(ncores)]
+    [p.join() for p in processes] #FIXME this probably should go elsewhere? like in a class that handles these things?
+    print(output)
+
+    #out = q.get()
+    #print(out)
+    #[output.update(q.get()) for i in range(ncores)]
+        #n = 0
+        #for start,stop in zipped:
+            #mkBinThread = threading.Thread(target=makeGeom, args=(target[start:stop],n)) #TODO fix this so that threads = number of corse instead of spawning bazillions of threads
+            #mkBinThread.start()
+            #n += 1
+        #mkBinThread.join() #FIXME this can fail
 
     #FIXME block until we are done
 
-        return [output[i] for i in range(n)] #FIXME alternately use
+    #print(output)
+    def runner():
+        print('running')
+        out = []
+        for i in range(ncores):
+            out.append(output[i]) #FIXME risk of missing indicies due to integer //
+        return out
+    return runner
 
     #elif len(shape) == 4 or project:
         #for i in range(ndarray.shape[0]): #last componenet will always be the 'projected' dimension
             #mkThrd = threading.Thread(target=makeGeom, args=(ndarray[:,Ellipsis,i],dumps))
-
     #shape = ndarray.shape #[0,0,0,:] : is interpreted as time
     
 def makePoints(n=1000):
@@ -302,43 +353,37 @@ class PointsTest(DirectObject):
     def __init__(self,num=99999,its=99):
         self.num = num
         self.its = its
-        #self.escapeText = genLabelText("ESC: Quit", 0)
         self.accept("escape", sys.exit)
 
         #pointcloud
         #self.clouds=[]
-        #for i in range(its):
-            #cloudGeom=makePoints(self.num) #save us the pain in this version make it the same one probably a more efficient way to do this
-            #self.cloudNode = GeomNode('points')
-            #self.cloudNode.addGeom(cloudGeom) #ooops dont forget this!
-            #self.cloud = render.attachNewNode(self.cloudNode)
+        for i in range(its):
+            cloudGeom=makePoints(self.num) #save us the pain in this version make it the same one probably a more efficient way to do this
+            self.cloudNode = GeomNode('points')
+            self.cloudNode.addGeom(cloudGeom) #ooops dont forget this!
+            self.cloud = render.attachNewNode(self.cloudNode)
             #self.cloud.setPos(10,10,10)
         #for i in range(its):
             #self.clouds.append(cloudNode)
-        #self.its = its
 
-        #self.counter = 0
-        #self.count = genLabelText('%s'%self.counter,3)
-        #self.count.reparentTo(base.a2dTopLeft)
 
         #self.poses = np.random.randint(-1000,1000,(its,3))
         #self.cloud = None
         #self.cloud = render.attachNewNode(self.cloudNode)
         #cloud.hprInterval(1.5,Point3(360,360,360)).loop()
-        #inst=render.attachNewNode('clound-%s'%self.counter)
 
-        #for i in range(its):
-            #inst=render.attachNewNode('clound-%s'%self.counter)
-            #inst.setPos(*self.poses[self.counter])
-            #self.cloud.instanceTo(inst)
-            #self.counter += 1
+        #self.counter = 0
+        #self.count = genLabelText('%s'%self.counter,3)
+        #self.count.reparentTo(base.a2dTopLeft)
 
-        n=9999999
-        nodes = convertToPoints(np.random.randint(-1000,1000,(n,4)),n)
-
-        for node in nodes:
-            render.attachNewNode(node)#.reparentTo(render)
-
+        """
+        inst=render.attachNewNode('clound-%s'%self.counter)
+        for i in range(its):
+            inst=render.attachNewNode('clound-%s'%self.counter)
+            inst.setPos(*self.poses[self.counter])
+            self.cloud.instanceTo(inst)
+            self.counter += 1
+        """
 
         
         #self.update()
@@ -374,6 +419,22 @@ class PointsTest(DirectObject):
         else:
             taskMgr.remove('MOAR')
             
+class NodeTest(DirectObject):
+    def __init__(self,n=9999,bins=99):
+        #nodes = convertToPoints(np.random.randint(-1000,1000,(n,4))) #FIXME cleanup bins and project, they are redundant
+        bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
+        nodes = []
+        runs = []
+        counter = 0
+        for base in bases:
+            print(counter)
+            counter += 1
+            runs.append(convertToPoints(base))
+        for run in runs:
+            nodes.extend(run())
+        for node in nodes:
+            render.attachNewNode(node)#.reparentTo(render)
+
 def main():
     from util import Utils
     from camera import CameraControl
@@ -392,14 +453,15 @@ def main():
     #pt = PointsTest(1,9999999)
     #pt = PointsTest(1,999999) #SLOW AS BALLS: IDEA: render faraway nodes as static meshes and transform them to live as we get closer!
     #pt = PointsTest(9999999,1)
-    #pt = PointsTest(99999,10) #runs fine when there is only 1 node >_<
+    #pt = PointsTest(99999,100) #runs fine when there is only 1 node >_<
     #pt = PointsTest(999,10) #runs fine when there is only 1 node >_<
     #pt = PointsTest(1,99999) #still slow :/
     #pt = PointsTest(1,9999) #still slow :/ #deep trees segfault!
     #pt = PointsTest(1,4000) #still slow :/ #this one is ok
-    pt = PointsTest(1,999) #still slow
+    #pt = PointsTest(1,999) #still slow
     #pt = PointsTest(1,499) #still slow 15 fps with 0,0,0 positioned geom points
     #pt = PointsTest(1,249) #about 45fps :/
+    nt = NodeTest(999,999)
     base.disableMouse()
     #base.camLens.setFar(9E12) #view-frustum-cull 0
     run()

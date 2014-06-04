@@ -215,9 +215,10 @@ class CameraControl(DirectObject):
 
     def makeTask(self, function):
         """ ye old task spawner """
-        x,y = base.mouseWatcherNode.getMouse()
-        setattr(self, '__%sTask_s__'%function, (x,y)) #this should be faster
-        taskMgr.add(getattr(self,function), function+'Task')
+        if base.mouseWatcherNode.hasMouse():
+            x,y = base.mouseWatcherNode.getMouse()
+            setattr(self, '__%sTask_s__'%function, (x,y)) #this should be faster
+            taskMgr.add(getattr(self,function), function+'Task')
 
     def addEndTask(self,key,function):
         self.__ends__[key].append(function)
@@ -237,35 +238,38 @@ class CameraControl(DirectObject):
             this should probably be normalized to screen size actually?
             or no... but to what?
         """
-        x,z = base.mouseWatcherNode.getMouse()
-        sx,sz = getattr(self,'__%s_start__'%name)
-        print(x,sx)
-        print(z,sz)
-        if z != sz or x != sx: #watch out for aliasing here...
-            norm = (((x - sx) * self.XGAIN)**2 + ((z - sz) * self.YGAIN)**2)**.5
-            #norm =  ((x - sx) * self.X_GAIN), ((z - sz) * self.Y_GAIN)
-            setattr(self, '__%s_start__'%name, (x,z))
-            return norm
-        else: #mouse has not moved
-            return 0
+        if base.mouseWatcherNode.hasMouse():
+            x,z = base.mouseWatcherNode.getMouse()
+            sx,sz = getattr(self,'__%s_start__'%name)
+            print(x,sx)
+            print(z,sz)
+            if z != sz or x != sx: #watch out for aliasing here...
+                norm = (((x - sx) * self.XGAIN)**2 + ((z - sz) * self.YGAIN)**2)**.5
+                #norm =  ((x - sx) * self.X_GAIN), ((z - sz) * self.Y_GAIN)
+                setattr(self, '__%s_start__'%name, (x,z))
+                return norm
+            else: #mouse has not moved
+                return 0
 
     def getMouseDdDf(self,name):
-        x,y = base.mouseWatcherNode.getMouse()
-        sx,sy = getattr(self,'__%s_s__'%(name))
-        dx = (x - sx) * self.XGAIN * self.__winx__
-        dy = (y - sy) * self.YGAIN * self.__winy__
-        return dx, dy
+        if base.mouseWatcherNode.hasMouse():
+            x,y = base.mouseWatcherNode.getMouse()
+            sx,sy = getattr(self,'__%s_s__'%(name))
+            dx = (x - sx) * self.XGAIN * self.__winx__
+            dy = (y - sy) * self.YGAIN * self.__winy__
+            return dx, dy
 
     def getMouseCross(self,name): #FIXME may need to do this incrementally as we started with...
-        x,y = base.mouseWatcherNode.getMouse()
-        sx,sy = getattr(self,'__%s_s__'%(name))
+        if base.mouseWatcherNode.hasMouse():
+            x,y = base.mouseWatcherNode.getMouse()
+            sx,sy = getattr(self,'__%s_s__'%(name))
 
-        dx = (x - sx) * self.XGAIN * self.__winx__
-        dy = (y - sy) * self.YGAIN * self.__winy__
-        norm = (dx**2 + dy**2)**.5
-        cross = x * sy - y * sx
+            dx = (x - sx) * self.XGAIN * self.__winx__
+            dy = (y - sy) * self.YGAIN * self.__winy__
+            norm = (dx**2 + dy**2)**.5
+            cross = x * sy - y * sx
 
-        return cross * norm
+            return cross * norm
 
     def home(self, task):
         self.camera.lookAt(self.cameraBase)
@@ -274,18 +278,19 @@ class CameraControl(DirectObject):
 
     def pan(self, task):
         """ I don't like it, it's weird! """
-        x,y = base.mouseWatcherNode.getMouse()
-        sx,sy = getattr(self,'__%s_s__'%(task.getName()))
-        dx = (x - sx) * self.XGAIN * self.__winx__ * 15
-        dy = (y - sy) * self.YGAIN * self.__winy__ * 15
-        #cx,cy,cz = self.camera.getPos()
-        self.camera.setPos(self.camera,dx,0,dy)
-        setattr(self, '__%s_s__'%task.getName(), (x,y)) #reset each frame to compensate for moving from own position
-        #nx,ny,nz = self.camera.getPos()
-        #dx2, dy2, dz2 = nx-cx, ny-cy, nz-cz
-        #self.camera.setPos(cx,cz,cy)
-        #self.cameraBase.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
-        #self.cameraTarget.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
+        if base.mouseWatcherNode.hasMouse():
+            x,y = base.mouseWatcherNode.getMouse()
+            sx,sy = getattr(self,'__%s_s__'%(task.getName()))
+            dx = (x - sx) * self.XGAIN * self.__winx__ * 15
+            dy = (y - sy) * self.YGAIN * self.__winy__ * 15
+            #cx,cy,cz = self.camera.getPos()
+            self.camera.setPos(self.camera,dx,0,dy)
+            setattr(self, '__%s_s__'%task.getName(), (x,y)) #reset each frame to compensate for moving from own position
+            #nx,ny,nz = self.camera.getPos()
+            #dx2, dy2, dz2 = nx-cx, ny-cy, nz-cz
+            #self.camera.setPos(cx,cz,cy)
+            #self.cameraBase.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
+            #self.cameraTarget.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
         return task.cont
 
     def zoom_in_slow(self, task, speed = 10):

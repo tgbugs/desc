@@ -147,7 +147,7 @@ def makeBins(ndarray,nbins=1000):
     if ndarray.shape[1] > 4:
         raise TypeError('we dont know what to do with 5d and above data yet')
 
-def makeGeom(array,ctup,i,pipe):
+def makeGeom(array,ctup,i,pipe, geomType=GeomPoints):
     """ multiprocessing capable geometery maker """
     fmt = GeomVertexFormat.getV3c4()
     vertexData = GeomVertexData('poitns', fmt, Geom.UHStatic)
@@ -160,7 +160,7 @@ def makeGeom(array,ctup,i,pipe):
         verts.addData3f(*point)
         color.addData4f(*ctup)
 
-    points = GeomPoints(Geom.UHStatic)
+    points = geomType(Geom.UHStatic)
     points.addConsecutiveVertices(0,len(array))
     points.closePrimitive()
 
@@ -168,14 +168,12 @@ def makeGeom(array,ctup,i,pipe):
     cloudGeom.addPrimitive(points)
     cloudNode = GeomNode('bin %s'%(i))
     cloudNode.addGeom(cloudGeom)
-    #embed()
     #output[i] = cloudNode
     #print('ping',{i:cloudNode})
     #pipe.send((i,))
     #out = q.get()
     #print('pong',out)
     #q.put(out)
-
     pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
     #return cloudNode
 
@@ -215,7 +213,10 @@ def convertToPoints(target): #FIXME works under python2 now...
         #output[i]=makeGeom(chunks[i],ctup,i,None)
         #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
 
-        p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1]))
+        p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomPoints)) #XXX this one
+        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomLinestrips))
+        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomTristrips))
+        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomTrifans))
         p.start()
         processes.append(p)
 
@@ -462,7 +463,7 @@ def main():
     #pt = PointsTest(1,999) #still slow
     #pt = PointsTest(1,499) #still slow 15 fps with 0,0,0 positioned geom points
     #pt = PointsTest(1,249) #about 45fps :/
-    nt = NodeTest(999,999)
+    nt = NodeTest(99999,99)
     base.disableMouse()
     #base.camLens.setFar(9E12) #view-frustum-cull 0
     run()

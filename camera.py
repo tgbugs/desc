@@ -160,7 +160,7 @@ class CameraControl(DirectObject):
             #self.accept(key,taskMgr.add,(getattr(self,function),function+'Task'))
             self.accept(key, self.makeTask, [function])
             keytest=key.split('-')[-1]
-            print(keytest)
+            #print(keytest)
             if keytest in {'mouse1','mouse2','mouse3'}:
                 self.addEndTask(keytest,function)
                 self.accept(keytest+'-up', self.endTask, [keytest,function])

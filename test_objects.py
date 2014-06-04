@@ -147,6 +147,38 @@ def makeBins(ndarray,nbins=1000):
     if ndarray.shape[1] > 4:
         raise TypeError('we dont know what to do with 5d and above data yet')
 
+def makeGeom(array,ctup,i,pipe):
+    """ multiprocessing capable geometery maker """
+    fmt = GeomVertexFormat.getV3c4()
+    vertexData = GeomVertexData('poitns', fmt, Geom.UHStatic)
+    points = array
+
+    verts = GeomVertexWriter(vertexData, 'vertex')
+    color = GeomVertexWriter(vertexData, 'color')
+
+    for point in points:
+        verts.addData3f(*point)
+        color.addData4f(*ctup)
+
+    points = GeomPoints(Geom.UHStatic)
+    points.addConsecutiveVertices(0,len(array))
+    points.closePrimitive()
+
+    cloudGeom = Geom(vertexData)
+    cloudGeom.addPrimitive(points)
+    cloudNode = GeomNode('bin %s'%(i))
+    cloudNode.addGeom(cloudGeom)
+    #embed()
+    #output[i] = cloudNode
+    #print('ping',{i:cloudNode})
+    #pipe.send((i,))
+    #out = q.get()
+    #print('pong',out)
+    #q.put(out)
+
+    pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
+    #return cloudNode
+
 
 
 def convertToPoints(target): #FIXME works under python2 now...
@@ -162,37 +194,6 @@ def convertToPoints(target): #FIXME works under python2 now...
     #TODO dtypes should be annotated! or should they...
     #if you dtype an existing array, you probably will need to c=c[:,0] to fix wrapping
         #FIXME unfrotunately this breaks slicing >_<
-
-    def makeGeom(array,ctup,i,pipe):
-        fmt = GeomVertexFormat.getV3c4()
-        vertexData = GeomVertexData('poitns', fmt, Geom.UHStatic)
-        points = array
-
-        verts = GeomVertexWriter(vertexData, 'vertex')
-        color = GeomVertexWriter(vertexData, 'color')
-
-        for point in points:
-            verts.addData3f(*point)
-            color.addData4f(*ctup)
-
-        points = GeomPoints(Geom.UHStatic)
-        points.addConsecutiveVertices(0,len(array))
-        points.closePrimitive()
-
-        cloudGeom = Geom(vertexData)
-        cloudGeom.addPrimitive(points)
-        cloudNode = GeomNode('bin %s'%(i))
-        cloudNode.addGeom(cloudGeom)
-        #embed()
-        #output[i] = cloudNode
-        #print('ping',{i:cloudNode})
-        #pipe.send((i,))
-        #out = q.get()
-        #print('pong',out)
-        #q.put(out)
-
-        pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
-        #return cloudNode
 
     if target.ndim > 2:
         raise TypeError('Format should be a list length n of vectors (4d max) ')

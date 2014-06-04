@@ -84,11 +84,12 @@ class BoxSel(DirectObject):
             self.__mouseDown__ = True
             target = self.getClickTarget()  #this isnt an RTS so we want click/drag
             if not target:
-                x,y = base.mouseWatcherNode.getMouse()
-                self.__baseBox__.setPos(x,0,y)
-                self.__baseBox__.setScale(0) #setSx setSy
-                self.__baseBox__.show()
-                taskMgr.add(self.boxTask, 'boxTask')
+                if base.mouseWatcherNode.hasMouse():
+                    x,y = base.mouseWatcherNode.getMouse()
+                    self.__baseBox__.setPos(x,0,y)
+                    self.__baseBox__.setScale(0) #setSx setSy
+                    self.__baseBox__.show()
+                    taskMgr.add(self.boxTask, 'boxTask')
 
     def getClickTarget(self):
         """ See if we were clicking ON an object """

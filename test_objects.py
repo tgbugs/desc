@@ -160,6 +160,38 @@ def makeBins(ndarray,nbins=1000):
     if ndarray.shape[1] > 4:
         raise TypeError('we dont know what to do with 5d and above data yet')
 
+def makeGeom(array,ctup,i,pipe):
+    """ multiprocessing capable geometery maker """
+    fmt = GeomVertexFormat.getV3c4()
+    vertexData = GeomVertexData('poitns', fmt, Geom.UHStatic)
+    points = array
+
+    verts = GeomVertexWriter(vertexData, 'vertex')
+    color = GeomVertexWriter(vertexData, 'color')
+
+    for point in points:
+        verts.addData3f(*point)
+        color.addData4f(*ctup)
+
+    points = GeomPoints(Geom.UHStatic)
+    points.addConsecutiveVertices(0,len(array))
+    points.closePrimitive()
+
+    cloudGeom = Geom(vertexData)
+    cloudGeom.addPrimitive(points)
+    cloudNode = GeomNode('bin %s'%(i))
+    cloudNode.addGeom(cloudGeom)
+    #embed()
+    #output[i] = cloudNode
+    #print('ping',{i:cloudNode})
+    #pipe.send((i,))
+    #out = q.get()
+    #print('pong',out)
+    #q.put(out)
+
+    pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
+    #return cloudNode
+
 
 def processWrap(func):
     """ needed to fix multiprocessing on windows """
@@ -183,38 +215,6 @@ def convertToPoints(target): #FIXME works under python2 now...
     #if you dtype an existing array, you probably will need to c=c[:,0] to fix wrapping
         #FIXME unfrotunately this breaks slicing >_<
 
-    def makeGeom(array,ctup,i,pipe):
-        fmt = GeomVertexFormat.getV3c4()
-        vertexData = GeomVertexData('poitns', fmt, Geom.UHStatic)
-        points = array
-
-        verts = GeomVertexWriter(vertexData, 'vertex')
-        color = GeomVertexWriter(vertexData, 'color')
-
-        for point in points:
-            verts.addData3f(*point)
-            color.addData4f(*ctup)
-
-        points = GeomPoints(Geom.UHStatic)
-        points.addConsecutiveVertices(0,len(array))
-        points.closePrimitive()
-
-        cloudGeom = Geom(vertexData)
-        cloudGeom.addPrimitive(points)
-        cloudNode = GeomNode('bin %s'%(i))
-        cloudNode.addGeom(cloudGeom)
-        #embed()
-        #output[i] = cloudNode
-        #print('ping',{i:cloudNode})
-        #pipe.send((i,))
-        #out = q.get()
-        #print('pong',out)
-        #q.put(out)
-
-        #pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
-        #pipe.close()
-        return cloudNode
-
     if target.ndim > 2:
         raise TypeError('Format should be a list length n of vectors (4d max) ')
 
@@ -231,23 +231,21 @@ def convertToPoints(target): #FIXME works under python2 now...
     pipes = [Pipe() for q in range(ncores)]
     output = {} #we can probably just merge the dicts after the fact?
     #q = Queue()
-    inp=[]
     for i in range(ncores):
         #output[i]=makeGeom(chunks[i],ctup,i,None)
         #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
         #p = mp.Process(target=processWrap(makeGeom), args=(chunks[i],ctup,i,pipes[i][1]))
-        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1]))
-        #p.start()
-        #processes.append(p)
-        inp.append([chunks[i],ctup,i,None])
-    output = parmap(makeGeom,inp)
+
+        p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1]))
+        p.start()
+        processes.append(p)
 
     #print(pipes[0][0].recv())
-    #for i in range(ncores):
-        #output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named
+    for i in range(ncores):
+        output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named
 
     #[output.update(pipes[i][0].recv()) for i in range(ncores)]
-    #[p.join() for p in processes] #FIXME this probably should go elsewhere? like in a class that handles these things?
+    [p.join() for p in processes] #FIXME this probably should go elsewhere? like in a class that handles these things?
     print(output)
 
     #out = q.get()

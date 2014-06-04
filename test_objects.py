@@ -1,3 +1,4 @@
+from __future__ import print_function
 #import direct.directbase.DirectStart #FIXME showbase
 from direct.showbase.ShowBase import ShowBase
 from direct.gui.DirectButton import DirectButton
@@ -174,12 +175,12 @@ def makeGeom(array,ctup,i,pipe, geomType=GeomPoints):
     #out = q.get()
     #print('pong',out)
     #q.put(out)
+    if pipe == None:
+        return (cloudNode,)
     pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
     #return cloudNode
 
-
-
-def convertToPoints(target): #FIXME works under python2 now...
+def convertToGeom(target,geomType=GeomPoints): #FIXME works under python2 now...
     """
         take an np.ndarray and convert it to a point cloud
         this will probably be faster than trying to make them
@@ -189,43 +190,51 @@ def convertToPoints(target): #FIXME works under python2 now...
         NO: this take an n lenght list of vectors length m where m is the dimensionality
         #we will need to bin the 4th dimension
     """
-    #TODO dtypes should be annotated! or should they...
-    #if you dtype an existing array, you probably will need to c=c[:,0] to fix wrapping
-        #FIXME unfrotunately this breaks slicing >_<
+    #TODO check that target has enough points for the geomType requested!
 
     if target.ndim > 2:
         raise TypeError('Format should be a list length n of vectors (4d max) ')
 
     ncores = 8
-    chunk_size = target.shape[0]//ncores
-    czip = zip(range(0,target.shape[0]-chunk_size,chunk_size),
-               range(chunk_size,target.shape[0],chunk_size))
-    chunks = []
-    for start,stop in czip:
-        chunks.append(target[start:stop]) #may not need to do this if I can generate it from i?
-
     ctup = np.random.rand(4)
-    processes = []
-    pipes = [Pipe() for q in range(ncores)]
-    output = {} #we can probably just merge the dicts after the fact?
-    #q = Queue()
-    for i in range(ncores):
-        #output[i]=makeGeom(chunks[i],ctup,i,None)
-        #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
+    if target.shape[0] < ncores*10: #need at LEAST 10 points per core TODO test for optimal chunking start size
+        ncores = 1
+        out = makeGeom(target,ctup,0,None,geomType)
+        return lambda:out
+    else:
+        chunks = []
+        chunk_size = target.shape[0]//ncores
+        czip = zip(range(0,target.shape[0]-chunk_size,chunk_size),
+                   range(chunk_size,target.shape[0],chunk_size))
+        for start,stop in czip:
+            chunks.append(target[start:stop]) #may not need to do this if I can generate it from i?
 
-        p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomPoints)) #XXX this one
-        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomLinestrips))
-        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomTristrips))
-        #p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],GeomTrifans))
-        p.start()
-        processes.append(p)
+        processes = []
+        pipes = [Pipe() for q in range(ncores)]
+        #q = Queue()
+        for i in range(ncores):
+            #output[i]=makeGeom(chunks[i],ctup,i,None)
+            #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
+
+            p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],geomType)) #XXX this one
+            p.start()
+            processes.append(p)
+        def runner():
+            print('running')
+            output = {} #we can probably just merge the dicts after the fact?
+            for i in range(ncores):
+                output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named, also recv blocks till close
+            out = []
+            for i in range(ncores):
+                out.append(output[i]) #FIXME risk of missing indicies due to integer //
+            print('done running')
+            return out
+        return runner
 
     #print(pipes[0][0].recv())
-    for i in range(ncores):
-        output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named
     #[output.update(pipes[i][0].recv()) for i in range(ncores)]
-    [p.join() for p in processes] #FIXME this probably should go elsewhere? like in a class that handles these things?
-    print(output)
+    #print(output)
+    #[p.join() for p in processes] #FIXME this probably should go elsewhere? like in a class that handles these things?
 
     #out = q.get()
     #print(out)
@@ -240,13 +249,6 @@ def convertToPoints(target): #FIXME works under python2 now...
     #FIXME block until we are done
 
     #print(output)
-    def runner():
-        print('running')
-        out = []
-        for i in range(ncores):
-            out.append(output[i]) #FIXME risk of missing indicies due to integer //
-        return out
-    return runner
 
     #elif len(shape) == 4 or project:
         #for i in range(ndarray.shape[0]): #last componenet will always be the 'projected' dimension
@@ -384,17 +386,22 @@ class NodeTest(DirectObject):
     def __init__(self,n=9999,bins=99):
         #nodes = convertToPoints(np.random.randint(-1000,1000,(n,4))) #FIXME cleanup bins and project, they are redundant
         bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
-        nodes = []
+        types = [GeomLinestrips]#, GeomTristrips]#, GeomTrifans] #FIXME allow makeGeom to accept a LIST of geom types!
+        #nodes = []
         runs = []
         counter = 0
-        for base in bases:
+        for base in bases: #FIXME for some reason this is running slower for extra bins number of bins, should not be
             print(counter)
             counter += 1
-            runs.append(convertToPoints(base))
-        for run in runs:
-            nodes.extend(run())
-        for node in nodes:
-            render.attachNewNode(node)#.reparentTo(render)
+            for type_ in types:
+                runs.append(convertToGeom(base,type_)) #this call seems to take longer with additional bins?
+        #for run in runs:
+            #nodes.extend(run())
+        print('attaching nodes')
+        for nodes in runs:
+            for node in nodes():
+                render.attachNewNode(node)
+        print('ready to roll')
 
 def main():
     from util import Utils
@@ -402,6 +409,7 @@ def main():
     #from panda3d.core import ConfigVariableBool
     #ConfigVariableString('view-frustum-cull',False)
     from panda3d.core import loadPrcFileData
+    from time import time
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
@@ -410,6 +418,7 @@ def main():
     axis = Axis3d()
     cc = CameraControl()
     bs = BoxSel()
+    base.disableMouse()
     #pt = PointsTest(999,99999)
     #pt = PointsTest(1,9999999)
     #pt = PointsTest(1,999999) #SLOW AS BALLS: IDEA: render faraway nodes as static meshes and transform them to live as we get closer!
@@ -422,10 +431,16 @@ def main():
     #pt = PointsTest(1,999) #still slow
     #pt = PointsTest(1,499) #still slow 15 fps with 0,0,0 positioned geom points
     #pt = PointsTest(1,249) #about 45fps :/
-    nt = NodeTest(99999,99)
-    base.disableMouse()
+    bins = 9999 #999=.057, below 200 ~.044 so hard to tell (for n = 99)
+    tick = time()
+    #FIXME low numbers of points causes major problems!
+    nt = NodeTest(3,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
+    tock = time()
+    metric = (tock-tick) / bins
+    print('run time / bins = %s'%metric)
+    #nt = NodeTest(999,5)
     #base.camLens.setFar(9E12) #view-frustum-cull 0
-    run()
+    run() #looks like this is the slow case... probably should look into non blocking model loading?
 
 if __name__ == '__main__':
     main()

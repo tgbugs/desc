@@ -21,6 +21,46 @@ import sys
 from threading import Thread
 from IPython import embed
 
+class HasSelectables: #mixin see chessboard example
+    def __init__(self):
+        #selection detection
+        self.picker = CollisionRraverser()
+        self.pq = CollisionHandlerQueue()
+        self.pickerNode = CollisionNode('mouseRay')
+        self.pickerNP = camera.attachNewNode(self.pickerNode)
+        self.pickerNode.setFromCollideMask(BitMask32.bit(1))
+        self.pickerRay = CollisionRay()
+        self.pickerNode.addCollider(self.pickerNP, self.pq)
+
+        #box selection detection HINT: start with drawing the 2d thing yo!
+
+        self.__shift__ = False
+        self.accept("shift", self.shiftOn)
+        self.accept("shift-up", self.shiftOff)
+
+        #mouse handling
+        self.accept("mouse1", self.clickHandler)
+        self.accept("mouse1-up", self.releaseHandler)
+
+        #dragging
+        self.dragTask = taskMgr.add(self.dragTask, 'dragTask')
+
+    def clickHandler(self):
+        pass
+
+    def releaseHandler(self):
+        pass
+
+    def dragTask(self, task):
+        pass
+
+
+    def clickSelectObject(self): #shif to multiselect... ?? to unselect invidiual??
+        pass
+
+    def dragSelectObjects(self): #always drag in the plane of the camera
+        pass
+
 def genLabelText(text, i): #FIXME
   return OnscreenText(text = text, pos = (-1.3, .95-.05*i), fg=(1,1,1,1),
                       align = TextNode.ALeft, scale = .05)

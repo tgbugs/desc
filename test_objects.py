@@ -29,19 +29,6 @@ from multiprocessing import Pipe,Process
 #from queue import Queue #warning on py2...
 #import threading #not what we need due to GIL >_<
 
-def spawn(f):
-    def fun(pipe,x):
-        pipe.send(f(x))
-        pipe.close()
-    return fun
-def parmap(f,X):
-    """ Function to make multiprocessing work correctly """
-    pipe=[Pipe() for x in X]
-    proc=[Process(target=spawn(f),args=(c,x)) for x,(p,c) in zip(X,pipe)]
-    [p.start() for p in proc]
-    [p.join() for p in proc]
-    return [p.recv() for (p,c) in pipe]
-
 #for points
 #nodePath.setRenderModePerspective()
 #nodePath.setRenderModeThickness()
@@ -191,15 +178,6 @@ def makeGeom(array,ctup,i,pipe):
 
     pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
     #return cloudNode
-
-
-def processWrap(func):
-    """ needed to fix multiprocessing on windows """
-    def wrap(*args):
-        return func(*args)
-    return wrap
-
-
 
 def convertToPoints(target): #FIXME works under python2 now...
     """
@@ -484,7 +462,7 @@ def main():
     #pt = PointsTest(1,999) #still slow
     #pt = PointsTest(1,499) #still slow 15 fps with 0,0,0 positioned geom points
     #pt = PointsTest(1,249) #about 45fps :/
-    nt = NodeTest(999,999)
+    nt = NodeTest(999,10)
     base.disableMouse()
     #base.camLens.setFar(9E12) #view-frustum-cull 0
     run()

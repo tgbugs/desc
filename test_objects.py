@@ -39,6 +39,8 @@ import numpy as np
 
 from dragsel import BoxSel
 
+NCORES = 8 #TODO get this live?
+
 def genLabelText(text, i): #FIXME
   return OnscreenText(text = text, pos = (.025, -.05*i), fg=(1,1,1,1),
                       align = TextNode.ALeft, scale = .05)
@@ -194,7 +196,7 @@ def convertToGeom(target,geomType=GeomPoints): #FIXME works under python2 now...
     if target.ndim > 2:
         raise TypeError('Format should be a list length n of vectors (4d max) ')
 
-    ncores = 8
+    ncores = NCORES #prevent changes to the global variable from affecting a single run
     ctup = np.random.rand(4)
     if target.shape[0] < ncores*10: #need at LEAST 10 points per core TODO test for optimal chunking start size
         ncores = 1
@@ -254,6 +256,13 @@ def convertToGeom(target,geomType=GeomPoints): #FIXME works under python2 now...
             #mkThrd = threading.Thread(target=makeGeom, args=(ndarray[:,Ellipsis,i],dumps))
     #shape = ndarray.shape #[0,0,0,:] : is interpreted as time
     
+def convertToColl(target,collType=CollisionSphere): #FIXME this won't work quite right
+    ncores = NCORES
+    if target.shape[0] < ncores*10:
+        ncores = 1
+        out = makeColl(
+    pass
+
 def makePoints(n=1000):
     """ make a cloud of points that are a single node VS branching and making subnodes to control display """
 

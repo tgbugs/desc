@@ -14,6 +14,20 @@ accessible from everywhere except insert mode:
  1. search
  2. command line
 
+notes:
+ 1. yes, high node counts are a problem, but apparently not in and of themselves?
+    solutions are: RigidBodyCombiner or NodePath.flattenStrong() (Light or Medium)
+    as long as selection still works this should not be an issue and we can alwasy
+    manipulate the geometry directly...
+ 2. read rdbs blog posts... threading-model Cull/Draw, also buffer protocols for direct manip seems good for quite a bit of stuff
+    holy crap that massively degrades performance!!!! multiplies the cull and draw times by a factor of 4!!!!!
+ 3. sweet spot for nodes is around 3000 on my hardware, guys in the thread say 300-500
+ 4. also, turns out it might be possible to do collision on individual nodes and keep that index by itself and thus not have to worry about the
+    impact on rendering
+
+ bugs:
+  1. turn on threading-mode Cull/Draw, do mouse collision with showCollisions(render) on the CollisionTraverser will segfault
+
 things
 ======
  1. separate out the proceduarl object definitions into their own file

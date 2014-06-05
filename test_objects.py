@@ -13,10 +13,9 @@ from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
 from panda3d.core import GeomLines, GeomLinestrips #useful for nodes
 from panda3d.core import GeomPoints
 from panda3d.core import Texture, GeomNode
-from panda3d.core import Point3,Vec3,Vec4
+from panda3d.core import Point3,Vec3,Vec4,BitMask32
 
-from panda3d.core import AmbientLight
-
+from panda3d.core import CollisionNode, CollisionSphere
 #tools
 #from panda3d.core import loadPrcFileData
 #loadPrcFileData("", "want-directtools #t")
@@ -167,7 +166,7 @@ def makeGeom(array,ctup,i,pipe, geomType=GeomPoints):
 
     cloudGeom = Geom(vertexData)
     cloudGeom.addPrimitive(points)
-    cloudNode = GeomNode('bin %s'%(i))
+    cloudNode = GeomNode('bin %s selectable'%(i))
     cloudNode.addGeom(cloudGeom)
     #output[i] = cloudNode
     #print('ping',{i:cloudNode})
@@ -220,14 +219,14 @@ def convertToGeom(target,geomType=GeomPoints): #FIXME works under python2 now...
             p.start()
             processes.append(p)
         def runner():
-            print('running')
+            #print('running')
             output = {} #we can probably just merge the dicts after the fact?
             for i in range(ncores):
                 output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named, also recv blocks till close
             out = []
             for i in range(ncores):
                 out.append(output[i]) #FIXME risk of missing indicies due to integer //
-            print('done running')
+            #print('done running')
             return out
         return runner
 
@@ -384,24 +383,42 @@ class PointsTest(DirectObject):
             
 class NodeTest(DirectObject):
     def __init__(self,n=9999,bins=99):
-        #nodes = convertToPoints(np.random.randint(-1000,1000,(n,4))) #FIXME cleanup bins and project, they are redundant
+        types = [GeomLinestrips]#, GeomTristrips], GeomTrifans] #FIXME allow makeGeom to accept a LIST of geom types!
         bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
-        types = [GeomLinestrips]#, GeomTristrips]#, GeomTrifans] #FIXME allow makeGeom to accept a LIST of geom types!
-        #nodes = []
         runs = []
-        counter = 0
         for base in bases: #FIXME for some reason this is running slower for extra bins number of bins, should not be
-            print(counter)
-            counter += 1
             for type_ in types:
                 runs.append(convertToGeom(base,type_)) #this call seems to take longer with additional bins?
-        #for run in runs:
-            #nodes.extend(run())
-        print('attaching nodes')
+
         for nodes in runs:
             for node in nodes():
-                render.attachNewNode(node)
-        print('ready to roll')
+                nd = render.attachNewNode(node)
+         
+class CollTest(DirectObject):
+    def __init__(self,n=9999,bins=99):
+        collideRoot = render.attachNewNode('collideRoot')
+        bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
+        type_ = GeomPoints
+        runs = []
+        for base in bases:
+            runs.append(convertToGeom(base,type_))
+        r = 0
+        for nodes in runs:
+            #pos = np.random.randint(-100,100,3)
+            for node in nodes():
+                nd = render.attachNewNode(node)
+                #nd.setPos(*pos)
+                #nd.setRenderModeThickness(5)
+                #XXX TODO XXX collision objects
+                n = 0 
+                for position in bases[r]: #FIXME this is hella slow, the correct way to do this is to detach and reattach CollisionNodes as they are needed...
+                    #TODO to change the color of a selected node we will need something a bit more ... sophisticated
+                    cNode = collideRoot.attachNewNode(CollisionNode('collider obj,vert %s,%s'%(r,n))) #ultimately used to index??
+                    cNode.node().addSolid(CollisionSphere(0,0,0,.5))
+                    cNode.node().setIntoCollideMask(BitMask32.bit(1))
+                    cNode.setPos(nd,*position)
+                    n+=1
+            r+=1
 
 def main():
     from util import Utils
@@ -410,14 +427,16 @@ def main():
     #ConfigVariableString('view-frustum-cull',False)
     from panda3d.core import loadPrcFileData
     from time import time
+    from panda3d.core import PStatClient
+    PStatClient.connect()
     loadPrcFileData('','view-frustum-cull 0')
+    #loadPrcFileData('','threading-model Cull/Draw') #bad for lots of nodes
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
     ut = Utils()
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
-    bs = BoxSel()
     base.disableMouse()
     #pt = PointsTest(999,99999)
     #pt = PointsTest(1,9999999)
@@ -431,15 +450,17 @@ def main():
     #pt = PointsTest(1,999) #still slow
     #pt = PointsTest(1,499) #still slow 15 fps with 0,0,0 positioned geom points
     #pt = PointsTest(1,249) #about 45fps :/
-    bins = 9999 #999=.057, below 200 ~.044 so hard to tell (for n = 99)
+    bins = 1 #999=.057, below 200 ~.044 so hard to tell (for n = 99)
     tick = time()
     #FIXME low numbers of points causes major problems!
-    nt = NodeTest(3,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
+    #nt = NodeTest(999999,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
+    ct = CollTest(9999,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
     tock = time()
     metric = (tock-tick) / bins
     print('run time / bins = %s'%metric)
     #nt = NodeTest(999,5)
     #base.camLens.setFar(9E12) #view-frustum-cull 0
+    bs = BoxSel() #some stuff
     run() #looks like this is the slow case... probably should look into non blocking model loading?
 
 if __name__ == '__main__':

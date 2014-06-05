@@ -1,3 +1,4 @@
+from __future__ import print_function
 #import direct.directbase.DirectStart
 from direct.showbase.ShowBase import ShowBase
 from direct.gui.DirectButton import DirectButton
@@ -12,9 +13,12 @@ from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
 from panda3d.core import GeomLines, GeomLinestrips #useful for nodes
 from panda3d.core import GeomPoints
 from panda3d.core import Texture, GeomNode
-from panda3d.core import Point3,Vec3,Vec4
+from panda3d.core import Point3,Vec3,Vec4,BitMask32
 
 from panda3d.core import AmbientLight
+
+from panda3d.core import CollisionTraverser,CollisionNode
+from panda3d.core import CollisionHandlerQueue,CollisionRay
 
 
 import sys
@@ -24,13 +28,17 @@ from IPython import embed
 class HasSelectables: #mixin see chessboard example
     def __init__(self):
         #selection detection
-        self.picker = CollisionRraverser()
+        self.picker = CollisionTraverser()
         self.pq = CollisionHandlerQueue()
         self.pickerNode = CollisionNode('mouseRay')
         self.pickerNP = camera.attachNewNode(self.pickerNode)
+        #self.pickerNode.setFromCollideMask(GeomNode.getDefaultCollideMask()) #TODO WOW geometry collision is SUPER slow...
         self.pickerNode.setFromCollideMask(BitMask32.bit(1))
+        #render.find('**selectable').node().setIntoCollideMask(BitMask32.bit(1))
         self.pickerRay = CollisionRay()
-        self.pickerNode.addCollider(self.pickerNP, self.pq)
+        self.pickerNode.addSolid(self.pickerRay)
+        self.picker.addCollider(self.pickerNP, self.pq)
+        #self.picker.showCollisions(render)
 
         #box selection detection HINT: start with drawing the 2d thing yo!
 
@@ -45,6 +53,35 @@ class HasSelectables: #mixin see chessboard example
         #dragging
         self.dragTask = taskMgr.add(self.dragTask, 'dragTask')
 
+    def getClickTarget(self,rootSelNode=None):
+        """ traverse from the root of the selectable tree """
+        print('getting target....')
+        if rootSelNode == None:
+            rootSelNode = render
+
+        if base.mouseWatcherNode.hasMouse():
+            self.pickerRay.setFromLens(base.camNode, *base.mouseWatcherNode.getMouse())
+
+            self.picker.traverse(rootSelNode)
+            if self.pq.getNumEntries() > 0: #if we got something sort it
+                self.pq.sortEntries()
+                #print(self.pq)
+                uuid = self.pq.getEntry(0).getIntoNode().getTag('uuid')
+                return self.pq.getEntry(0)
+
+
+
+        #nearPoint = render.getRelativePoint(camera, self.pickerRay.getOrigin())
+        #nearVec = render.getRelativeVector(camera, self.pickerRay.getDirection())
+        #thingToDrag.obj.setPos(PointAtZ(.5, nearPoint, nearVec)) #not sure how this works
+
+
+    def shiftOn(self):
+        self.__shift__ = True
+
+    def shiftOff(self):
+        self.__shift__ = False
+
     def clickHandler(self):
         pass
 
@@ -53,7 +90,6 @@ class HasSelectables: #mixin see chessboard example
 
     def dragTask(self, task):
         pass
-
 
     def clickSelectObject(self): #shif to multiselect... ?? to unselect invidiual??
         pass
@@ -101,10 +137,11 @@ def makeSelectRect():
     
 #use render 2d?
 
-class BoxSel(DirectObject):
+class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
     def __init__(self):
+        super(BoxSel, self).__init__()
 
-        self.__mouseDown__ = False
+        #self.__mouseDown__ = False
 
         #setup the selection box
         #self.__startNode__ = render2d.attachNewNode(PandaNode()) #empty node
@@ -120,28 +157,35 @@ class BoxSel(DirectObject):
         #taskMgr.add(self.clickTask, 'clickTask')
         
     def gotClick(self):
-        if not self.__mouseDown__:
-            self.__mouseDown__ = True
-            target = self.getClickTarget()  #this isnt an RTS so we want click/drag
-            if not target:
-                if base.mouseWatcherNode.hasMouse():
-                    x,y = base.mouseWatcherNode.getMouse()
-                    self.__baseBox__.setPos(x,0,y)
-                    self.__baseBox__.setScale(0) #setSx setSy
-                    self.__baseBox__.show()
-                    taskMgr.add(self.boxTask, 'boxTask')
+        #if not self.__mouseDown__: #this case never happens unless the univers explodes?
+        #self.__mouseDown__ = True
+        target = self.getClickTarget()  #this isnt an RTS so we want click/drag
+        #TODO in theory this should not normally take this long???
+        print(target)
+        if not target:
+            if base.mouseWatcherNode.hasMouse():
+                x,y = base.mouseWatcherNode.getMouse()
+                self.__baseBox__.setPos(x,0,y)
+                self.__baseBox__.setScale(0) #setSx setSy
+                self.__baseBox__.show()
+                taskMgr.add(self.boxTask, 'boxTask')
 
     def getClickTarget(self):
         """ See if we were clicking ON an object """
         #this will use the ray tracing hit detection
         #so no need for x and y
-        return False
+
+        #TODO the magic here will be that we will move the individual geom
+        #by creating a new node that copies it for the drag and then reinsert at the new position
+        #when we release
+        
+        #this may take a bit more finagling ie: we may need to create a collision sphere around every vertex
+        return super(BoxSel,self).getClickTarget() #TODO damn it python 2
 
     def gotRelease(self):
-        self.__mouseDown__ = False
+        #self.__mouseDown__ = False
         self.__baseBox__.hide()
         taskMgr.remove('boxTask')
-
 
     #def clickTask(self, task): #this will probably need to handle many possible click targets
         #if type(self.__mouseDown__) is tuple:

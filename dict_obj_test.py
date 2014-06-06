@@ -1,26 +1,12 @@
-import cProfile, pstats, io
-sortby = 'cumulative'
-def Before():
-    global pr, s
-    pr = cProfile.Profile()
-    s = io.StringIO()
-    pr.enable()
-
-def After(name='WHO KNOWS!'):
-    global pr, s
-    pr.disable()
-    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats()
-    print(name,s.getvalue())
-
-import threading
 from itertools import count
-class objectManager(dict):
+class MonoDict(dict): #TODO this might work really well as one of those shared index dicts!??
+    """ threadsafe dict with .insert that gurantees monotonicity """
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.__counter__ = count(0,1) #this is threadsafe
         self.__lastIndex__ = -1
         #self.idx = 0 #test for monotonicity
+
         #TODO monolithic for all things or allow manager managers?
             #personally I would prefer monolitic for sake of simplicity
             #and frankly uint32 has more indexes than we will ever need
@@ -41,7 +27,7 @@ class objectManager(dict):
         self.__setitem__(key, value)
         return key
 
-    def __setitem__(self,key,value):
+    def TOOSLOW__setitem__(self,key,value): #FIXME we might just want to completely ignore this since we want fast updates?
         if key > self.__lastIndex__:
             raise KeyError('Use insert to add new objects!') #self.update will just be a nasty mess
         else:
@@ -49,80 +35,80 @@ class objectManager(dict):
             #self.idx = self.__lastIndex__
             super().__setitem__(key,value)
 
-def OMvsDict():
-    reps = 999999
-    om = objectManager()
-    for i in range(0,10,3):
-        print('before',om.__addIndex__)
-        print('insert',om.insert('asdf'))
-        print('after',om.__addIndex__)
+###
+#   Tests
+###
+if __name__ == '__main__':
+    import threading
+    from prof import Prof
+    p = Prof()
 
-    om = objectManager()
-    Before()
-    for i in range(reps):
-        om.insert(i)
-    After('om')
-        
-    om2 = {}
-    def helper(i): #turns out locks are super expensive... who knew!
-        om2[i] = i
-        1+1
-        1-1
+    def OMvsDict():
+        reps = 999999
+        om = MonoDict()
+        for i in range(0,10,3):
+            print('before',om.__addIndex__)
+            print('insert',om.insert('asdf'))
+            print('after',om.__addIndex__)
 
-    Before()
-    for i in range(reps): #roughly 5x faster
-        helper(i)
-        #om2[i] = i #weirdness dude
-    #[om2.update({i:i}) for i in range(reps)]
-    After('dict')
-    print(len(om2))
-
-def countIsThreadsafe():
-    om = objectManager()
-    #om = {}
-    def nasty(n):
-        num = 111
-        for i in range(num*n,num*(n+1)):
-            #om[i]=i
+        om = MonoDict()
+        p.Before()
+        for i in range(reps):
             om.insert(i)
+        p.After('om')
+            
+        om2 = {}
+        def helper(i): #turns out locks are super expensive... who knew!
+            om2[i] = i
+            1+1
+            1-1
 
-    tnum = 9999
-    threads = []
-    [threads.append(threading.Thread(target=nasty, args=(i,))) for i in range(tnum)]
-    [t.start() for t in threads]
-    [t.join() for t in threads]
+        p.Before()
+        for i in range(reps): #roughly 5x faster
+            helper(i)
+            #om2[i] = i #weirdness dude
+        #[om2.update({i:i}) for i in range(reps)]
+        p.After('dict')
+        print(len(om2))
 
-    print(om.idx)
-    #print(om)
-    #print(om.__addIndex__)
+    def countIsThreadsafe():
+        om = MonoDict()
+        #om = {}
+        def nasty(n):
+            num = 111
+            for i in range(num*n,num*(n+1)):
+                #om[i]=i
+                om.insert(i)
 
-def addPoses():
-    import numpy as np
-    om = objectManager()
-    #om = {}
+        tnum = 9999
+        threads = []
+        [threads.append(threading.Thread(target=nasty, args=(i,))) for i in range(tnum)]
+        [t.start() for t in threads]
+        [t.join() for t in threads]
 
-    #Before()
-    bases = np.random.randn(99999,3) #as long as we stage inserts or do it in a different thread everything should be ok
-    #After('gens')
+        #print(om)
+        #print(om.__addIndex__)
 
-    def helper(b):
-        om[-1] = b
+    def addPoses():
+        import numpy as np
+        om = MonoDict()
+        #om = {}
 
-    Before()
-    for b in bases:
-        helper(b)
-        #print(out,b) #crap
-    #[om.update({-1:b}) for b in bases]
-    After('inserts')
-    #print(om)
+        bases = np.random.randn(999999,3) #as long as we stage inserts or do it in a different thread everything should be ok
 
-    
-def main():
-    countIsThreadsafe()
-    #OMvsDict()
-    addPoses()
+        p.Before()
+        for b in bases:
+            #helper(b)
+            om.insert(b)
+            #print(out,b) #crap
+        #[om.update({-1:b}) for b in bases]
+        p.After('inserts')
+        #print(om) #super slow for big dicts
 
-
+    def main():
+        countIsThreadsafe()
+        #OMvsDict()
+        addPoses()
 
 if __name__ == '__main__':
     main()

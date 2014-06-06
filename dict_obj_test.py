@@ -1,3 +1,18 @@
+import cProfile, pstats, io
+sortby = 'cumulative'
+def Before():
+    global pr, s
+    pr = cProfile.Profile()
+    s = io.StringIO()
+    pr.enable()
+
+def After(name='WHO KNOWS!'):
+    global pr, s
+    pr.disable()
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    print(name,s.getvalue())
+
 import threading
 from itertools import count
 class objectManager(dict):
@@ -18,9 +33,11 @@ class objectManager(dict):
             #step two we switch to axis mode with a set of objects, perhaps still in hier space
 
     def insert(self,value):
+        """ insert an object into the manager and get back its identifier
+        """
         key = self.__counter__.__next__()
-        if key > self.__lastIndex__: #if some other thread has already updated, don't reset to a lower value
-            self.__lastIndex__ = key #this prevents problems with other threads resetting __lastIndex__
+        if key > self.__lastIndex__: #ensure monotonicity
+            self.__lastIndex__ = key
         self.__setitem__(key, value)
         return key
 
@@ -31,22 +48,6 @@ class objectManager(dict):
             #assert self.idx <= self.__lastIndex__, 'not monotonic!'
             #self.idx = self.__lastIndex__
             super().__setitem__(key,value)
-
-import cProfile, pstats, io
-sortby = 'cumulative'
-def Before():
-    global pr, s
-    pr = cProfile.Profile()
-    s = io.StringIO()
-    pr.enable()
-
-def After(name='WHO KNOWS!'):
-    global pr, s
-    pr.disable()
-    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats()
-    print(name,s.getvalue())
-
 
 def OMvsDict():
     reps = 999999
@@ -105,7 +106,7 @@ def addPoses():
     #After('gens')
 
     def helper(b):
-        om[99999999999999] = b
+        om[-1] = b
 
     Before()
     for b in bases:

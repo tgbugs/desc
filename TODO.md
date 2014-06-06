@@ -30,6 +30,10 @@ notes:
 
 things
 ======
+ 6. collision nodes need to be able to quickly reference the geometry atom
+    they are bound to, this means the index of a specific vertex in a geom or
+    a geom itself to manipulate either the pixel shader or the texture, hrm
+    we might be able to use a vertex shader to change color of selected vertices
  1. separate out the proceduarl object definitions into their own file
  2. keybinds config file: mapping from config names to functions
  3. CONCLUSION: do not use the scene graph for most things, it is simply too slow allow selection on sub components, or figure out how to thread this

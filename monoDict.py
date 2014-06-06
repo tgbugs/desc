@@ -1,4 +1,22 @@
+#TODO monolithic for all things or allow manager managers?
+    #personally I would prefer monolitic for sake of simplicity
+    #and frankly uint32 has more indexes than we will ever need
+#the main question is where the identifiers are going to come from?
+    #the answer for this almost certainly is the data structure that
+    #has uuids or the like baked in and references *could* work that way
+    #BUT we don't need that for just the things in memory right now...
+#how do we call a bulk update eg when we switch an axis?
+    #step one we are in hierarchical exploration mode
+    #step two we switch to axis mode with a set of objects, perhaps still in hier space
+
+#XXX NOTE: currently this cannot be used effectively to track the positions of relations, which have 2 ends
+    #at best realtions should probably be referenced as a tuple of MonoDict index values...
+    #we might be able to do fast type inference, but then a relation could reference a relation and the
+    #whole thing will come tumbling down
+#basically when we deal with the relations between relations we will have to think a little bit harder about this
+
 from itertools import count
+
 class MonoDict(dict): #TODO this might work really well as one of those shared index dicts!??
     """ threadsafe dict with .insert that gurantees monotonicity """
     def __init__(self,*args,**kwargs):
@@ -6,18 +24,6 @@ class MonoDict(dict): #TODO this might work really well as one of those shared i
         self.__counter__ = count(0,1) #this is threadsafe
         self.__lastIndex__ = -1
         #self.idx = 0 #test for monotonicity
-
-        #TODO monolithic for all things or allow manager managers?
-            #personally I would prefer monolitic for sake of simplicity
-            #and frankly uint32 has more indexes than we will ever need
-        #the main question is where the identifiers are going to come from?
-            #the answer for this almost certainly is the data structure that
-            #has uuids or the like baked in and references *could* work that way
-            #BUT we don't need that for just the things in memory right now...
-        #how do we call a bulk update eg when we switch an axis?
-            #step one we are in hierarchical exploration mode
-            #step two we switch to axis mode with a set of objects, perhaps still in hier space
-
     def insert(self,value):
         """ insert an object into the manager and get back its identifier
         """

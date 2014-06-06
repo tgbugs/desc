@@ -169,7 +169,39 @@ def makeGeom(array,ctup,i,pipe, geomType=GeomPoints):
     cloudGeom = Geom(vertexData)
     cloudGeom.addPrimitive(points)
     cloudNode = GeomNode('bin %s selectable'%(i))
-    cloudNode.addGeom(cloudGeom)
+    cloudNode.addGeom(cloudGeom) #TODO figure out if it is faster to add and subtract Geoms from geom nodes...
+    #output[i] = cloudNode
+    #print('ping',{i:cloudNode})
+    #pipe.send((i,))
+    #out = q.get()
+    #print('pong',out)
+    #q.put(out)
+    if pipe == None:
+        return (cloudNode,)
+    pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
+    #return cloudNode
+
+def _makeGeom(array,ctup,i,pipe, geomType=GeomPoints): #XXX testing multiple Geom version ... for perf seems like it will be super slow
+    #SUUUPER slow TONS of draw calls
+    #wwwayyy better to make a bunch of geoms ahead of time...
+    """ multiprocessing capable geometery maker """
+    fmt = GeomVertexFormat.getV3c4()
+
+    cloudNode = GeomNode('bin %s selectable'%(i))
+    for point in array:
+        vertexData = GeomVertexData('poitn', fmt, Geom.UHStatic)
+        GeomVertexWriter(vertexData, 'vertex').addData3f(*point)
+        GeomVertexWriter(vertexData, 'color').addData4f(*ctup)
+        #verts.addData3f(*point)
+        #color.addData4f(*ctup)
+
+        points = geomType(Geom.UHStatic)
+        points.addVertex(0)
+        points.closePrimitive()
+
+        cloudGeom = Geom(vertexData)
+        cloudGeom.addPrimitive(points)
+        cloudNode.addGeom(cloudGeom) #TODO figure out if it is faster to add and subtract Geoms from geom nodes...
     #output[i] = cloudNode
     #print('ping',{i:cloudNode})
     #pipe.send((i,))
@@ -260,8 +292,7 @@ def convertToColl(target,collType=CollisionSphere): #FIXME this won't work quite
     ncores = NCORES
     if target.shape[0] < ncores*10:
         ncores = 1
-        out = makeColl(
-    pass
+        out = makeColl()
 
 def makePoints(n=1000):
     """ make a cloud of points that are a single node VS branching and making subnodes to control display """

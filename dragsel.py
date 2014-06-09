@@ -156,13 +156,21 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
         #taskMgr.add(self.clickTask, 'clickTask')
         
+    def processTarget(self,target):
+        #note: target is a CollisionEntry
+        embed()
+        #self.loadData(uid)
+        #self.doRenderStuff() #this is the hard part...
+        return None
+
     def gotClick(self):
         #if not self.__mouseDown__: #this case never happens unless the univers explodes?
         #self.__mouseDown__ = True
         target = self.getClickTarget()  #this isnt an RTS so we want click/drag
         #TODO in theory this should not normally take this long???
-        print(target)
-        if not target:
+        if target:
+            self.processTarget(target)
+        else:
             if base.mouseWatcherNode.hasMouse():
                 x,y = base.mouseWatcherNode.getMouse()
                 self.__baseBox__.setPos(x,0,y)

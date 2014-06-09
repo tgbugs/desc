@@ -24,6 +24,8 @@ from panda3d.core import CollisionNode, CollisionSphere
 import sys
 from IPython import embed
 
+from monoDict import MonoDict as md
+
 import multiprocessing as mp
 from multiprocessing import Pipe
 #from queue import Queue #warning on py2...
@@ -48,95 +50,8 @@ def genLabelText(text, i): #FIXME
 #get the data from the database? or rather let people set their own custom prefs for whole classes of things on the fly and save it somewhere?
 
 def getRelRenderProperties(relateable):
-    """ Get or save the properties for all relatable types, initially they should all just be set to a default """
+    """ Get or save the properties for all relatable types, ,col,vertsinitially they should all just be set to a default """
     #need to figure out exactly how we are going to do this...
-
-def makeGrid(rng = 1000, spacing = 10): #FIXME make this scale based on zoom???
-    ctup = (.3,.3,.3,1)
-    xs = np.arange(-rng,rng+1,spacing)
-    ys = xs
-
-    fmt = GeomVertexFormat.getV3c4() #3 component vertex, w/ 4 comp color
-    #fmt = GeomVertexFormat.getV3() #3 component vertex, w/ 4 comp color
-    vertexData = GeomVertexData('points', fmt, Geom.UHStatic)
-
-    verts = GeomVertexWriter(vertexData, 'vertex')
-    color = GeomVertexWriter(vertexData, 'color')
-
-
-    for i,d in enumerate(xs):
-        switch1 = (-1) ** i * rng
-        switch2 = (-1) ** i * -rng
-        #print(d,switch1,0)
-        verts.addData3f(d, switch1, 0)
-        verts.addData3f(d, switch2, 0)
-        color.addData4f(*ctup)
-        color.addData4f(*ctup)
-
-    for i,d in enumerate(ys):
-        switch1 = (-1) ** i * rng
-        switch2 = (-1) ** i * -rng
-        verts.addData3f(switch1, d, 0)
-        verts.addData3f(switch2, d, 0)
-        color.addData4f(*ctup)
-        color.addData4f(*ctup)
-
-    gridLines = GeomLinestrips(Geom.UHStatic)
-    gridLines.addConsecutiveVertices(0, vertexData.getNumRows())
-    gridLines.closePrimitive()
-
-    grid = Geom(vertexData)
-    grid.addPrimitive(gridLines)
-    return grid
-
-def makeAxis(): #FIXME make this scale based on zoom???
-    colors = (
-        (1,0,0,1),
-        (0,1,0,1),
-        (0,0,1,1),
-
-        (1,0,0,1),
-        (0,1,0,1),
-        (0,0,1,1),
-    )
-    points = (
-        (0,0,0),
-        (0,0,0),
-        (0,0,0),
-        (1,0,0),
-        (0,1,0),
-        (0,0,1),
-    )
-
-    fmt = GeomVertexFormat.getV3c4() #3 component vertex, w/ 4 comp color
-    #fmt = GeomVertexFormat.getV3() #3 component vertex, w/ 4 comp color
-    vertexData = GeomVertexData('points', fmt, Geom.UHStatic)
-
-    verts = GeomVertexWriter(vertexData, 'vertex')
-    color = GeomVertexWriter(vertexData, 'color')
-
-
-    for p,c in zip(points,colors):
-        verts.addData3f(*p)
-        color.addData4f(*c)
-
-    axisX = GeomLinestrips(Geom.UHStatic)
-    axisX.addVertices(0,3)
-    axisX.closePrimitive()
-
-    axisY = GeomLinestrips(Geom.UHStatic)
-    axisY.addVertices(1,4)
-    axisY.closePrimitive()
-
-    axisZ = GeomLinestrips(Geom.UHStatic)
-    axisZ.addVertices(2,5)
-    axisZ.closePrimitive()
-
-    axis = Geom(vertexData)
-    axis.addPrimitive(axisX)
-    axis.addPrimitive(axisY)
-    axis.addPrimitive(axisZ)
-    return axis
 
 def makeBins(ndarray,nbins=1000):
     if ndarray.shape[1] == 4 or nbins > 1:
@@ -149,16 +64,19 @@ def makeBins(ndarray,nbins=1000):
     if ndarray.shape[1] > 4:
         raise TypeError('we dont know what to do with 5d and above data yet')
 
-def makeGeom(array,ctup,i,pipe, geomType=GeomPoints):
+def makeGeom(index,array,ctup,i,pipe, geomType=GeomPoints):
     """ multiprocessing capable geometery maker """
     fmt = GeomVertexFormat.getV3c4()
-    vertexData = GeomVertexData('poitns', fmt, Geom.UHStatic)
+    vertexData = GeomVertexData('points', fmt, Geom.UHDynamic)
+    cloudGeom = Geom(vertexData)
+    cloudNode = GeomNode('bin %s selectable'%(i))
     points = array
 
     verts = GeomVertexWriter(vertexData, 'vertex')
     color = GeomVertexWriter(vertexData, 'color')
 
     for point in points:
+        index.insert([point,(cloudNode,cloudGeom,vertexData),None])
         verts.addData3f(*point)
         color.addData4f(*ctup)
 
@@ -166,9 +84,7 @@ def makeGeom(array,ctup,i,pipe, geomType=GeomPoints):
     points.addConsecutiveVertices(0,len(array))
     points.closePrimitive()
 
-    cloudGeom = Geom(vertexData)
     cloudGeom.addPrimitive(points)
-    cloudNode = GeomNode('bin %s selectable'%(i))
     cloudNode.addGeom(cloudGeom) #TODO figure out if it is faster to add and subtract Geoms from geom nodes...
     #output[i] = cloudNode
     #print('ping',{i:cloudNode})
@@ -213,7 +129,7 @@ def _makeGeom(array,ctup,i,pipe, geomType=GeomPoints): #XXX testing multiple Geo
     pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
     #return cloudNode
 
-def convertToGeom(target,geomType=GeomPoints): #FIXME works under python2 now...
+def convertToGeom(index,target,geomType=GeomPoints): #FIXME works under python2 now...
     """
         take an np.ndarray and convert it to a point cloud
         this will probably be faster than trying to make them
@@ -232,7 +148,7 @@ def convertToGeom(target,geomType=GeomPoints): #FIXME works under python2 now...
     ctup = np.random.rand(4)
     if target.shape[0] < ncores*10: #need at LEAST 10 points per core TODO test for optimal chunking start size
         ncores = 1
-        out = makeGeom(target,ctup,0,None,geomType)
+        out = makeGeom(index,target,ctup,0,None,geomType)
         return lambda:out
     else:
         chunks = []
@@ -249,7 +165,7 @@ def convertToGeom(target,geomType=GeomPoints): #FIXME works under python2 now...
             #output[i]=makeGeom(chunks[i],ctup,i,None)
             #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
 
-            p = mp.Process(target=makeGeom, args=(chunks[i],ctup,i,pipes[i][1],geomType)) #XXX this one
+            p = mp.Process(target=makeGeom, args=(index,chunks[i],ctup,i,pipes[i][1],geomType)) #XXX this one
             p.start()
             processes.append(p)
         def runner():
@@ -335,21 +251,6 @@ def makePoints(n=1000):
 #light.setColor(Vec4(1,1,1,1))
 #sceneLight = render.attachNewNode(light)
 #render.setLight(sceneLight)
-class Grid3d(DirectObject):
-    def __init__(self):
-        gridNode = GeomNode('grid')
-        gridGeom = makeGrid()
-        gridNode.addGeom(gridGeom)
-        grid = render.attachNewNode(gridNode)
-
-class Axis3d(DirectObject): #FIXME not the best way to do this, making all these new direct objects if they need to be controlled
-    def __init__(self, scale=10):
-        axisNode = GeomNode('axis')
-        axisGeom = makeAxis()
-        axisNode.addGeom(axisGeom)
-        axis = render.attachNewNode(axisNode)
-        axis.setScale(scale,scale,scale)
-        axis.setRenderModeThickness(2)
 
 class PointsTest(DirectObject):
     def __init__(self,num=99999,its=99):
@@ -460,9 +361,32 @@ class CollTest(DirectObject):
                     n+=1
             r+=1
 
+class FullTest(DirectObject):
+    def __init__(self,n=1,bins=1):
+        index = md()
+        collideRoot = render.attachNewNode('collideRoot')
+        bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
+        type_ = GeomPoints
+        #objIndex.insert([base,None,None]) #position geom, col
+        runs = []
+        for base in bases:
+            runs.append(convertToGeom(index,base,type_))
+        for nodes in runs:
+            for node in nodes():
+                nd = render.attachNewNode(node)
+                n = 0 
+        for uid,list_ in index.items():
+            #TODO to change the color of a selected node we will need something a bit more ... sophisticated
+            cNode = collideRoot.attachNewNode(CollisionNode('collider %s'%uid)) #ultimately used to index??
+            cNode.node().addSolid(CollisionSphere(0,0,0,.5))
+            cNode.node().setIntoCollideMask(BitMask32.bit(1))
+            cNode.setPos(nd,*list_[0])
+            cNode.setPythonTag('uid',uid)
+            list_[2] = cNode
+
 def main():
     from util import Utils
-    from camera import CameraControl
+    from ui import CameraControl, Axis3d, Grid3d
     #from panda3d.core import ConfigVariableBool
     #ConfigVariableString('view-frustum-cull',False)
     from panda3d.core import loadPrcFileData
@@ -490,14 +414,11 @@ def main():
     #pt = PointsTest(1,999) #still slow
     #pt = PointsTest(1,499) #still slow 15 fps with 0,0,0 positioned geom points
     #pt = PointsTest(1,249) #about 45fps :/
-    bins = 1 #999=.057, below 200 ~.044 so hard to tell (for n = 99)
-    tick = time()
+    bins = 2 #999=.057, below 200 ~.044 so hard to tell (for n = 99)
     #FIXME low numbers of points causes major problems!
     #nt = NodeTest(999999,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
-    ct = CollTest(9999,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
-    tock = time()
-    metric = (tock-tick) / bins
-    print('run time / bins = %s'%metric)
+    #ct = CollTest(9999,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
+    ft = FullTest(999,bins)
     #nt = NodeTest(999,5)
     #base.camLens.setFar(9E12) #view-frustum-cull 0
     bs = BoxSel() #some stuff

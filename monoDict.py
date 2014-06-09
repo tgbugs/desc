@@ -20,14 +20,14 @@ from itertools import count
 class MonoDict(dict): #TODO this might work really well as one of those shared index dicts!??
     """ threadsafe dict with .insert that gurantees monotonicity """
     def __init__(self,*args,**kwargs):
-        super().__init__(*args,**kwargs)
+        super(MonoDict,self).__init__(*args,**kwargs)
         self.__counter__ = count(0,1) #this is threadsafe
         self.__lastIndex__ = -1
         #self.idx = 0 #test for monotonicity
     def insert(self,value):
         """ insert an object into the manager and get back its identifier
         """
-        key = self.__counter__.__next__()
+        key = next(self.__counter__)
         if key > self.__lastIndex__: #ensure monotonicity
             self.__lastIndex__ = key
         self.__setitem__(key, value)

@@ -30,6 +30,7 @@ notes:
 
 things
 ======
+ 7. we could use getPythonTag to make it really easy to link collision nodes to vertecies...
  6. collision nodes need to be able to quickly reference the geometry atom
     they are bound to, this means the index of a specific vertex in a geom or
     a geom itself to manipulate either the pixel shader or the texture, hrm

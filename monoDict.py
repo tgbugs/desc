@@ -16,7 +16,27 @@
 #basically when we deal with the relations between relations we will have to think a little bit harder about this
 
 from itertools import count
+#from threading import Lock
+from multiprocessing import Lock, RawValue, Value
+from ctypes import c_ulonglong, cast
 
+class Counter(): #FIXME not working yet...
+    """ a multiprocesssing safe counter """
+    def __init__(self,start,step):
+        #self.__counter__ = count(start,step)
+        #self.value = RawValue(c_ulonglong,start)
+        self.value = Value(c_ulonglong,start)
+        self.step = c_ulonglong(step)
+        self.lock = Lock()
+    def __next__(self):
+        with self.lock:
+            inter = self.value.value + self.step.value
+            self.value = c_ulonglong(inter)
+            return int(inter)
+    def next(self):
+        return self.__next__()
+
+#FIXME NOT multiprocessing safe ;_;
 class MonoDict(dict): #TODO this might work really well as one of those shared index dicts!??
     """ threadsafe dict with .insert that gurantees monotonicity """
     def __init__(self,*args,**kwargs):
@@ -24,6 +44,15 @@ class MonoDict(dict): #TODO this might work really well as one of those shared i
         self.__counter__ = count(0,1) #this is threadsafe
         self.__lastIndex__ = -1
         #self.idx = 0 #test for monotonicity
+
+    def reserve(self):
+        """ reserve an index for later use """
+        key = next(self.__counter__)
+        if key > self.__lastIndex__: #ensure monotonicity
+            self.__lastIndex__ = key
+        self.__setitem__(key, None)
+        return key
+
     def insert(self,value):
         """ insert an object into the manager and get back its identifier
         """

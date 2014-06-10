@@ -158,9 +158,10 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         
     def processTarget(self,target):
         #note: target is a CollisionEntry
-        embed()
+        #embed()
         #self.loadData(uid)
         #self.doRenderStuff() #this is the hard part...
+        print(target)
         return None
 
     def gotClick(self):

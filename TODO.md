@@ -40,3 +40,4 @@ things
  3. CONCLUSION: do not use the scene graph for most things, it is simply too slow allow selection on sub components, or figure out how to thread this
  4. 4d grid plus the ability to zip through any 1 2 or 3 of the dimensions with a slider... 
  5. simple way to represent relations as lines with colors to mark their type
+ 8. http://eli.thegreenplace.net/2012/01/04/shared-counter-with-pythons-multiprocessing/ << counter things irritating :/

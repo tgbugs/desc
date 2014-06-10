@@ -28,6 +28,7 @@ from monoDict import MonoDict as md
 
 import multiprocessing as mp
 from multiprocessing import Pipe
+#from multiprocessing.managers import SyncManager
 #from queue import Queue #warning on py2...
 #import threading #not what we need due to GIL >_<
 
@@ -64,23 +65,35 @@ def makeBins(ndarray,nbins=1000):
     if ndarray.shape[1] > 4:
         raise TypeError('we dont know what to do with 5d and above data yet')
 
-def makeGeom(index,array,ctup,i,pipe, geomType=GeomPoints):
+def makeGeom(index_counter, array,ctup,i,pipe, geomType=GeomPoints):
     """ multiprocessing capable geometery maker """
+    #man = indexMan(('127.0.0.1',5000), authkey='none')
+    #man.connect()
+    #index = man.index()
+    index = {}
+
     fmt = GeomVertexFormat.getV3c4()
-    vertexData = GeomVertexData('points', fmt, Geom.UHDynamic)
+
+    vertexData = GeomVertexData('points', fmt, Geom.UHDynamic) #FIXME use the index for these too? with setPythonTag, will have to 'reserve' some
+    #vertexData.setPythonTag('uid',index.reserve()) #maybe we don't need this? the geom should have it all?
     cloudGeom = Geom(vertexData)
+    #cloudGeom.setPythonTag('uid',index.reserve())
     cloudNode = GeomNode('bin %s selectable'%(i))
+    uid = next(index_counter)
+    index[uid] = None
+    cloudNode.setPythonTag('uid',uid) #FIXME we return cloudnode elsewhere... maybe on the other end we can set the uid in the index properly?
+
     points = array
 
     verts = GeomVertexWriter(vertexData, 'vertex')
     color = GeomVertexWriter(vertexData, 'color')
 
     for point in points:
-        index.insert([point,(cloudNode,cloudGeom,vertexData),None])
+        index[next(index_counter)]=[point,cloudNode.getPythonTag('uid'),None] #FIXME we're gonna need a decode on the other end?
         verts.addData3f(*point)
         color.addData4f(*ctup)
 
-    points = geomType(Geom.UHStatic)
+    points = geomType(Geom.UHDynamic)
     points.addConsecutiveVertices(0,len(array))
     points.closePrimitive()
 
@@ -93,8 +106,9 @@ def makeGeom(index,array,ctup,i,pipe, geomType=GeomPoints):
     #print('pong',out)
     #q.put(out)
     if pipe == None:
-        return (cloudNode,)
+        return cloudNode, index
     pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
+    pipe.send(index) #FIXME make this return a pointer NOPE
     #return cloudNode
 
 def _makeGeom(array,ctup,i,pipe, geomType=GeomPoints): #XXX testing multiple Geom version ... for perf seems like it will be super slow
@@ -125,11 +139,11 @@ def _makeGeom(array,ctup,i,pipe, geomType=GeomPoints): #XXX testing multiple Geo
     #print('pong',out)
     #q.put(out)
     if pipe == None:
-        return (cloudNode,)
+        return (cloudNode)
     pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
     #return cloudNode
 
-def convertToGeom(index,target,geomType=GeomPoints): #FIXME works under python2 now...
+def convertToGeom(index_counter,target,geomType=GeomPoints): #FIXME works under python2 now...
     """
         take an np.ndarray and convert it to a point cloud
         this will probably be faster than trying to make them
@@ -145,11 +159,12 @@ def convertToGeom(index,target,geomType=GeomPoints): #FIXME works under python2 
         raise TypeError('Format should be a list length n of vectors (4d max) ')
 
     ncores = NCORES #prevent changes to the global variable from affecting a single run
+    multiple = 10 #irritatingly broken for multiprocessing using the global index :(
     ctup = np.random.rand(4)
-    if target.shape[0] < ncores*10: #need at LEAST 10 points per core TODO test for optimal chunking start size
+    if target.shape[0] < ncores*multiple: #need at LEAST 10 points per core TODO test for optimal chunking start size
         ncores = 1
-        out = makeGeom(index,target,ctup,0,None,geomType)
-        return lambda:out
+        out, index = makeGeom(index_counter, target,ctup,0,None,geomType)
+        return lambda:out, index
     else:
         chunks = []
         chunk_size = target.shape[0]//ncores
@@ -165,19 +180,22 @@ def convertToGeom(index,target,geomType=GeomPoints): #FIXME works under python2 
             #output[i]=makeGeom(chunks[i],ctup,i,None)
             #a = threading.Thread(target=makeGeom, args=(chunks[i],ctup,i))#,cb))
 
-            p = mp.Process(target=makeGeom, args=(index,chunks[i],ctup,i,pipes[i][1],geomType)) #XXX this one
+            p = mp.Process(target=makeGeom, args=(index_counter, chunks[i],ctup,i,pipes[i][1],geomType)) #XXX this one
             p.start()
             processes.append(p)
         def runner():
             #print('running')
             output = {} #we can probably just merge the dicts after the fact?
+            idx = []
             for i in range(ncores):
-                output[i]=GeomNode.decodeFromBamStream(pipes[i][0].recv()) #it will match since pipes are named, also recv blocks till close
+                bit = pipes[i][0].recv()
+                output[i]=GeomNode.decodeFromBamStream(bit) #it will match since pipes are named, also recv blocks till close
+                idx.append( pipes[i][0].recv() )
             out = []
             for i in range(ncores):
                 out.append(output[i]) #FIXME risk of missing indicies due to integer //
             #print('done running')
-            return out
+            return zip(out, idx) #FIXME stuipd
         return runner
 
     #print(pipes[0][0].recv())
@@ -361,28 +379,49 @@ class CollTest(DirectObject):
                     n+=1
             r+=1
 
+#
+#class indexMan(SyncManager):
+    #pass
+from monoDict import Counter
 class FullTest(DirectObject):
     def __init__(self,n=1,bins=1):
-        index = md()
+
+        #index = md()
+        #def get_index():
+            #return index
+        #indexMan.register('index',get_index)
+        #self.iman = indexMan(('127.0.0.1',5000),authkey='none')
+        #self.iman.start()
+        index = {}
+        index_counter = Counter(0,1)
+
+
         collideRoot = render.attachNewNode('collideRoot')
         bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
         type_ = GeomPoints
-        #objIndex.insert([base,None,None]) #position geom, col
         runs = []
+
         for base in bases:
-            runs.append(convertToGeom(index,base,type_))
+            runs.append(convertToGeom(index_counter,base,type_))
+
         for nodes in runs:
-            for node in nodes():
+            for node, idx in nodes(): #FIXME stupid
                 nd = render.attachNewNode(node)
-                n = 0 
+                index.update(idx) #FIXME this is nasty
+                print(idx)
         for uid,list_ in index.items():
             #TODO to change the color of a selected node we will need something a bit more ... sophisticated
+            #parent = list_[1][0]
+            if list_ == None:
+                continue
             cNode = collideRoot.attachNewNode(CollisionNode('collider %s'%uid)) #ultimately used to index??
             cNode.node().addSolid(CollisionSphere(0,0,0,.5))
             cNode.node().setIntoCollideMask(BitMask32.bit(1))
-            cNode.setPos(nd,*list_[0])
+            cNode.setPos(*list_[0])
             cNode.setPythonTag('uid',uid)
-            list_[2] = cNode
+            cNode.show()
+            list_[2] = cNode #FIXME this is inconsistent and the 'uid' means different things in different contexts!
+        print(index_counter.value)
 
 def main():
     from util import Utils
@@ -414,14 +453,14 @@ def main():
     #pt = PointsTest(1,999) #still slow
     #pt = PointsTest(1,499) #still slow 15 fps with 0,0,0 positioned geom points
     #pt = PointsTest(1,249) #about 45fps :/
-    bins = 2 #999=.057, below 200 ~.044 so hard to tell (for n = 99)
+    bins = 1 #999=.057, below 200 ~.044 so hard to tell (for n = 99)
     #FIXME low numbers of points causes major problems!
     #nt = NodeTest(999999,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
     #ct = CollTest(9999,bins) #the inscreased time is more pronounced with larger numbers of nodes... is it the serialization?
-    ft = FullTest(999,bins)
     #nt = NodeTest(999,5)
     #base.camLens.setFar(9E12) #view-frustum-cull 0
     bs = BoxSel() #some stuff
+    ft = FullTest(999,bins)
     run() #looks like this is the slow case... probably should look into non blocking model loading?
 
 if __name__ == '__main__':

@@ -352,37 +352,44 @@ class NodeTest(DirectObject):
         for nodes in runs:
             for node in nodes():
                 nd = render.attachNewNode(node)
+
+def smipleMake(index_counter,target,geomType=GeomPoints): #FIXME works under python2 now...
+    ctup = np.random.rand(4)
+    out, index = makeGeom(index_counter,target,ctup,0,None,geomType)
+    return lambda:(out, index) #this is stupid
          
+from monoDict import Counter
+index_counter = Counter(0,1)
 class CollTest(DirectObject):
-    def __init__(self,n=9999,bins=99):
+    def __init__(self,n=9999,bins=9):
         collideRoot = render.attachNewNode('collideRoot')
         bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
         type_ = GeomPoints
         runs = []
         for base in bases:
-            runs.append(convertToGeom(base,type_))
+            runs.append(smipleMake(index_counter,base,type_))
         r = 0
         for nodes in runs:
             #pos = np.random.randint(-100,100,3)
-            for node in nodes():
-                nd = render.attachNewNode(node)
-                #nd.setPos(*pos)
-                #nd.setRenderModeThickness(5)
-                #XXX TODO XXX collision objects
-                n = 0 
-                for position in bases[r]: #FIXME this is hella slow, the correct way to do this is to detach and reattach CollisionNodes as they are needed...
-                    #TODO to change the color of a selected node we will need something a bit more ... sophisticated
-                    cNode = collideRoot.attachNewNode(CollisionNode('collider obj,vert %s,%s'%(r,n))) #ultimately used to index??
-                    cNode.node().addSolid(CollisionSphere(0,0,0,.5))
-                    cNode.node().setIntoCollideMask(BitMask32.bit(1))
-                    cNode.setPos(nd,*position)
-                    n+=1
+            print(nodes)
+            node,_ = nodes()
+            nd = render.attachNewNode(node)
+            #nd.setPos(*pos)
+            #nd.setRenderModeThickness(5)
+            #XXX TODO XXX collision objects
+            n = 0 
+            for position in bases[r]: #FIXME this is hella slow, the correct way to do this is to detach and reattach CollisionNodes as they are needed...
+                #TODO to change the color of a selected node we will need something a bit more ... sophisticated
+                cNode = collideRoot.attachNewNode(CollisionNode('collider obj,vert %s,%s'%(r,n))) #ultimately used to index??
+                cNode.node().addSolid(CollisionSphere(0,0,0,.5))
+                cNode.node().setIntoCollideMask(BitMask32.bit(1))
+                cNode.setPos(nd,*position)
+                n+=1
             r+=1
 
 #
 #class indexMan(SyncManager):
     #pass
-from monoDict import Counter
 class FullTest(DirectObject):
     def __init__(self,n=1,bins=1):
 
@@ -393,7 +400,7 @@ class FullTest(DirectObject):
         #self.iman = indexMan(('127.0.0.1',5000),authkey='none')
         #self.iman.start()
         index = {}
-        index_counter = Counter(0,1)
+        #index_counter = Counter(0,1)
 
 
         collideRoot = render.attachNewNode('collideRoot')
@@ -423,7 +430,8 @@ class FullTest(DirectObject):
             list_[2] = cNode #FIXME this is inconsistent and the 'uid' means different things in different contexts!
         print(index_counter.value)
 
-def main():
+
+def _main():
     from util import Utils
     from ui import CameraControl, Axis3d, Grid3d
     #from panda3d.core import ConfigVariableBool
@@ -462,6 +470,30 @@ def main():
     bs = BoxSel() #some stuff
     ft = FullTest(999,bins)
     run() #looks like this is the slow case... probably should look into non blocking model loading?
+
+def main():
+    from util import Utils
+    from ui import CameraControl, Axis3d, Grid3d
+    from panda3d.core import loadPrcFileData
+    from time import time
+    from panda3d.core import PStatClient
+
+    PStatClient.connect()
+    loadPrcFileData('','view-frustum-cull 0')
+    base = ShowBase()
+    base.setBackgroundColor(0,0,0)
+    ut = Utils()
+    grid = Grid3d()
+    axis = Axis3d()
+    cc = CameraControl()
+    bs = BoxSel() #TODO
+    base.disableMouse()
+
+    #render something
+    ct = CollTest() 
+
+    run() # we don't need threading for this since panda has a builtin events interface
+
 
 if __name__ == '__main__':
     main()

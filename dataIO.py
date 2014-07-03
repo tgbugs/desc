@@ -66,6 +66,11 @@ class sceneRender(DirectObject):
 #oct tree order is x, y ,z where x ++++---- y ++--++-- z +-+-+-+- for each quadrant
 
 def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None):  # TODO in theory this could be multiprocessed
+    """ Divide the space covered by all the objects into an oct tree and then
+        replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
+        for some reason this massively improves performance even w/o the code
+        for mouse over adding and removing subsets of nodes.
+    """
     max_points = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
     num_points = len(positions)
 
@@ -89,6 +94,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
             childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
             childNode.setPythonTag('uuid',uuid)
+            #childNode.show()
         return True
 
     bitmasks =  [ np.bool_(np.zeros_like(uuids)) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
@@ -234,7 +240,7 @@ def main():
     level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [2000 for _ in range(99)]
+    counts = [9999 for _ in range(99)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

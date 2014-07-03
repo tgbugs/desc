@@ -5,6 +5,9 @@
 import numpy as np
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import CollisionNode, CollisionSphere
+from panda3d.core import BitMask32
+
+from defaults import *
 #scene renderer is what we will use to coordinate receiving the set of visible objects to render
 #the total set of possible objects could be treated as another sceneRednerer???
 
@@ -65,8 +68,6 @@ class sceneRender(DirectObject):
 def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None):  # TODO in theory this could be multiprocessed
     max_points = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
     num_points = len(positions)
-    print(center,side)
-    print(num_points)
 
     if center == None:  # branch predictor should take care of this?
         mins = [np.min(positions[:,i])-1 for i in range(3)]  #FIXME geom radius? fixed with -1 and only a concern at the corners really
@@ -80,10 +81,13 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         return False
     elif num_points < max_points:
         l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
-        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius))
+        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
+        l2Node.setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+        #l2Node.show()
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
             childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
+            childNode.setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
             #probably don't need setPythonTag? can just use the name which is the uuid?
         return True
 
@@ -112,7 +116,6 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     for i in range(8):
         branch = bitmasks[i]  # this is where we can multiprocess
         new_center = center + logic[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
-        #print(branch)
         subSet = positions[branch]
         out = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5)
         output.append(out)
@@ -214,6 +217,7 @@ def main():
     from dragsel import BoxSel
     from util import Utils
     from ui import CameraControl, Axis3d, Grid3d
+    from test_objects import makeSimpleGeom
 
     PStatClient.connect()
     loadPrcFileData('','view-frustum-cull 0')
@@ -228,12 +232,17 @@ def main():
 
     #profileOctit()
     level2Root = render.attachNewNode('collideRoot')
-    for nnodes in [1,250,510,511,512,513,1000,2000,10000,100000]:
-        positions = np.random.rand(nnodes,3) + np.random.randint(-10,10) * 10
-        uuids = np.arange(0,nnodes) * nnodes  # eeeehhhhh
+    #counts = [1,250,510,511,512,513,1000,2000,10000]
+    counts = [10000]
+    for i in range(len(counts)):
+        nnodes = counts[i]
+        #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))
+        positions = np.cumsum(np.random.randint(-1,2,(nnodes,3)), axis=0)
+        uuids = np.arange(0,nnodes) * i
         geomCollide = np.ones(nnodes) * .5
         out = treeMe(level2Root, positions, uuids, geomCollide)
         print(out)
+        render.attachNewNode(makeSimpleGeom(positions,np.random.rand(4)))
 
     run()
 

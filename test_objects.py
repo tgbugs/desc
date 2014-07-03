@@ -25,6 +25,7 @@ import sys
 from IPython import embed
 
 from monoDict import MonoDict as md
+from defaults import *
 
 import multiprocessing as mp
 from multiprocessing import Pipe
@@ -110,6 +111,31 @@ def makeGeom(index_counter, array,ctup,i,pipe, geomType=GeomPoints):
     pipe.send(cloudNode.encodeToBamStream()) #FIXME make this return a pointer NOPE
     pipe.send(index) #FIXME make this return a pointer NOPE
     #return cloudNode
+
+
+def makeSimpleGeom(array,ctup,geomType=GeomPoints):
+    fmt = GeomVertexFormat.getV3c4()
+
+    vertexData = GeomVertexData('points', fmt, Geom.UHDynamic) #FIXME use the index for these too? with setPythonTag, will have to 'reserve' some
+    cloudGeom = Geom(vertexData)
+    cloudNode = GeomNode('just some points')
+
+    verts = GeomVertexWriter(vertexData, 'vertex')
+    color = GeomVertexWriter(vertexData, 'color')
+
+    for point in array:
+        verts.addData3f(*point)
+        color.addData4f(*ctup)
+
+    points = geomType(Geom.UHDynamic)
+    points.addConsecutiveVertices(0,len(array))
+    points.closePrimitive()
+
+    cloudGeom.addPrimitive(points)
+    cloudNode.addGeom(cloudGeom) #TODO figure out if it is faster to add and subtract Geoms from geom nodes...
+
+    return cloudNode
+ 
 
 def _makeGeom(array,ctup,i,pipe, geomType=GeomPoints): #XXX testing multiple Geom version ... for perf seems like it will be super slow
     #SUUUPER slow TONS of draw calls
@@ -382,7 +408,7 @@ class CollTest(DirectObject):
                 #TODO to change the color of a selected node we will need something a bit more ... sophisticated
                 cNode = collideRoot.attachNewNode(CollisionNode('collider obj,vert %s,%s'%(r,n))) #ultimately used to index??
                 cNode.node().addSolid(CollisionSphere(0,0,0,.5))
-                cNode.node().setIntoCollideMask(BitMask32.bit(1))
+                cNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
                 cNode.setPos(nd,*position)
                 if show:
                     cNode.show()
@@ -425,7 +451,7 @@ class FullTest(DirectObject):
                 continue
             cNode = collideRoot.attachNewNode(CollisionNode('collider %s'%uid)) #ultimately used to index??
             cNode.node().addSolid(CollisionSphere(0,0,0,.5))
-            cNode.node().setIntoCollideMask(BitMask32.bit(1))
+            cNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
             cNode.setPos(*list_[0])
             cNode.setPythonTag('uid',uid)
             cNode.show()

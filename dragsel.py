@@ -25,6 +25,8 @@ import sys
 from threading import Thread
 from IPython import embed
 
+from defaults import *
+
 class HasSelectables: #mixin see chessboard example
     def __init__(self):
         #selection detection
@@ -33,7 +35,7 @@ class HasSelectables: #mixin see chessboard example
         self.pickerNode = CollisionNode('mouseRay')
         self.pickerNP = camera.attachNewNode(self.pickerNode)
         #self.pickerNode.setFromCollideMask(GeomNode.getDefaultCollideMask()) #TODO WOW geometry collision is SUPER slow...
-        self.pickerNode.setFromCollideMask(BitMask32.bit(1))
+        self.pickerNode.setFromCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
         #render.find('**selectable').node().setIntoCollideMask(BitMask32.bit(1))
         self.pickerRay = CollisionRay()
         self.pickerNode.addSolid(self.pickerRay)

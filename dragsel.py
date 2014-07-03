@@ -26,6 +26,7 @@ from threading import Thread
 from IPython import embed
 
 from defaults import *
+from util import genLabelText
 
 class HasSelectables: #mixin see chessboard example
     def __init__(self):
@@ -68,7 +69,7 @@ class HasSelectables: #mixin see chessboard example
             if self.pq.getNumEntries() > 0: #if we got something sort it
                 self.pq.sortEntries()
                 #print(self.pq)
-                uuid = self.pq.getEntry(0).getIntoNode().getTag('uuid')
+                #uuid = self.pq.getEntry(0).getIntoNode().getTag('uuid')
                 return self.pq.getEntry(0)
 
 
@@ -98,10 +99,6 @@ class HasSelectables: #mixin see chessboard example
 
     def dragSelectObjects(self): #always drag in the plane of the camera
         pass
-
-def genLabelText(text, i): #FIXME
-  return OnscreenText(text = text, pos = (-1.3, .95-.05*i), fg=(1,1,1,1),
-                      align = TextNode.ALeft, scale = .05)
 
 def makeSelectRect():
     ctup = (1,1,1,1)
@@ -152,6 +149,9 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         self.__baseBox__ = render2d.attachNewNode(boxNode)
         self.__baseBox__.hide()
 
+        self.selText = genLabelText('uuid',3)
+        self.selText.reparentTo(base.a2dTopLeft)
+
         self.accept('mouse1',self.gotClick)
         self.accept('mouse1-up',self.gotRelease)
         self.accept("escape", sys.exit)
@@ -164,6 +164,9 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #self.loadData(uid)
         #self.doRenderStuff() #this is the hard part...
         print(target)
+        uuid = target.getIntoNode().getPythonTag('uuid')
+        self.selText.setText("%s"%uuid)
+        print(uuid)
         return None
 
     def gotClick(self):

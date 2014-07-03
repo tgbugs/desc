@@ -82,13 +82,13 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     elif num_points < max_points:
         l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
-        l2Node.setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+        l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         #l2Node.show()
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
             childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
-            childNode.setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
-            #probably don't need setPythonTag? can just use the name which is the uuid?
+            childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
+            childNode.setPythonTag('uuid',uuid)
         return True
 
     bitmasks =  [ np.bool_(np.zeros_like(uuids)) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
@@ -219,7 +219,7 @@ def main():
     from ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
 
-    PStatClient.connect()
+    PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
@@ -233,12 +233,12 @@ def main():
     #profileOctit()
     level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
-    counts = [10000]
+    counts = [100000,100000]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))
         positions = np.cumsum(np.random.randint(-1,2,(nnodes,3)), axis=0)
-        uuids = np.arange(0,nnodes) * i
+        uuids = np.arange(0,nnodes) * (i + 1)
         geomCollide = np.ones(nnodes) * .5
         out = treeMe(level2Root, positions, uuids, geomCollide)
         print(out)

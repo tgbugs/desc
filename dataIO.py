@@ -233,7 +233,8 @@ def main():
     #profileOctit()
     level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
-    counts = [100000,100000]
+    #counts = [1000,1000]
+    counts = [2000 for _ in range(99)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

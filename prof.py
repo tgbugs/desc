@@ -19,4 +19,17 @@ class Prof:
         ps.print_stats()
         print(name,self.s.getvalue())
 
+#decorator to do this
+def profile_me(function):
+    def wrapped(*args,**kwargs):
+        pr = cProfile.Profile()
+        s = io.StringIO()
+        pr.enable()
+        function(*args,**kwargs)
+        pr.disable()
+        ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+        ps.print_stats()
+        print(function.__name__,s.getvalue())
+    wrapped.__name__ = function.__name__
+    return wrapped
 

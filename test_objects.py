@@ -361,7 +361,7 @@ def smipleMake(index_counter,target,geomType=GeomPoints): #FIXME works under pyt
 from monoDict import Counter
 index_counter = Counter(0,1)
 class CollTest(DirectObject):
-    def __init__(self,n=9999,bins=9):
+    def __init__(self,n=9999,bins=9,show=False):
         collideRoot = render.attachNewNode('collideRoot')
         bases = [np.cumsum(np.random.randint(-1,2,(n,3)),axis=0) for i in range(bins)]
         type_ = GeomPoints
@@ -384,6 +384,8 @@ class CollTest(DirectObject):
                 cNode.node().addSolid(CollisionSphere(0,0,0,.5))
                 cNode.node().setIntoCollideMask(BitMask32.bit(1))
                 cNode.setPos(nd,*position)
+                if show:
+                    cNode.show()
                 n+=1
             r+=1
 
@@ -490,7 +492,8 @@ def main():
     base.disableMouse()
 
     #render something
-    ct = CollTest() 
+    ct = CollTest(2000)
+    #ft = FullTest(99,1)
 
     run() # we don't need threading for this since panda has a builtin events interface
 

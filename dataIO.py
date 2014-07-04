@@ -160,6 +160,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         for mouse over adding and removing subsets of nodes.
     """
     max_points = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
+    #max_points = 1024
     num_points = len(positions)
 
     if center == None:  # branch predictor should take care of this?
@@ -227,7 +228,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                 l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
                 l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
                 l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
-                l2Node.show()
+                #l2Node.show()
 
                 #text parent
                 tnp = render.attachNewNode("TextParent")
@@ -253,7 +254,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                 #tnp.flattenStrong() #doesn't seem to help :(
                 return True
 
-    if num_points == 1:
+    if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
         print("detect a branch with 1")
         return nextLevel(check=-1)
 
@@ -373,7 +374,7 @@ def main():
     level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [9999 for _ in range(1)]
+    counts = [99999 for _ in range(1)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

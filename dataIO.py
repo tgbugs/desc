@@ -174,7 +174,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         return False
 
     def nextLevel(check=0):
-        print(side)
+        #print(side)
         bitmasks =  [ np.bool_(np.zeros_like(uuids)) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
 
         partition = positions > center
@@ -208,18 +208,22 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
 
     if num_points < max_points:
         #run again until we find the SMALLEST subunit
-        if num_points < check:  # We return true here because it gurantees that out will be > 1 and cant have negative num points
-            return True
-        elif check and num_points >= check:
+        #if num_points < check:  # We return true here because it gurantees that out will be > 1 and cant have negative num points
+            #return True
+        #elif check and num_points >= check:  # apparently I was eaten by an oder of operations bug? XXX nope! still issue
+            #return True
+        #elif check:
+            #return T
+        if check > 0:
             return True
         else:
-            print("check",check)
+            #print("check",check)
             out = nextLevel(check=num_points)
-            print(out)
-            print(np.sum(out))
+            #print(out)
+            #print(np.sum(out))
 
             #this should have been crashing!
-            if np.sum(out) > 1:  # yeah the check is a waisted iteration but this way we actually shrink the size
+            if np.sum(out) > 1 or check == -1:  # yeah the check is a waisted iteration but this way we actually shrink the size
                 l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
                 l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
                 l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
@@ -248,6 +252,10 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                     childNode.setPythonTag('text',textNode)
                 #tnp.flattenStrong() #doesn't seem to help :(
                 return True
+
+    if num_points == 1:
+        print("detect a branch with 1")
+        return nextLevel(check=-1)
 
     return nextLevel()
 
@@ -365,7 +373,7 @@ def main():
     level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [999 for _ in range(1)]
+    counts = [9999 for _ in range(1)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

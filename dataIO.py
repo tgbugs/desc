@@ -389,6 +389,8 @@ def main():
     from ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
 
+    from uuid import uuid4
+
     PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
@@ -407,12 +409,13 @@ def main():
     #profileOctit()
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [999 for _ in range(99)]
+    counts = [99 for _ in range(99)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))
         positions = np.cumsum(np.random.randint(-1,2,(nnodes,3)), axis=0)
-        uuids = np.arange(0,nnodes) * (i + 1)
+        #uuids = np.arange(0,nnodes) * (i + 1)
+        uuids = np.array(["%s"%uuid4() for _ in range(nnodes)])
         geomCollide = np.ones(nnodes) * .5
         out = treeMe(level2Root, positions, uuids, geomCollide)
         print(out)

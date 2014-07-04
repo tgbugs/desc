@@ -214,19 +214,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             intoNode = target.getIntoNode()
             #text = intoNode.getPythonTag('text')
 
-        uuid = intoNode.getPythonTag('uuid')
+        uuid = intoNode.getPythonTag('uuid')  # FIXME it would see that this are not actually uuids...
         self.selText.setText("%s"%uuid)
-
-        textNode = self.textRoot.attachNewNode(TextNode("%s_text"%uuid))
-        textNode.setPos(*intoNode.getBounds().getApproxCenter())
-        textNode.node().setText("%s"%uuid)
-        textNode.node().setEffect(BillboardEffect.makePointEye())
-        #textNode.node().setCardDecal(True)
-
-
-        #if not text.node().getText():
-            #text.node().setText("%s"%uuid)
-        #text.show()
 
         if self.__shift__:  # FIXME OH NO! we need a dict ;_; shift should toggle selection
             pass
@@ -234,7 +223,20 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             if clear:
                 self.clearSelection()
 
-        self.curSelShown.append(textNode)
+        textNode = self.textRoot.find("%s_text"%uuid)
+        if not textNode:
+            textNode = self.textRoot.attachNewNode(TextNode("%s_text"%uuid))
+            textNode.setPos(*intoNode.getBounds().getApproxCenter())
+            textNode.node().setText("%s"%uuid)
+            textNode.node().setEffect(BillboardEffect.makePointEye())
+            self.curSelShown.append(textNode)
+
+        #textNode.node().setCardDecal(True)
+
+
+        #if not text.node().getText():
+            #text.node().setText("%s"%uuid)
+        #text.show()
 
             #add stuff, nasty race conditions if someone releases shift and the mouse at the same time
             #and subtract from selection too while keeping the rest selected
@@ -342,6 +344,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             for j in range(l2.getNumChildren()):
                 projectNode(l2.getChild(j))
 
+        print(len(self.curSelShown))
         #someday we thread this ;_;
         #pts = makeSimpleGeom(points,[1,1,1,1])
         #self.projRoot.attachNewNode(pts)

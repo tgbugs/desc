@@ -207,7 +207,8 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
 
         return output
 
-    if num_points < max_points:
+    if 0:
+    #if num_points < max_points:
         l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
@@ -238,6 +239,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         return True
 
 
+    #if 0:
     if num_points < max_points:
         #run again until we find the SMALLEST subunit
         #if num_points < check:  # We return true here because it gurantees that out will be > 1 and cant have negative num points

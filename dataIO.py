@@ -224,7 +224,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
-        #l2Node.show()
+        l2Node.show()
 
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
@@ -409,7 +409,7 @@ def main():
     #profileOctit()
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [99 for _ in range(99)]
+    counts = [9999 for _ in range(1)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

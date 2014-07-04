@@ -153,6 +153,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
         self.textRoot = render.find('textRoot')
         self.projRoot = render2d.attachNewNode('projNode')
+        self.selRoot = render.attachNewNode('selNode')
 
         #corner selection detection #XXX this turns out to be slower, only traverse all the l2 nodes once faster
         self.cornerPicker = CollisionTraverser()
@@ -305,6 +306,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
         collRoot = render.find('collideRoot')
         self.projRoot.removeChildren()
+        self.selRoot.removeChildren()
 
         x2 = cx + sx
         if cx > x2:
@@ -322,6 +324,10 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             uZ = z2
             lZ = cz
 
+        boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5
+        boxCenter = Point3(sx * .5, 0, sz * .5)  # profile vs just using the points we get out
+        lensFL = base.camLens.getFocalLength()
+
         points = []
         def projectNode(node):
             point3d = node.getBounds().getApproxCenter()
@@ -336,18 +342,52 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             if lX <= pX and pX <= uX: 
                 if lZ <= pZ and pZ <= uZ: 
                     points.append([pX, 0, pZ])
-                    self.processTarget(node)
+                    #self.processTarget(node)
                     #self.projRoot.attachNewNode(makePoint(Point3(p2[0], 0, p2[1])))
 
+        l2points = []
+        def projectL2(node):
+            """ projec only the centers of l2 spehres, figure out how to get their radii """
+            point3d = node.getBounds().getApproxCenter()
+            p3 = base.cam.getRelativePoint(render, point3d)
+            p2 = Point2()
+
+            base.camLens.project(p3,p2)
+
+            #pX = p2[0]
+            #pZ = p2[1]
+
+            p2p = Point3(p2[0],0,p2[1])
+
+            r3 = node.getBounds().getRadius()
+            d1 = camera.getDistance(node)  # FIXME make sure we get the correct camera
+
+            projNodeRadius = r3 * (lensFL/d1)  # use similar triangles to get projected radius
+
+            distance = (p2p - boxCenter).length()
+
+            if distance > boxRadius + projNodeRadius:  # GRRRR seems reversed
+                #l2points.append(p2p)
+                l2points.append(point3d)
+                for j in range(node.getNumChildren()):
+                    projectNode(node.getChild(j))
+
+                
+
+
         for i in range(collRoot.getNumChildren()):  # FIXME linear search SUCKS :/ we have the oct tree :/
-            l2 = collRoot.getChild(i)
-            for j in range(l2.getNumChildren()):
-                projectNode(l2.getChild(j))
+            projectL2(collRoot.getChild(i))
+            #for j in range(l2.getNumChildren()):
+                #projectNode(l2.getChild(j))
 
         print(len(self.curSelShown))
         #someday we thread this ;_;
-        #pts = makeSimpleGeom(points,[1,1,1,1])
-        #self.projRoot.attachNewNode(pts)
+        l2s = makeSimpleGeom(l2points,[1,0,0,1])
+        l2n = self.selRoot.attachNewNode(l2s)
+        l2n.setRenderModeThickness(8)
+
+        pts = makeSimpleGeom(points,[1,1,1,1])
+        self.projRoot.attachNewNode(pts)
 
 
     def _getEnclosedNodes(self):
@@ -513,6 +553,7 @@ def main():
     base.disableMouse()
     ut = Utils()
     dt = BoxSel()
+    embed()
     run()
 
 if __name__ == '__main__':

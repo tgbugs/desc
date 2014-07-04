@@ -153,7 +153,7 @@ class sceneRender(DirectObject):
 #bounding cube has side lengths of 2r
 #oct tree order is x, y ,z where x ++++---- y ++--++-- z +-+-+-+- for each quadrant
 
-def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None):  # TODO in theory this could be multiprocessed
+def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, check = 0 ):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
         for some reason this massively improves performance even w/o the code
@@ -173,67 +173,83 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     if num_points <= 0:
         return False
 
+    def nextLevel(check=0):
+        print(side)
+        bitmasks =  [ np.bool_(np.zeros_like(uuids)) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+
+        partition = positions > center
+        #centered = positions - center  #this lets us check against 0
+        
+        #the 8 conbinatorial cases
+        for i in range(num_points):
+            index = octit(partition[i])
+            bitmasks[index][i] = True
+
+        logic = np.array([
+            [ 1, 1, 1],
+            [ 1, 1,-1],
+            [ 1,-1, 1],
+            [ 1,-1,-1],
+            [-1, 1, 1],
+            [-1, 1,-1],
+            [-1,-1, 1],
+            [-1,-1,-1],
+        ])
+
+        output = []
+        for i in range(8):
+            branch = bitmasks[i]  # this is where we can multiprocess
+            new_center = center + logic[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
+            subSet = positions[branch]
+            zap = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5, check)
+            output.append(zap)
+
+        return output
+
     if num_points < max_points:
         #run again until we find the SMALLEST subunit
-        l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
-        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
-        l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
-        #l2Node.show()
+        if num_points < check:  # We return true here because it gurantees that out will be > 1 and cant have negative num points
+            return True
+        elif check and num_points >= check:
+            return True
+        else:
+            print("check",check)
+            out = nextLevel(check=num_points)
+            print(out)
+            print(np.sum(out))
 
-        #text parent
-        tnp = render.attachNewNode("TextParent")
-        for p,uuid,geom in zip(positions,uuids,geomCollide):
-            childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
-            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
-            childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
-            childNode.setPythonTag('uuid',uuid)
-            #childNode.show()
+            #this should have been crashing!
+            if np.sum(out) > 1:  # yeah the check is a waisted iteration but this way we actually shrink the size
+                l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
+                l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
+                l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+                l2Node.show()
 
-            #text nodes FIXME horribly inefficient 
-            #maybe we can make it faster by getting where the points project onto the 2d space and render the
-            #text at THAT position instead of in 3d space?
-            #eh, probably better to only put text on major landmarks/connected and on mouse over/selection?
-            #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
-            textNode = tnp.attachNewNode(TextNode("%s"%uuid))
-            textNode.setPos(*p)
-            textNode.node().setText("%s"%uuid)
-            textNode.node().setCardDecal(True)
-            textNode.node().setEffect(BillboardEffect.makePointEye())
-            textNode.hide() #turn it on when we click? set it when we click?
-            childNode.setPythonTag('text',textNode)
-        #tnp.flattenStrong() #doesn't seem to help :(
-        return True
+                #text parent
+                tnp = render.attachNewNode("TextParent")
+                for p,uuid,geom in zip(positions,uuids,geomCollide):
+                    childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
+                    childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
+                    childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
+                    childNode.setPythonTag('uuid',uuid)
+                    #childNode.show()
 
-    bitmasks =  [ np.bool_(np.zeros_like(uuids)) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+                    #text nodes FIXME horribly inefficient 
+                    #maybe we can make it faster by getting where the points project onto the 2d space and render the
+                    #text at THAT position instead of in 3d space?
+                    #eh, probably better to only put text on major landmarks/connected and on mouse over/selection?
+                    #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
+                    textNode = tnp.attachNewNode(TextNode("%s"%uuid))
+                    textNode.setPos(*p)
+                    textNode.node().setText("%s"%uuid)
+                    textNode.node().setCardDecal(True)
+                    textNode.node().setEffect(BillboardEffect.makePointEye())
+                    textNode.hide() #turn it on when we click? set it when we click?
+                    childNode.setPythonTag('text',textNode)
+                #tnp.flattenStrong() #doesn't seem to help :(
+                return True
 
-    partition = positions > center
-    #centered = positions - center  #this lets us check against 0
-    
-    #the 8 conbinatorial cases
-    for i in range(num_points):
-        index = octit(partition[i])
-        bitmasks[index][i] = True
-
-    logic = np.array([
-        [ 1, 1, 1],
-        [ 1, 1,-1],
-        [ 1,-1, 1],
-        [ 1,-1,-1],
-        [-1, 1, 1],
-        [-1, 1,-1],
-        [-1,-1, 1],
-        [-1,-1,-1],
-    ])
-
-    output = []
-    for i in range(8):
-        branch = bitmasks[i]  # this is where we can multiprocess
-        new_center = center + logic[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
-        subSet = positions[branch]
-        out = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5)
-        output.append(out)
-
-    return output
+    return nextLevel()
 
 
 def makeTextCard(text):

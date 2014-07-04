@@ -366,6 +366,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             dist = p2 - rproj
             dist = dist.length()
             print(dist)
+            dist = 0  # XXX until we can figure out what is wrong
 
             if not base.camLens.project(p3,p2):
                 #displacement = (p2[0]**2 + p2[1]**2) ** .5

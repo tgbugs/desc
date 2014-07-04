@@ -14,8 +14,9 @@ from panda3d.core import GeomLines, GeomLinestrips #useful for nodes
 from panda3d.core import GeomPoints
 from panda3d.core import Texture, GeomNode
 from panda3d.core import Point3,Point2,Vec3,Vec4,BitMask32
+from panda3d.core import BillboardEffect
 
-from panda3d.core import AmbientLight
+#from panda3d.core import AmbientLight
 
 from panda3d.core import CollisionTraverser,CollisionNode
 from panda3d.core import CollisionHandlerQueue,CollisionRay,CollisionLine
@@ -27,6 +28,7 @@ from IPython import embed
 
 from defaults import *
 from util import genLabelText
+from test_objects import makeSimpleGeom
 
 
 class HasSelectables: #mixin see chessboard example
@@ -64,7 +66,7 @@ class HasSelectables: #mixin see chessboard example
 
     def getClickTarget(self,rootSelNode=None):
         """ traverse from the root of the selectable tree """
-        print('getting target....')
+        #print('getting target....')
         if rootSelNode == None:
             rootSelNode = render
 
@@ -149,6 +151,9 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
     def __init__(self):
         super(BoxSel, self).__init__()
 
+        self.textRoot = render.find('textRoot')
+        self.projRoot = render2d.attachNewNode('projNode')
+
         #corner selection detection #XXX this turns out to be slower, only traverse all the l2 nodes once faster
         self.cornerPicker = CollisionTraverser()
         self.cpq = CollisionHandlerQueue()  # FIXME we might only need one of these?
@@ -186,7 +191,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         while 1:
             try:
                 obj = self.curSelShown.pop()
-                obj.hide()
+                obj.detachNode()
+                #obj.remove()
             except IndexError: #FIXME slow?
                 return None
 
@@ -198,29 +204,37 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #self.loadData(uid)
         #self.doRenderStuff() #this is the hard part...
 
-        text = None
-
         if taskMgr.hasTaskNamed('boxTask'):  # FIXME this seems a nasty way to control this...
-            text = target.getPythonTag('text')
-            uuid = target.getPythonTag('uuid')
-            intoNode = None
+            #text = target.getPythonTag('text')
+            #uuid = target.getPythonTag('uuid')
+            intoNode = target
+            clear = False
         else:
+            clear = True
             intoNode = target.getIntoNode()
-            text = intoNode.getPythonTag('text')
-            uuid = intoNode.getPythonTag('uuid')
-            self.selText.setText("%s"%uuid)
+            #text = intoNode.getPythonTag('text')
 
-        if not text.node().getText():
-            text.node().setText("%s"%uuid)
-        text.show()
+        uuid = intoNode.getPythonTag('uuid')
+        self.selText.setText("%s"%uuid)
+
+        textNode = self.textRoot.attachNewNode(TextNode("%s_text"%uuid))
+        textNode.setPos(*intoNode.getBounds().getApproxCenter())
+        textNode.node().setText("%s"%uuid)
+        textNode.node().setEffect(BillboardEffect.makePointEye())
+        #textNode.node().setCardDecal(True)
+
+
+        #if not text.node().getText():
+            #text.node().setText("%s"%uuid)
+        #text.show()
 
         if self.__shift__:  # FIXME OH NO! we need a dict ;_; shift should toggle selection
             pass
         elif self.curSelShown:
-            if intoNode != None:
+            if clear:
                 self.clearSelection()
 
-        self.curSelShown.append(text)
+        self.curSelShown.append(textNode)
 
             #add stuff, nasty race conditions if someone releases shift and the mouse at the same time
             #and subtract from selection too while keeping the rest selected
@@ -264,7 +278,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #self.__mouseDown__ = False
         if taskMgr.hasTaskNamed('boxTask'):
             self.__baseBox__.hide()
-            self.getEnclosedNodes()
+            if abs(self.__baseBox__.getScale()[0]) > .005:
+                self.getEnclosedNodes()
             taskMgr.remove('boxTask')
 
     #def clickTask(self, task): #this will probably need to handle many possible click targets
@@ -284,6 +299,55 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         return task.cont
 
     def getEnclosedNodes(self):
+        cx,cy,cz = self.__baseBox__.getPos()
+        sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
+        collRoot = render.find('collideRoot')
+        self.projRoot.removeChildren()
+
+        x2 = cx + sx
+        if cx > x2:
+            uX = cx
+            lX = x2
+        else:
+            uX = x2
+            lX = cx
+
+        z2 = cz + sz
+        if cz > z2:
+            uZ = cz
+            lZ = z2
+        else:
+            uZ = z2
+            lZ = cz
+
+        points = []
+        def projectNode(node):
+            point3d = node.getBounds().getApproxCenter()
+            p3 = base.cam.getRelativePoint(render, point3d)
+            p2 = Point2()
+
+            if not base.camLens.project(p3,p2):
+                return False
+
+            pX = p2[0]
+            pZ = p2[1]
+            if lX <= pX and pX <= uX: 
+                if lZ <= pZ and pZ <= uZ: 
+                    points.append([pX, 0, pZ])
+                    self.processTarget(node)
+                    #self.projRoot.attachNewNode(makePoint(Point3(p2[0], 0, p2[1])))
+
+        for i in range(collRoot.getNumChildren()):  # FIXME linear search SUCKS :/ we have the oct tree :/
+            l2 = collRoot.getChild(i)
+            for j in range(l2.getNumChildren()):
+                projectNode(l2.getChild(j))
+
+        #someday we thread this ;_;
+        #pts = makeSimpleGeom(points,[1,1,1,1])
+        #self.projRoot.attachNewNode(pts)
+
+
+    def _getEnclosedNodes(self):
         cx,cy,cz = self.__baseBox__.getPos()
         sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
         
@@ -391,14 +455,14 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
                 if lZ-dist <= pZ and pZ <= uZ+dist: 
                     #print(node.getCollideMask())
                     #print(BitMask32.bit(BITMASK_COLL_CLICK))
-                    #if node.getCollideMask() == BitMask32.bit(BITMASK_COLL_CLICK): #FIXME we can massively improve performance on l2 nodes wholely contained in box
-                    if node.getPythonTag('text'):
+                    if node.getCollideMask() == BitMask32.bit(BITMASK_COLL_CLICK): #FIXME we can massively improve performance on l2 nodes wholely contained in box
+                    #if node.getPythonTag('text'):
                         self.processTarget(node)
                         return True
                     else:
                         output = []
                         out = None
-                        print("NumChildren",node.getNumChildren())
+                        #print("NumChildren",node.getNumChildren())
                         for i in range(node.getNumChildren()):
                             out = checkNode(node.getChild(i))
                         output.append(out)
@@ -416,7 +480,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             #for j in range(l2.getNumChildren()):
                 #out = checkNode(l2.getChild(j))
             output.append(out)
-        print(output)
+        #print(output)
 
         #just add the scale and everything will be ok
         #start with the l2 nodes since there are fewer ie collision mask = BITMASK_COLL_MOUSE

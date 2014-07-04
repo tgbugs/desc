@@ -41,7 +41,6 @@ from multiprocessing import Pipe
 
 import numpy as np
 
-from dragsel import BoxSel
 
 NCORES = 8 #TODO get this live?
 
@@ -467,6 +466,7 @@ def _main():
     from panda3d.core import loadPrcFileData
     from time import time
     from panda3d.core import PStatClient
+    from dragsel import BoxSel
     PStatClient.connect()
     loadPrcFileData('','view-frustum-cull 0')
     #loadPrcFileData('','threading-model Cull/Draw') #bad for lots of nodes
@@ -505,6 +505,8 @@ def main():
     from panda3d.core import loadPrcFileData
     from time import time
     from panda3d.core import PStatClient
+
+    from dragsel import BoxSel
 
     PStatClient.connect()
     loadPrcFileData('','view-frustum-cull 0')

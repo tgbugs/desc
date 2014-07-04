@@ -7,7 +7,6 @@ from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode
 from panda3d.core import CollisionNode, CollisionSphere
 from panda3d.core import BitMask32
-from panda3d.core import BillboardEffect
 
 from defaults import *
 
@@ -153,6 +152,19 @@ class sceneRender(DirectObject):
 #bounding cube has side lengths of 2r
 #oct tree order is x, y ,z where x ++++---- y ++--++-- z +-+-+-+- for each quadrant
 
+class asdf2:
+    @staticmethod
+    def setText():
+        return None
+class asdf:
+    """ WOW creating these inside a loop is SLOW """
+    @staticmethod
+    def show():
+        pass
+    @staticmethod
+    def node():
+        return asdf2
+
 def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, check = 0 ):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
@@ -207,40 +219,24 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
 
         return output
 
-    if 0:
-    #if num_points < max_points:
+    #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
+    if num_points < max_points:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
         l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         #l2Node.show()
 
-        #text parent
-        tnp = render.attachNewNode("textRoot")
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
-            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
+            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME use getBounds()??
             childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
             childNode.setPythonTag('uuid',uuid)
             #childNode.show()
-
-            #text nodes FIXME horribly inefficient 
-            #maybe we can make it faster by getting where the points project onto the 2d space and render the
-            #text at THAT position instead of in 3d space?
-            #eh, probably better to only put text on major landmarks/connected and on mouse over/selection?
-            #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
-            textNode = tnp.attachNewNode(TextNode("%s"%uuid))
-            textNode.setPos(*p)
-            #textNode.node().setText("%s"%uuid)  # set the text on selection for faster load???
-            textNode.node().setCardDecal(True)
-            textNode.node().setEffect(BillboardEffect.makePointEye())
-            textNode.hide() #turn it on when we click? set it when we click?
-            childNode.setPythonTag('text',textNode)
-        #tnp.flattenStrong() #doesn't seem to help :(
         return True
 
 
-    #if 0:
-    if num_points < max_points:
+    if 0:
+    #if num_points < max_points:  # turns out performance on this is shit
         #run again until we find the SMALLEST subunit
         #if num_points < check:  # We return true here because it gurantees that out will be > 1 and cant have negative num points
             #return True
@@ -264,7 +260,6 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                 #l2Node.show()
 
                 #text parent
-                tnp = render.attachNewNode("TextParent")
                 for p,uuid,geom in zip(positions,uuids,geomCollide):
                     childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
                     childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
@@ -277,6 +272,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                     #text at THAT position instead of in 3d space?
                     #eh, probably better to only put text on major landmarks/connected and on mouse over/selection?
                     #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
+                    """
                     textNode = tnp.attachNewNode(TextNode("%s"%uuid))
                     textNode.setPos(*p)
                     #textNode.node().setText("%s"%uuid)
@@ -284,11 +280,12 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                     textNode.node().setEffect(BillboardEffect.makePointEye())
                     textNode.hide() #turn it on when we click? set it when we click?
                     childNode.setPythonTag('text',textNode)
+                    """
                 #tnp.flattenStrong() #doesn't seem to help :(
                 return True
 
         if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
-            print("detect a branch with 1")
+            #print("detect a branch with 1")
             return nextLevel(check=-1)
 
     return nextLevel()
@@ -395,6 +392,10 @@ def main():
     PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
+
+    textRoot = render.attachNewNode("textRoot")
+    level2Root = render.attachNewNode('collideRoot')
+
     base.setBackgroundColor(0,0,0)
     ut = Utils()
     grid = Grid3d()
@@ -404,10 +405,9 @@ def main():
     base.disableMouse()
 
     #profileOctit()
-    level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [9999 for _ in range(1)]
+    counts = [999 for _ in range(99)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

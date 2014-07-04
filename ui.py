@@ -274,7 +274,7 @@ class CameraControl(DirectObject):
     def getWindowSize(self,wat=None):
         self.__winx__ = base.win.getXSize()
         self.__winy__ = base.win.getYSize()
-        print(self.__winx__,self.__winy__)
+        #print(self.__winx__,self.__winy__)
 
     def makeTask(self, function):
         """ ye old task spawner """

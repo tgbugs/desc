@@ -208,6 +208,37 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         return output
 
     if num_points < max_points:
+        l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
+        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
+        l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+        #l2Node.show()
+
+        #text parent
+        tnp = render.attachNewNode("TextParent")
+        for p,uuid,geom in zip(positions,uuids,geomCollide):
+            childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
+            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
+            childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
+            childNode.setPythonTag('uuid',uuid)
+            #childNode.show()
+
+            #text nodes FIXME horribly inefficient 
+            #maybe we can make it faster by getting where the points project onto the 2d space and render the
+            #text at THAT position instead of in 3d space?
+            #eh, probably better to only put text on major landmarks/connected and on mouse over/selection?
+            #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
+            textNode = tnp.attachNewNode(TextNode("%s"%uuid))
+            textNode.setPos(*p)
+            textNode.node().setText("%s"%uuid)
+            textNode.node().setCardDecal(True)
+            textNode.node().setEffect(BillboardEffect.makePointEye())
+            textNode.hide() #turn it on when we click? set it when we click?
+            childNode.setPythonTag('text',textNode)
+        #tnp.flattenStrong() #doesn't seem to help :(
+        return True
+
+
+    if num_points < max_points:
         #run again until we find the SMALLEST subunit
         #if num_points < check:  # We return true here because it gurantees that out will be > 1 and cant have negative num points
             #return True
@@ -254,9 +285,9 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                 #tnp.flattenStrong() #doesn't seem to help :(
                 return True
 
-    if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
-        print("detect a branch with 1")
-        return nextLevel(check=-1)
+        if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
+            print("detect a branch with 1")
+            return nextLevel(check=-1)
 
     return nextLevel()
 
@@ -374,7 +405,7 @@ def main():
     level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [99999 for _ in range(1)]
+    counts = [9999 for _ in range(1)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

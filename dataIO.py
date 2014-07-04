@@ -4,21 +4,109 @@
 
 import numpy as np
 from direct.showbase.DirectObject import DirectObject
+from panda3d.core import TextNode
 from panda3d.core import CollisionNode, CollisionSphere
 from panda3d.core import BitMask32
+from panda3d.core import BillboardEffect
 
 from defaults import *
+
 #scene renderer is what we will use to coordinate receiving the set of visible objects to render
 #the total set of possible objects could be treated as another sceneRednerer???
 
 #NOTE: we do NOT deal with selection call backs here, instead we use the UUID that they return
 #and handle that in our selection code
 
+#XXX use CollisionTube for rectangular stuff, its not perfect (corners) but it is better than the alternative
+
+class requestManager(object):
+    """ Server side class that listens for requests to render data to bam
+        Should cooperate with another predictive class that generates related
+        requests.
+    """
+    def __init__(self,port):
+        """ Set up to listen for requests for data from the render client.
+            These requests will then spawn processes that retrieve and
+            render the data and related data the user might want to view.
+        """
+        pass
+    def listenForRequest(self):
+        pass
+    def handleRequest(self):
+        pass
+
+
+class bamCache(object):
+    """ A tree structure that holds ranked related bams, probably should
+        be a splay tree? not now, use a dict
+    """
+    def __init__(self):
+        pass
+
+class requestPredictor(object):
+    """ Given a request for data compute a bunch or related requests.
+        Probably needs a record of bams that have already been requested.
+    """
+    def __init__(self, user):
+        if user:
+            #TODO retrieve the previous cache for that user
+            self.cache = {}
+        else:
+            self.cache = {}
+
+    def getRelated(self, request):
+        """ If we want to get real fancy we can try to do prediction based on
+            Previous user request patterns or just all existing requests.
+            Probably need a way to do this in parallel and not worry about
+            _perfect_ concurrency?
+        """
+        #1 other views of the same data
+        #2 sub trees
+        #3 XXX problem: compiling a new bam every time can get really expensive
+            #if we want to make small changes :/, it is good for performance
+            #bad for keeping things modifiable
+        #4 maybe we can get around the problem by caching bams... or by flattening?
+            #if we want to leverage the power to scale the size of something by a value
+            #then maybe we *should* look at using individual nodes when there are fewer
+            #values on screen?
+        #5 apparently we can traverse geomNodes and find all their constituent geoms and
+            #scale those in place???
+        #6 editing of the geom structure in place seems like it might be a better way to manage this
+            #when we want to make small changes to the larger structure, just tweak a subset
+            #of the verts
+
+    def rankRelated(self, request):
+        pass
+
+    def rankCache(self):
+        """ Rank the bams in the cahce, probably don't need this since
+            The cache should be ranked based on the original rank and
+            then just put in in temporal order. Then things at the end
+            of the cache will be popped off. Whenever a cached bam is
+            requested it and its related (ooop need a tree) bams should
+            all be put back at the top.
+        """
+        #Start by rendering the requested setup to a bam stream and then
+        #compute other related views automatically.
+
+class bamReceiver(DirectObject):
+    def __init__(self):
+        self.cache = {}
+
+class requestBuilder(object):
+    """ Generate a json (or the like) request for data
+        maybe sqlalchemy? who knows
+    """
+    def request(self, uuid, properties):
+        return ""
+
+
 class sceneRender(DirectObject):
     def __init__(self,rootNode,collNode): #technically we don't need this becasue render is global? nah, this way we can use things OTHER than render which can be useful for viz
         self.root = rootNode
         self.coll = collNode
         self.sceneCache = {} #dict of hashes of the root for each pair of objects, geometry+collide
+
     def compileObjects(self,objectList): #this is weak of we want to use 
         """ take whatever strcutre we give to our data objects and compile them
             to points in x,y,z space and create the structure for selecting them
@@ -84,17 +172,36 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
 
     if num_points <= 0:
         return False
-    elif num_points < max_points:
+
+    if num_points < max_points:
+        #run again until we find the SMALLEST subunit
         l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         #l2Node.show()
+
+        #text parent
+        tnp = render.attachNewNode("TextParent")
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
             childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
             childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
             childNode.setPythonTag('uuid',uuid)
             #childNode.show()
+
+            #text nodes FIXME horribly inefficient 
+            #maybe we can make it faster by getting where the points project onto the 2d space and render the
+            #text at THAT position instead of in 3d space?
+            #eh, probably better to only put text on major landmarks/connected and on mouse over/selection?
+            #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
+            textNode = tnp.attachNewNode(TextNode("%s"%uuid))
+            textNode.setPos(*p)
+            textNode.node().setText("%s"%uuid)
+            textNode.node().setCardDecal(True)
+            textNode.node().setEffect(BillboardEffect.makePointEye())
+            textNode.hide() #turn it on when we click? set it when we click?
+            childNode.setPythonTag('text',textNode)
+        #tnp.flattenStrong() #doesn't seem to help :(
         return True
 
     bitmasks =  [ np.bool_(np.zeros_like(uuids)) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
@@ -129,6 +236,8 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     return output
 
 
+def makeTextCard(text):
+    return 
 
 
 def walkTree(tree,side,center):
@@ -240,7 +349,7 @@ def main():
     level2Root = render.attachNewNode('collideRoot')
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [9999 for _ in range(99)]
+    counts = [999 for _ in range(1)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

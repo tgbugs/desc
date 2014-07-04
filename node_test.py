@@ -7,8 +7,11 @@ from panda3d.core import OmniBoundingVolume
 from time import time
 
 import numpy as np
+from IPython import embed
 
 import sys
+
+from ui import makeAxis
 
 def makePoint():
     point = (0,0,0)
@@ -27,6 +30,20 @@ def makePoint():
     cloudNode = GeomNode('point')
     cloudNode.addGeom(cloud)
     return cloudNode
+
+class geomTest(DirectObject):
+    def __init__(self,n):
+        self.accept('escape',sys.exit)
+        poses = np.random.randint(-100,100,(n,3))
+        geomParent = render.attachNewNode('geomParent')
+        geoms = GeomNode('container')
+        for _ in range(n):
+            ax = makeAxis()
+            ax.setPos(np.random.randint(-100,100))
+            geoms.addGeom(ax)
+
+        geomParent.attachNewNode(geoms)
+
 
 class emptyTest(DirectObject):
     def __init__(self,n):
@@ -56,10 +73,18 @@ class emptyTest(DirectObject):
 def main():
     from panda3d.core import PStatClient
     from panda3d.core import loadPrcFileData
+    from ui import CameraControl, Axis3d, Grid3d
     #loadPrcFileData('','threading-model Cull/Draw') #XXX wow, not good for this use case...
     base = ShowBase()
+    base.disableMouse()
     base.setBackgroundColor(0,0,0)
-    nt = emptyTest(3000)
+
+    cc = CameraControl()
+    ax = Axis3d()
+    gd = Grid3d()
+
+    #nt = emptyTest(2000)
+    gt = geomTest(2000)
     PStatClient.connect()
     run()
 

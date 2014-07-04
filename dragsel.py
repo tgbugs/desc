@@ -190,7 +190,6 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             except IndexError: #FIXME slow?
                 return None
 
-        
     def processTarget(self,target):
         #TODO shouldn't we let nodes set their own "callback" on click? so that there is a type per instead of shoving it all here?
             #well we also need to keep track of the previously selected set of nodes so we can turn them back off
@@ -203,6 +202,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
         if taskMgr.hasTaskNamed('boxTask'):  # FIXME this seems a nasty way to control this...
             text = target.getPythonTag('text')
+            uuid = target.getPythonTag('uuid')
             intoNode = None
         else:
             intoNode = target.getIntoNode()
@@ -210,6 +210,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             uuid = intoNode.getPythonTag('uuid')
             self.selText.setText("%s"%uuid)
 
+        if not text.node().getText():
+            text.node().setText("%s"%uuid)
         text.show()
 
         if self.__shift__:  # FIXME OH NO! we need a dict ;_; shift should toggle selection
@@ -419,7 +421,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #just add the scale and everything will be ok
         #start with the l2 nodes since there are fewer ie collision mask = BITMASK_COLL_MOUSE
 
-def makePoint(point):
+def makePoint(point=[0,0,0]):
     clr4 = [1,1,1,1]
     fmt = GeomVertexFormat.getV3c4() #3 component vertex, w/ 4 comp color
     vertexData = GeomVertexData('points', fmt, Geom.UHStatic)

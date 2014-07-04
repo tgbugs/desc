@@ -215,7 +215,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         #l2Node.show()
 
         #text parent
-        tnp = render.attachNewNode("TextParent")
+        tnp = render.attachNewNode("textRoot")
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
             childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
@@ -230,7 +230,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
             textNode = tnp.attachNewNode(TextNode("%s"%uuid))
             textNode.setPos(*p)
-            textNode.node().setText("%s"%uuid)
+            #textNode.node().setText("%s"%uuid)  # set the text on selection for faster load???
             textNode.node().setCardDecal(True)
             textNode.node().setEffect(BillboardEffect.makePointEye())
             textNode.hide() #turn it on when we click? set it when we click?
@@ -279,7 +279,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                     #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
                     textNode = tnp.attachNewNode(TextNode("%s"%uuid))
                     textNode.setPos(*p)
-                    textNode.node().setText("%s"%uuid)
+                    #textNode.node().setText("%s"%uuid)
                     textNode.node().setCardDecal(True)
                     textNode.node().setEffect(BillboardEffect.makePointEye())
                     textNode.hide() #turn it on when we click? set it when we click?
@@ -418,6 +418,8 @@ def main():
         print(out)
         render.attachNewNode(makeSimpleGeom(positions,np.random.rand(4)))
 
+    #textRoot = render.find('textRoot')
+    #textRoot.detach()
     run()
 
 if __name__ == "__main__":

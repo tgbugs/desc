@@ -386,9 +386,9 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             # testing stuff to view the (desired) projection of l2 nodes
             cfz, cfx = base.camLens.getFilmSize()
             rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2,pi/8)]
-            radn = self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1]))
-            radn.setRenderModeThickness(6)
-            print(cfx,cfz)
+            radn = self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1],GeomLineStrips))
+            #radn.setRenderModeThickness(6)
+            #print(cfx,cfz)
 
             for boxCenter in centers:
                 diff = p2p - boxCenter
@@ -398,6 +398,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
                 z = projNodeRadius * sin(theta) * cfz
                 rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d
                 test = boxRadius + rescaled
+                line = [p2p,Point3(x,0,z)]
+                self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
 
                 if distance < test:
                     #l2points.append(p2p)

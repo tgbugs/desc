@@ -21,6 +21,7 @@ from panda3d.core import BillboardEffect
 from panda3d.core import CollisionTraverser,CollisionNode
 from panda3d.core import CollisionHandlerQueue,CollisionRay,CollisionLine
 
+from numpy import pi, arange, sin, cos, arctan
 
 import sys
 from threading import Thread
@@ -324,8 +325,23 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             uZ = z2
             lZ = cz
 
-        boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5
-        boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
+        #boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5  # TODO we could make it so that every 2x change in raidus used 2 circles instead of 1 to prevent overshoot we can't just divide the radius by 2 though :/
+        #boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
+
+        def calcRC(major,minor):
+            ratio = int(abs(major // minor))
+            split = major / ratio
+            radius = ((split * .5)**2 + (minor * .5)**2)**.5
+            majCents = [(split * .5) + i*(split) for i in range(ratio)]
+            return radius, majCents
+
+        if abs(sx) > abs(sz):
+            boxRadius,majCents = calcRC(sx,sz)
+            centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
+        elif abs(sz) >= abs(sx):
+            boxRadius,majCents = calcRC(sz,sx)
+            centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
+
         lensFL = base.camLens.getFocalLength()
 
         points = []
@@ -362,15 +378,33 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             r3 = node.getBounds().getRadius()
             d1 = camera.getDistance(node)  # FIXME make sure we get the correct camera
 
-            projNodeRadius = r3 * (lensFL/d1)  # FIXME this needs to be converted to render2d coords???
+            if not d1:
+                d1 = 1E-9
+            projNodeRadius = r3 * ((lensFL*2)/d1)  # FIXME this needs to be converted to render2d coords???
+            # we are missing a corrected for how close something is to the camera.... for some reason
 
-            distance = (p2p - boxCenter).length()
+            # testing stuff to view the (desired) projection of l2 nodes
+            cfz, cfx = base.camLens.getFilmSize()
+            rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2,pi/8)]
+            radn = self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1]))
+            radn.setRenderModeThickness(6)
+            print(cfx,cfz)
 
-            if distance < boxRadius + projNodeRadius:
-                #l2points.append(p2p)
-                l2points.append(point3d)
-                for j in range(node.getNumChildren()):
-                    projectNode(node.getChild(j))
+            for boxCenter in centers:
+                diff = p2p - boxCenter
+                distance = diff.length()
+                theta = arctan(diff[2] / diff[0])  # FIXME all of these problems may be being caused by not using aspect2d?
+                x = projNodeRadius * cos(theta) * cfx
+                z = projNodeRadius * sin(theta) * cfz
+                rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d
+                test = boxRadius + rescaled
+
+                if distance < test:
+                    #l2points.append(p2p)
+                    l2points.append(point3d)
+                    for j in range(node.getNumChildren()):
+                        projectNode(node.getChild(j))
+                    return None  # return as soon as any one of the centers gets a hit
 
                 
 

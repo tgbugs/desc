@@ -325,7 +325,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             lZ = cz
 
         boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5
-        boxCenter = Point3(sx * .5, 0, sz * .5)  # profile vs just using the points we get out
+        boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
         lensFL = base.camLens.getFocalLength()
 
         points = []
@@ -362,11 +362,11 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             r3 = node.getBounds().getRadius()
             d1 = camera.getDistance(node)  # FIXME make sure we get the correct camera
 
-            projNodeRadius = r3 * (lensFL/d1)  # use similar triangles to get projected radius
+            projNodeRadius = r3 * (lensFL/d1)  # FIXME this needs to be converted to render2d coords???
 
             distance = (p2p - boxCenter).length()
 
-            if distance > boxRadius + projNodeRadius:  # GRRRR seems reversed
+            if distance < boxRadius + projNodeRadius:
                 #l2points.append(p2p)
                 l2points.append(point3d)
                 for j in range(node.getNumChildren()):

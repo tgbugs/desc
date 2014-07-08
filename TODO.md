@@ -21,3 +21,4 @@ things
  3. CONCLUSION: do not use the scene graph for most things, it is simply too slow allow selection on sub components, or figure out how to thread this
  4. 4d grid plus the ability to zip through any 1 2 or 3 of the dimensions with a slider... 
  5. simple way to represent relations as lines with colors to mark their type
+ 6. multipe camera views/ windows, get multiple perspectives on a problem at the same time... well, each diferent arragment will require its own model... but it will be nice to have them side by side at least

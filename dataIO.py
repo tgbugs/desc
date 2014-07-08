@@ -3,6 +3,7 @@
 """
 
 import numpy as np
+from IPython import embed
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode
 from panda3d.core import CollisionNode, CollisionSphere
@@ -17,6 +18,12 @@ from defaults import *
 #and handle that in our selection code
 
 #XXX use CollisionTube for rectangular stuff, its not perfect (corners) but it is better than the alternative
+
+class console(DirectObject):
+    def __init__(self):
+        self.accept('i',self.ipython)
+    def ipython(self):
+        embed()  # this works becasue you can access all the things via render :)
 
 class requestManager(object):
     """ Server side class that listens for requests to render data to bam
@@ -224,7 +231,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
-        l2Node.show()
+        #l2Node.show()
 
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
@@ -377,6 +384,12 @@ def profileOctit():
     b(data)
 
 
+def pdir(lst,string):
+    for d in lst:
+        if d.count(string):
+            try: getattr(thing,d)()
+            except: pass
+
 def main():
     from time import time
 
@@ -403,18 +416,25 @@ def main():
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
-    bs = BoxSel() #TODO
     base.disableMouse()
+    con = console()
 
     #profileOctit()
 
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [99 for _ in range(1)]
+    counts = [9999 for _ in range(1)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))
         positions = np.cumsum(np.random.randint(-1,2,(nnodes,3)), axis=0)
+
+        #positions = []
+        #for j in np.linspace(-10,10,512):
+            #positions += [[0,v+j,0] for v in np.arange(-1000,1000,100)]
+        #positions = np.array(positions)
+        #nnodes = len(positions)
+
         #uuids = np.arange(0,nnodes) * (i + 1)
         uuids = np.array(["%s"%uuid4() for _ in range(nnodes)])
         geomCollide = np.ones(nnodes) * .5
@@ -424,6 +444,8 @@ def main():
 
     #textRoot = render.find('textRoot')
     #textRoot.detach()
+    bs = BoxSel(False)  # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
+    #base.camLens.setFov(150)
     run()
 
 if __name__ == "__main__":

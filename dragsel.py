@@ -21,7 +21,7 @@ from panda3d.core import BillboardEffect
 from panda3d.core import CollisionTraverser,CollisionNode
 from panda3d.core import CollisionHandlerQueue,CollisionRay,CollisionLine
 
-from numpy import pi, arange, sin, cos, arctan
+from numpy import pi, arange, sin, cos, arctan2 #, arccos, arcsin, arctan2, arccos2, arcsin2
 
 import sys
 from threading import Thread
@@ -31,6 +31,9 @@ from defaults import *
 from util import genLabelText
 from test_objects import makeSimpleGeom
 
+def fixAsp(point):  # FIXME broken
+    return render2d.getRelativePoint(aspect2d,point)
+    #return aspect2d.getRelativePoint(render2d,point)  # no...
 
 class HasSelectables: #mixin see chessboard example
     def __init__(self):
@@ -281,8 +284,9 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
     def gotRelease(self):
         #self.__mouseDown__ = False
         if taskMgr.hasTaskNamed('boxTask'):
-            self.__baseBox__.hide()
-            if abs(self.__baseBox__.getScale()[0]) > .005:
+            #self.__baseBox__.hide()
+            #if abs(self.__baseBox__.getScale()[0]) > .005:
+            if abs(self.__baseBox__.getScale()[0]) > .0001:
                 self.getEnclosedNodes()
             taskMgr.remove('boxTask')
 
@@ -303,6 +307,9 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         return task.cont
 
     def getEnclosedNodes(self):
+        #cfx, cfz = base.camLens.getFilmSize()  # FIXME need this for a bunch of corrections
+        cfx = 1
+        cfz = base.camLens.getAspectRatio()
         cx,cy,cz = self.__baseBox__.getPos()
         sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
         collRoot = render.find('collideRoot')
@@ -329,6 +336,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
 
         def calcRC(major,minor):
+            if not minor:
+                return 0, [0]
             ratio = int(abs(major // minor))
             split = major / ratio
             radius = ((split * .5)**2 + (minor * .5)**2)**.5
@@ -362,16 +371,13 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
                     #self.projRoot.attachNewNode(makePoint(Point3(p2[0], 0, p2[1])))
 
         l2points = []
-        def projectL2(node):
+        def projectL2(node):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
             """ projec only the centers of l2 spehres, figure out how to get their radii """
             point3d = node.getBounds().getApproxCenter()
             p3 = base.cam.getRelativePoint(render, point3d)
             p2 = Point2()
 
             base.camLens.project(p3,p2)
-
-            #pX = p2[0]
-            #pZ = p2[1]
 
             p2p = Point3(p2[0],0,p2[1])
 
@@ -380,33 +386,60 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
             if not d1:
                 d1 = 1E-9
-            projNodeRadius = r3 * ((lensFL*2)/d1)  # FIXME this needs to be converted to render2d coords???
+            projNodeRadius = r3 * ((lensFL*2)/d1)  # FIXME this needs to be converted to render2d coords??? also the X axis ALWAYS has the correct width!
             # we are missing a corrected for how close something is to the camera.... for some reason
 
             # testing stuff to view the (desired) projection of l2 nodes
-            cfz, cfx = base.camLens.getFilmSize()
-            rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2,pi/8)]
-            radn = self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1],GeomLineStrips))
+            #rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2.126,pi/16)]
+            #rads = [p2p+fixAsp(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius)) for theta in arange(0,pi*2.126,pi/32)]
+            #self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1],GeomLinestrips))
+            radU = [p2p+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+            self.projRoot.attachNewNode(makeSimpleGeom(radU,[1,0,0,1],GeomLinestrips))
+
             #radn.setRenderModeThickness(6)
-            #print(cfx,cfz)
+            print("cfz",cfz)
 
             for boxCenter in centers:
-                diff = p2p - boxCenter
+                diff = p2p - boxCenter  # FIXME aspect 2d??
                 distance = diff.length()
-                theta = arctan(diff[2] / diff[0])  # FIXME all of these problems may be being caused by not using aspect2d?
-                x = projNodeRadius * cos(theta) * cfx
-                z = projNodeRadius * sin(theta) * cfz
-                rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d
-                test = boxRadius + rescaled
-                line = [p2p,Point3(x,0,z)]
-                self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+                #theta = arctan2(diff[0], diff[2]) + pi/4
+                #dx = (p2[0] - boxCenter[0])
+                #dz = (p2[1] - boxCenter[2]) * cfz
+                dx = (boxCenter[0] - p2[0])
+                dz = (boxCenter[2] - p2[1]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
+                #distance = (dx**2 + dz**2)**.5
+                theta = arctan2(dz, dx) # + pi/2  # FIXME this is what is broken I'm sure
+                print(theta/pi,"pi radians")
 
-                if distance < test:
+                x = cos(theta) * projNodeRadius
+                z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
+                rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
+
+                radU = [boxCenter+(Point3(cos(theta)*distance, 0, sin(theta)*distance)) for theta in arange(0,pi*2.126,pi/32)]
+                self.projRoot.attachNewNode(makeSimpleGeom(radU,[1,1,1,1],GeomLinestrips))
+
+                radRads = [ p2p + (Point3( cos(theta)*rescaled, 0.0, sin(theta)*rescaled )) for theta in arange(0,pi*2.126,pi/32) ]
+                rr = self.projRoot.attachNewNode(makeSimpleGeom(radRads,[1,1,0,1],GeomLinestrips))
+
+                asdf = self.projRoot.attachNewNode(makeSimpleGeom([Point3(x,0,z)],[1,1,0,1]))
+                asdf.setRenderModeThickness(3)
+
+                line = [p2p,boxCenter]
+                
+                boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
+                #self.projRoot.attachNewNode(makeSimpleGeom(boxRads,[0,1,1,1],GeomLinestrips))
+                self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
+
+                #if distance < xz - p2p:
+                if distance < boxRadius + rescaled:
                     #l2points.append(p2p)
+                    self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
                     l2points.append(point3d)
                     for j in range(node.getNumChildren()):
                         projectNode(node.getChild(j))
                     return None  # return as soon as any one of the centers gets a hit
+                else:
+                    self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
 
                 
 

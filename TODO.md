@@ -43,3 +43,6 @@ things
  8. http://eli.thegreenplace.net/2012/01/04/shared-counter-with-pythons-multiprocessing/ << counter things irritating :/
  9. make it possible to view a 'slice' through a 3d structure specifically by hiding all points/geom along an axis
     support for arbitrary axes *should* be possible though their meaning outside say a raw data pixel volume is nebulous
+ 10. Write a function to convert selected objects, and the relevant set of properties to a set of points!
+ 11. Relative scaling of the base grid for different objects can be handled locally using the scale property on geoms?
+     but will need to sync with the collision surfaces somehow :/

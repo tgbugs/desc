@@ -19,22 +19,29 @@ from defaults import *
 #and handle that in our selection code
 
 #XXX use CollisionTube for rectangular stuff, its not perfect (corners) but it is better than the alternative
-class requestManager(object):
-    """ Server side class that listens for requests to render data to bam
-        Should cooperate with another predictive class that generates related
-        requests.
+
+class requestDispatcher(object):
+    """
+        The local half the the request system, manages the connection to the request manager
     """
     def __init__(self,port):
-        """ Set up to listen for requests for data from the render client.
-            These requests will then spawn processes that retrieve and
-            render the data and related data the user might want to view.
-        """
-        pass
-    def listenForRequest(self):
-        pass
-    def handleRequest(self):
-        pass
 
+    def __get_m
+
+    def dispatch(self,request):
+
+
+def buildRequest(selected_uuids, selected_properties):
+    """ Build and dispatch a request and return a future 
+        indicating that we expect to receive a compiled set
+        of objects to render
+
+        The arguments accept a list of uuids and a list of properties for each
+        uuid so that we can dispatch multiple requests at once even if they
+        are for different coordinate systems
+    """
+    { uuid:properties for uuid,properties in zip(selected_uuids, selected_properties) }
+    return future
 
 class bamCache(object):
     """ A tree structure that holds ranked related bams, probably should
@@ -152,6 +159,10 @@ class sceneRender(DirectObject):
 #just make an oct tree and stick circles on nodes with have >= max points we only need to compute COM and max/min once
 #bounding cube has side lengths of 2r
 #oct tree order is x, y ,z where x ++++---- y ++--++-- z +-+-+-+- for each quadrant
+
+
+
+
 
 def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, check = 0 ):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then

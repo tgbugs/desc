@@ -1,9 +1,10 @@
 """
     DirectObject class in panda for DRAWING the data we get back, this might be run on a remote panda instance?
 """
-
+from uuid import uuid4
 import numpy as np
 from IPython import embed
+
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode
 from panda3d.core import CollisionNode, CollisionSphere
@@ -18,13 +19,6 @@ from defaults import *
 #and handle that in our selection code
 
 #XXX use CollisionTube for rectangular stuff, its not perfect (corners) but it is better than the alternative
-
-class console(DirectObject):
-    def __init__(self):
-        self.accept('i',self.ipython)
-    def ipython(self):
-        embed()  # this works becasue you can access all the things via render :)
-
 class requestManager(object):
     """ Server side class that listens for requests to render data to bam
         Should cooperate with another predictive class that generates related
@@ -159,19 +153,6 @@ class sceneRender(DirectObject):
 #bounding cube has side lengths of 2r
 #oct tree order is x, y ,z where x ++++---- y ++--++-- z +-+-+-+- for each quadrant
 
-class asdf2:
-    @staticmethod
-    def setText():
-        return None
-class asdf:
-    """ WOW creating these inside a loop is SLOW """
-    @staticmethod
-    def show():
-        pass
-    @staticmethod
-    def node():
-        return asdf2
-
 def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, check = 0 ):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
@@ -235,7 +216,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
 
         for p,uuid,geom in zip(positions,uuids,geomCollide):
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
-            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME use getBounds()??
+            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) # we do it this way because it keeps framerates WAY higher dont know why
             childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
             childNode.setPythonTag('uuid',uuid)
             #childNode.show()
@@ -297,21 +278,6 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
 
     return nextLevel()
 
-
-def makeTextCard(text):
-    return 
-
-
-def walkTree(tree,side,center):
-    collNodes = []
-    if hasattr(tree,'__iter__'): #not at a leaf
-        pass
-    elif tree:
-        pass
-    else:  # there were zero nodes in this leaf
-        pass
-
-
 def octit(position):  # use this not entirely sure why it is better, maybe fewer missed branches?
     x, y, z = position
     if x:
@@ -337,34 +303,6 @@ def octit(position):  # use this not entirely sure why it is better, maybe fewer
             else:
                 return 7
 
-def altoctit(position):  # slower
-    x, y, z = position
-    if   x and y and z:             #+++
-        return 0
-    elif x and y and not z:         #++-
-        return 1
-    elif x and not y and z:         #+-+
-        return 2
-    elif x and not y and not z:     #+--
-        return 3
-    elif not x and y and not z:     #-++
-        return 4
-    elif not x and y and not z:     #-+-
-        return 5
-    elif not x and not y and z:     #--+
-        return 6
-    elif not x and not y and not z: #---
-        return 7
-
-
-def fixCOM(geom):
-    """ Expects a numpy array of points such that point 1 is geom[0]
-        we will slice such that xs = geom[:,0] etc
-    """
-    com = np.mean(geom,axis=0)
-    return geom-com
-
-
 def profileOctit():
     from prof import profile_me
 
@@ -383,13 +321,6 @@ def profileOctit():
     a(data)
     b(data)
 
-
-def pdir(lst,string):
-    for d in lst:
-        if d.count(string):
-            try: getattr(thing,d)()
-            except: pass
-
 def main():
     from time import time
 
@@ -398,11 +329,9 @@ def main():
     from panda3d.core import PStatClient
 
     from dragsel import BoxSel
-    from util import Utils
+    from util import Utils, console
     from ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
-
-    from uuid import uuid4
 
     PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
@@ -423,7 +352,7 @@ def main():
 
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
-    counts = [9999 for _ in range(1)]
+    counts = [999 for _ in range(99)]
     for i in range(len(counts)):
         nnodes = counts[i]
         #positions = np.random.uniform(-nnodes/10,nnodes/10,size=(nnodes,3))

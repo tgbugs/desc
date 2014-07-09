@@ -7,6 +7,11 @@ def genLabelText(text, i): #FIXME
   return OnscreenText(text = text, pos = (.025, -.05*i), fg=(1,1,1,1),
                       align = TextNode.ALeft, scale = .05)
 
+class console(DirectObject):
+    def __init__(self):
+        self.accept('i',self.ipython)
+    def ipython(self):
+        embed()  # this works becasue you can access all the things via render :)
 
 class Utils(DirectObject):
     def __init__(self):

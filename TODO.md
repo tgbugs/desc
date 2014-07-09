@@ -41,3 +41,5 @@ things
  4. 4d grid plus the ability to zip through any 1 2 or 3 of the dimensions with a slider... 
  5. simple way to represent relations as lines with colors to mark their type
  8. http://eli.thegreenplace.net/2012/01/04/shared-counter-with-pythons-multiprocessing/ << counter things irritating :/
+ 9. make it possible to view a 'slice' through a 3d structure specifically by hiding all points/geom along an axis
+    support for arbitrary axes *should* be possible though their meaning outside say a raw data pixel volume is nebulous

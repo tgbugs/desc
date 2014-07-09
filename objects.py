@@ -104,3 +104,36 @@ class PathEquivalence:
 class CommutativeDiagram:
     def __init__(self, objects:set(Object) , morphisms:set(Morphism) , evidence:ObjectInstance = None ):
         self.
+
+
+
+###
+#   Simple data objects
+###
+
+def dataTokenObject(object):
+    def __init__(self, uuid, 
+
+
+def dataObject(object):
+    """ no relations here for the time being """
+    def __init__(self, type_name, uuid, property_names, property_dims):
+        self.type_name = type_name
+        self.uuid = uuid
+        self.property_names = property_names
+        self.property_dims = property_dims
+
+    def add_instance(self,instance):
+        """ instances are *sort of* sub type relations """
+        pass
+
+    def add_token(self,token):
+        pass
+
+    def tokenMaker(self):
+        #class tokenClass(object):
+        tokenClass = type( self.type_name+"_token",
+                          dataTokenObject, {},
+        )
+
+        return tokenClass

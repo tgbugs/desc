@@ -37,7 +37,11 @@ class connectionServerProtocol(asyncio.Protocol):
         self.__block__ = b''
 
     def data_received(self, data):  # data is a bytes object
-        print('data received: %s'%data)
+        #print('data received: %s'%data)
+        try:
+            print('data tail:',data[-10])
+        except IndexError:
+            pass
         print([t for t in self.process_data(data)])
         #actually process the response
         self.transport.write(b'processed response')
@@ -57,25 +61,30 @@ class connectionServerProtocol(asyncio.Protocol):
                 pickleStop = data.find(b'..') + 1
                 if not pickleStop:
                     pickleStop = -1  # it seems like there should be a cool way to exploit a failed find returning -1...
-                self.__block__ += data[pickleStart:pickleStop]  # FIXME pickels should really come all at once but honestly no telling if the underlying implementation will accidentally chunk a pickle stream :/ need to test
+                self.__block__ += data[pickleStart:pickleStop+1]  # FIXME pickels should really come all at once but honestly no telling if the underlying implementation will accidentally chunk a pickle stream :/ need to test
         else:
-            if self.__receiving__ == 'pickel':
+            if self.__receiving__ == 'pickle':
                 pickleStop = data.find(b'..') + 1
                 if not pickleStop:
                     pickleStop = -1  # it seems like there should be a cool way to exploit a failed find returning -1...
-                self.__block__ += data[pickleStart:pickleStop]
+                self.__block__ += data[:pickleStop+1]
 
-        if not pickleStop:
+        if pickleStop == -1:
             self.__receiving__ = 'pickle'
             yield None
-        else:  # make sure we don't have another pickle lurking in the rest of the data!
-            thing = pickle.loads(self.__block__)
+        elif self.__block__:  # make sure we don't have another pickle lurking in the rest of the data!
+            try:
+                thing = pickle.loads(self.__block__)
+            except ValueError as e:
+                self.__block__ = b''
+                raise e
             self.__block__ = b''
-            self.__receiving__ = False
             yield thing
-            rest = data[pickeStop:]
+            rest = data[pickleStop:]
+            self.__receiving__ = False  # dont know if need this here, but just incase
             if len(rest) > 1:
-                yield process_data(rest[1:])
+                yield from self.process_data(rest[1:])  # FIXME pretty sure this triggers recursion error
+            self.__receiving__ = False
 
                 ##look for pickle end
             #else:

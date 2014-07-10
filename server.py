@@ -54,23 +54,23 @@ class connectionServerProtocol(asyncio.Protocol):
                 #are we there yet?
         self.__splitStopPossible__ = False
         pickleStop = 0
-        if not self.__receiving__:  #FIXME our pickle implementation needs to have a CLEAR stop opcode because . does not work :/
+        if not self.__receiving__:
             pickleStart = data.find(b'\x80')
             if pickleStart != -1:
                 pickleStop = data.find(b'..') + 1
                 if not pickleStop:
-                    pickleStop = -1  # it seems like there should be a cool way to exploit a failed find returning -1...
-                self.__block__ += data[pickleStart:pickleStop]  # FIXME pickels should really come all at once but honestly no telling if the underlying implementation will accidentally chunk a pickle stream :/ need to test
+                    pickleStop = None
+                self.__block__ += data[pickleStart:pickleStop]
         else:
             if self.__receiving__ == 'pickle':
                 pickleStop = data.find(b'..') + 1
                 if self.__splitStopPossible__ and data[0] == b'.':
                     pickleStop = 0
                 elif not pickleStop:
-                    pickleStop = -1  # it seems like there should be a cool way to exploit a failed find returning -1...
+                    pickleStop = None
                 self.__block__ += data[:pickleStop]
 
-        if pickleStop == -1:  # this is confusing, -1 only occurs if we are receiving
+        if pickleStop is None:  # this is confusing, -1 only occurs if we are receiving
             self.__receiving__ = 'pickle'  # FIXME why we set this every time >_<
             if data[-1] == b'.':
                 self.__splitStopPossible__ == True
@@ -78,10 +78,11 @@ class connectionServerProtocol(asyncio.Protocol):
         elif self.__block__:  # make sure we don't have another pickle lurking in the rest of the data!
             try:
                 thing = pickle.loads(self.__block__)
-            except (ValueError, pickle.UnpicklingError) as e:
+            except (ValueError, EOFError, pickle.UnpicklingError) as e:
+                block = self.__block__
                 self.__block__ = b''
                 self.__receiving__ = False
-                raise e
+                raise BaseException(block)
             self.__block__ = b''
             yield thing
             rest = data[pickleStop:]

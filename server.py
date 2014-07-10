@@ -37,11 +37,10 @@ class connectionServerProtocol(asyncio.Protocol):
         self.__block__ = b''
 
     def data_received(self, data):  # data is a bytes object
-        #print('data received: %s'%data)
         try:
             print('data tail:',data[-10])
         except IndexError:
-            pass
+            print('data received: %s'%data)
         print([t for t in self.process_data(data)])
         #actually process the response
         self.transport.write(b'processed response')
@@ -53,7 +52,7 @@ class connectionServerProtocol(asyncio.Protocol):
                 #if the stream sends fixed sized requests just wait for bytes
             #existing stream
                 #are we there yet?
-
+        self.__splitStopPossible__ = False
         pickleStop = 0
         if not self.__receiving__:  #FIXME our pickle implementation needs to have a CLEAR stop opcode because . does not work :/
             pickleStart = data.find(b'\x80')
@@ -61,29 +60,34 @@ class connectionServerProtocol(asyncio.Protocol):
                 pickleStop = data.find(b'..') + 1
                 if not pickleStop:
                     pickleStop = -1  # it seems like there should be a cool way to exploit a failed find returning -1...
-                self.__block__ += data[pickleStart:pickleStop+1]  # FIXME pickels should really come all at once but honestly no telling if the underlying implementation will accidentally chunk a pickle stream :/ need to test
+                self.__block__ += data[pickleStart:pickleStop]  # FIXME pickels should really come all at once but honestly no telling if the underlying implementation will accidentally chunk a pickle stream :/ need to test
         else:
             if self.__receiving__ == 'pickle':
                 pickleStop = data.find(b'..') + 1
-                if not pickleStop:
+                if self.__splitStopPossible__ and data[0] == b'.':
+                    pickleStop = 0
+                elif not pickleStop:
                     pickleStop = -1  # it seems like there should be a cool way to exploit a failed find returning -1...
-                self.__block__ += data[:pickleStop+1]
+                self.__block__ += data[:pickleStop]
 
-        if pickleStop == -1:
-            self.__receiving__ = 'pickle'
+        if pickleStop == -1:  # this is confusing, -1 only occurs if we are receiving
+            self.__receiving__ = 'pickle'  # FIXME why we set this every time >_<
+            if data[-1] == b'.':
+                self.__splitStopPossible__ == True
             yield None
         elif self.__block__:  # make sure we don't have another pickle lurking in the rest of the data!
             try:
                 thing = pickle.loads(self.__block__)
-            except ValueError as e:
+            except (ValueError, pickle.UnpicklingError) as e:
                 self.__block__ = b''
+                self.__receiving__ = False
                 raise e
             self.__block__ = b''
             yield thing
             rest = data[pickleStop:]
             self.__receiving__ = False  # dont know if need this here, but just incase
             if len(rest) > 1:
-                yield from self.process_data(rest[1:])  # FIXME pretty sure this triggers recursion error
+                yield from self.process_data(rest[1:])  # FIXME this can triggers recursion error on too many ..
             self.__receiving__ = False
 
                 ##look for pickle end
@@ -93,9 +97,6 @@ class connectionServerProtocol(asyncio.Protocol):
 
     #def dispatch_block(self):
         #processBlock(self.transport,self.__block__)  # this should probably yield a future or something to keep it async
-
-
-
 
     def eof_received(self):
         #clean up the connection and store stuff because the client has exited

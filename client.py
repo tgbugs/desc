@@ -45,8 +45,11 @@ def main():
     transport.write(dumps([random.random() for _ in range(100)]))
     transport.write(dumps([random.random() for _ in range(100)]))
     transport.write(dumps([random.random() for _ in range(100)]))
-
-    transport.write(pickle.dumps(rand(100)))
+    sleep(.001)
+    transport.write(dumps('numpy?!'))
+    sleep(.001)
+    transport.write(dumps(rand(100)))
+    transport.write(dumps(rand(100)))
 
     embed()  # if this is anything like calling run() .... this will work nicely
     #try:

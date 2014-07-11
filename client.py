@@ -7,6 +7,7 @@ import ssl
 from time import sleep
 from IPython import embed
 from numpy.random import rand
+
 from defaults import CONNECTION_PORT, DATA_PORT
 
 
@@ -115,7 +116,7 @@ authOpCodes = {
     #b'\x95':'start',
     #b'..':'stop',
     b'\x97\x97':'',
-    b'\x98\x98':'',
+    b'\x98':'request response follows',
     b'\x99':'256byte_token_follows',
 }
 

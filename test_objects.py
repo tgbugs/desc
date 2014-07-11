@@ -413,6 +413,7 @@ class CollTest(DirectObject):
                     cNode.show()
                 n+=1
             r+=1
+        embed()
 
 #
 #class indexMan(SyncManager):

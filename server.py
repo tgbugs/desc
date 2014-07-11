@@ -10,6 +10,8 @@ from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
 
+from massive_bam import massive_bam as example_bam
+
 class requestManager(object):
     """ Server side class that listens for requests to render data to bam
         Should cooperate with another predictive class that generates related
@@ -165,8 +167,9 @@ class dataServerProtocol(asyncio.Protocol):
                     self.remove_token_for_ip(self.ip, self.token_received)  # do this immediately so that the token cannot be reused!
                     # TODO retry count??
         else:
-            print(self.pprefix,[t for t in self.process_data(data)])
-            self.transport.write(b'processed response\n')
+            request_generator = self.process_data(data):
+            self.process_request(request_generator)
+            #self.transport.write(b'processed response\n')
         #try:
             #print(self.pprefix,'data tail:',data[-10])
         #except IndexError:
@@ -179,6 +182,7 @@ class dataServerProtocol(asyncio.Protocol):
         print(self.pprefix,'got eof')
 
     def process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
+        """ generator that generates requests from the incoming data stream """
         self.__splitStopPossible__ = False
         pickleStop = 0
         if not self.__receiving__:
@@ -219,15 +223,94 @@ class dataServerProtocol(asyncio.Protocol):
                 yield from self.process_data(rest[1:])  # FIXME this can triggers recursion error on too many ..
             self.__receiving__ = False
 
+    def process_requests(self,request_generator):
+        for request in request_generator:
+            rh, bam = self.get_bam(request)
+            message = b'\x98'+b'0'+rh+bam+b'..'
+            self.transport.write(message)
+            self.request_prediction(request)
+            yield
+        return
+
+    def get_bam(self,request):
+        rh = hash(request)
+        bam = self.get_cache(rh)
+        if bam is None:
+            bam = self.make_bam(request)
+            self.update_cache(rh, bam)
+        return rh, bam
+
+    def request_prediction(self, request):
+        #should compute a set of n related requests, and send their hash + bam to the client and to the local cache
+        for preq in self.make_predictions(request):
+            rh, bam = self.get_bam(preq)
+            message = b'\x98'+b'1'+rh+bam+b'..'
+            self.transport.write(message)
+            yield
+        return
+
+    #things that go to the database
+    def make_bam(self, request):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
+
+    def make_predictions(self, request):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
+
+    # shared state functions
+    def get_cache(self, request_hash):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
+
+    def check_cache(self, request_hash):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
+
+    def update_cache(self, request_hash, bam_data):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
+
     def get_tokens_for_ip(self, ip):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
     def remove_token_for_ip(self, ip, token):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
-    #def update_token_data(self, ip, token):
-        #self.tokenDict[ip].add(token)  # could have multiple connections per ip
-        #print('token added',self.tokenDict)
+class bamManager:
+    def make_bam(self, request):
+        return example_bam
+    def make_predictions(self, request):
+        yield request
+
+
+class requestCacheManager:
+    """ we want to use a global cache so that we don't recompute the same request
+        for multiple clients
+
+        we *could* make this persistent if needs be
+    """
+    def __init__(self, cache_limit = 10000):
+        self.cache_limit = cache_limit
+        self.cache = {}
+        self.cache_age = deque()  # this is a nasty hack, probably need a real tree here at some point
+
+    def check_cache(self, request_hash):  # this is real supe slow :/
+        try:
+            self.cach[request_hash]
+            return True
+        except KeyError:
+            return False
+
+    def get_cache(self, request_hash):  # this is real supe slow :/
+        try:
+            bam = self.cache[request_hash]
+            self.cache_age.remove(request_hash)
+            self.cache_age.append(request_hash)  # basically ranks cache by access frequency
+            return bam
+        except KeyError:
+            return None
+
+
+    def update_cache(self, request_hash, bam_data):  # TODO only call this if 
+        self.cache[request_hash] = bam_data
+        while len(self.cache_age) > self.cache_limit:
+            self.cache.pop(self.cache_age.popleft())
 
 
 class tokenManager:  # TODO this thing could be its own protocol and run as a shared state server using lambda: instance
@@ -246,7 +329,6 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
     def remove_token_for_ip(self, ip, token):
         self.tokenDict[ip].remove(token)
         print(self.tokenDict)
-
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)

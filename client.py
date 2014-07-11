@@ -135,7 +135,8 @@ def main():
         #print('exiting...')
     #finally:
         #clientLoop.close()
-    #clientLoop.close()
+    transport.write_eof()
+    clientLoop.close()
 
 #def main():
     #print("WHAT IS GOING ON HERE")

@@ -139,6 +139,7 @@ class dataServerProtocol(asyncio.Protocol):
             self.expected_tokens = self.tokenDict[peername[0]]
             self.transport = transport
             self.pprefix = peername
+            self.ip = peername[0]
             self.__receiving__ = False
             self.__block__ = b''
         except KeyError:
@@ -159,7 +160,7 @@ class dataServerProtocol(asyncio.Protocol):
                 token_start += 1
                 token = data[token_start:token_start+256]
                 if token in self.expected_tokens:
-                    self.token_received = True
+                    self.token_received = token
         else:
             print(self.pprefix,[t for t in self.process_data(data)])
             self.transport.write(b'processed response\n')
@@ -171,7 +172,8 @@ class dataServerProtocol(asyncio.Protocol):
         #actually process the response
 
     def eof_received(self):
-        print('got eof')
+        self.tokenDict[self.ip].remove(self.token_received)
+        print(self.pprefix,'got eof')
 
     def process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
         self.__splitStopPossible__ = False

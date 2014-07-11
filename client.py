@@ -1,3 +1,5 @@
+#!/usr/bin/env python3.4
+
 import asyncio
 import random
 import pickle
@@ -36,16 +38,14 @@ class dataProtocol(asyncio.Protocol):
         print('connection lost')
         asyncio.get_event_loop().close()
 
-    def set_data_callback(self,callback_function):
-        self.data_callback = callback_function
-"""
-authBytesPerBlock = 512
+#authBytesPerBlock = 512
 authOpCodes = {
-    b'\x99\x99':'',
-    b'\x98\x98':'',
+    #b'\x95':'start',
+    #b'..':'stop',
     b'\x97\x97':'',
+    b'\x98\x98':'',
+    b'\x99':'256byte_token_follows',
 }
-"""
 
 
 class newConnectionProtocol(asyncio.Protocol):
@@ -56,12 +56,22 @@ class newConnectionProtocol(asyncio.Protocol):
         #send public key (ie the account we are looking for) #their password should unlock a local key which 
 
     def data_received(self, data):
-        done = False
-        if done:
-            self.write_eof()
-        
+        token = b''
+        token_start = data.find(b'\x99')  # FIXME sadly we'll probably need to deal with splits again
+        if token_start != -1:
+            token_start += 1
+            token = data[token_start:token_start+256]
+        if token:
+            self.future_token.set_result(token)
+            self.transport.write_eof()
+
     def connection_lost(self, exc):
         pass
+
+    @asyncio.coroutine
+    def get_data_token(self,future):
+        self.future_token = future
+        yield from self.future_token
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -78,14 +88,28 @@ def main():
 
     #TODO ONE way to make this synchronous so to add a coroutine that only completes when it gets a response
         #and then call run_until_complete on it :)
-    test = []
-    def myfunc(data):
-        test.append(data)
+    #test = []
+    #def myfunc(data):
+        #test.append(data)
 
+
+    tokenFuture = asyncio.Future()
+    transport, protocol = clientLoop.run_until_complete(coro_conClient)
+    clientLoop.run_until_complete(protocol.get_data_token(tokenFuture))
+    #while 1:
+        #try:
+    print(tokenFuture.result())
+            #break
+        #except:
+            #pass
+        
 
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
-    protocol.set_data_callback(myfunc)
     transport.write(b'testing?')
+    transport.write(b'testing?')
+    transport.write(b'testing?')
+    transport.write(b'\x99'+tokenFuture.result())
+
     #writer.write('does this work?')
     for i in range(10):
         sleep(1E-4)  # FIXME around 1E-4 we switch from a single data stream to multiple streams...
@@ -98,11 +122,10 @@ def main():
     transport.write(dumps([random.random() for _ in range(100)]))
     transport.write(dumps([random.random() for _ in range(100)]))
     transport.write(dumps([random.random() for _ in range(100)]))
-    #sleep(.001)
     transport.write(dumps('numpy?!'))
-    #sleep(.001)
     transport.write(dumps(rand(100)))
     transport.write(dumps(rand(100)))
+    #TODO we can make scheduling things nice by using run_until_complete on futures associated with each write IF we care
 
     embed()  # if this is anything like calling run() .... this will work nicely
     #try:

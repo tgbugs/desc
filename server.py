@@ -1,6 +1,12 @@
+#!/usr/bin/env python3.4
+
 import asyncio
 import pickle
 import ssl
+import os  # for dealing with firewall stuff
+from collections import defaultdict
+from numpy.random import bytes as make_bytes
+from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
 
@@ -45,6 +51,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
             #this is NOT secure
             pass
         self.transport = transport
+        self.ip = transport.get_extra_info('peername')[0]
         #for now we are just going to give clients peer certs and not worry about it
 
         #client telling us this is a new user request
@@ -85,38 +92,77 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
 
     def data_received(self, data):  # data is a bytes object
         done = False
+        print(self.ip,data)
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
+            token = make_bytes(256)
+            token_message = b'\x99'+token
+            self.send_ip_token_pair(self.ip, token)
+            self.open_data_firewall(self.ip)
+            #DO ALL THE THINGS
+            #TODO pass that token value paired with the peer cert to the data server...
+                #if we use client certs then honestly we dont really need the token at all
+                #so we do need the token, but really only as a "we're ready for you" message
+            #open up the firewall to give that ip address access to that port
+            self.transport.write(token_message)
         if done:
             self.transport.write_eof()
 
     def eof_received(self):
         #clean up the connection and store stuff because the client has exited
-        print('got eof')
+        print(self.ip, 'got eof')
 
-    def send_auth_request(self):
-        self.transport.write()
+    def register_data_server_token_setter(self,function):
+        self.send_ip_token_pair = function
 
-    def post_success(self):
-        #open up the firewall on the
-        pass
+
+
+    def open_data_firewall(self, ip_address):
+        """ probably nftables? """
+        # TODO NOTE: this should probably be implemented under the assumption that
+            #the data server is NOT the same as the connection server
+        os.system('echo "kittens!"')
     
 
 class dataServerProtocol(asyncio.Protocol):
     #first of all ignore all packets received on 
     #the port in question that have not passed auth
+    def __init__(self):
+        self.token_received = False
+        self.tokenDict = defaultdict(set)
+
     def connection_made(self, transport):
         #check for session token
         peername = transport.get_extra_info('peername')
         print("connection from:",peername)
-        self.pprefix = peername
-        self.transport = transport
-        self.__receiving__ = False
-        self.__block__ = b''
+        try:
+            self.expected_tokens = self.tokenDict[peername[0]]
+            self.transport = transport
+            self.pprefix = peername
+            self.__receiving__ = False
+            self.__block__ = b''
+        except KeyError:
+            transport.write(b'This is a courtesy message alerting you that your'
+                            b' IP is not on the list of IPs authorized to make'
+                            b' data connections. Query: How did you get through'
+                            b' the firewall?')
+            # probably should log this event
+            transport.write_eof()
+            print(peername,'This IP is not in the list (dict) of know ips. Terminated.')
 
     def data_received(self, data):
-        print(self.pprefix,[t for t in self.process_data(data)])
-        self.transport.write(b'processed response')
+        #print(self.pprefix,data)
+        print('current token dict',self.tokenDict)
+        if not self.token_received:
+            token_start = data.find(b'\x99')
+            if token_start != -1:
+                token_start += 1
+                token = data[token_start:token_start+256]
+                if token in self.expected_tokens:
+                    self.token_received = True
+        else:
+            print(self.pprefix,[t for t in self.process_data(data)])
+            self.transport.write(b'processed response\n')
         #try:
             #print(self.pprefix,'data tail:',data[-10])
         #except IndexError:
@@ -168,21 +214,31 @@ class dataServerProtocol(asyncio.Protocol):
                 yield from self.process_data(rest[1:])  # FIXME this can triggers recursion error on too many ..
             self.__receiving__ = False
 
+    def update_token_data(self, ip, token):
+        self.tokenDict[ip].add(token)  # could have multiple connections per ip
+        print('token added',self.tokenDict)
+
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+
+    conServ = connectionServerProtocol()
+    datServ = dataServerProtocol()
+    conServ.register_data_server_token_setter(datServ.update_token_data)  # hat now eaten
+
     serverLoop = asyncio.get_event_loop()
-    coro_conServer = serverLoop.create_server(connectionServerProtocol, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
-    coro_dataServer = serverLoop.create_server(dataServerProtocol, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
-    server = serverLoop.run_until_complete(coro_conServer)
-    server = serverLoop.run_until_complete(coro_dataServer)
+    coro_conServer = serverLoop.create_server(lambda: conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
+    coro_dataServer = serverLoop.create_server(lambda: datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
+    serverCon = serverLoop.run_until_complete(coro_conServer)
+    serverData = serverLoop.run_until_complete(coro_dataServer)
     try:
         serverLoop.run_forever()
     except KeyboardInterrupt:
         print('exiting...')
     finally:
-        server.close()
+        serverCon.close()
+        serverData.close()
         serverLoop.close()
 
 

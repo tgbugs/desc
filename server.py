@@ -115,14 +115,14 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
     def register_data_server_token_setter(self,function):
         self.send_ip_token_pair = function
 
-
-
     def open_data_firewall(self, ip_address):
         """ probably nftables? """
         # TODO NOTE: this should probably be implemented under the assumption that
             #the data server is NOT the same as the connection server
         os.system('echo "kittens!"')
     
+    def update_token_data(self, ip, token):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
 
 class dataServerProtocol(asyncio.Protocol):
     #first of all ignore all packets received on 
@@ -156,9 +156,14 @@ class dataServerProtocol(asyncio.Protocol):
             token_start = data.find(b'\x99')
             if token_start != -1:
                 token_start += 1
-                token = data[token_start:token_start+256]
+                try:
+                    token = data[token_start:token_start+256]
+                except IndexError:
+                    raise IndexError('This token is not long enough!')
                 if token in self.expected_tokens:
                     self.token_received = token
+                    self.remove_token_for_ip(self.ip, self.token_received)  # do this immediately so that the token cannot be reused!
+                    # TODO retry count??
         else:
             print(self.pprefix,[t for t in self.process_data(data)])
             self.transport.write(b'processed response\n')
@@ -170,7 +175,7 @@ class dataServerProtocol(asyncio.Protocol):
         #actually process the response
 
     def eof_received(self):
-        self.remove_token_for_ip(self.ip, self.token_received)
+        #close the firewall!
         print(self.pprefix,'got eof')
 
     def process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
@@ -225,7 +230,11 @@ class dataServerProtocol(asyncio.Protocol):
         #print('token added',self.tokenDict)
 
 
-class tokenManager:
+class tokenManager:  # TODO this thing could be its own protocol and run as a shared state server using lambda: instance
+    """ shared state for tokens O_O (I cannot believe this works
+        As long as these functions do what they say they do this
+        could run on mars and no one would really care.
+    """
     def __init__(self):
         self.tokenDict = defaultdict(set)
     def update_token_data(self, ip, token):
@@ -238,6 +247,7 @@ class tokenManager:
         self.tokenDict[ip].remove(token)
         print(self.tokenDict)
 
+
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
@@ -247,6 +257,7 @@ def main():
 
     tm = tokenManager()  # keep the shared state out here! magic if this works
 
+    # commence in utero monkey patching
     conServ = type('connectionServerProtocol', (connectionServerProtocol,),
                    {'send_ip_token_pair':tm.update_token_data})
     datServ = type('dataServerProtocol', (dataServerProtocol,),

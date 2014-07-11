@@ -129,14 +129,13 @@ class dataServerProtocol(asyncio.Protocol):
     #the port in question that have not passed auth
     def __init__(self):
         self.token_received = False
-        self.tokenDict = defaultdict(set)
 
     def connection_made(self, transport):
         #check for session token
         peername = transport.get_extra_info('peername')
         print("connection from:",peername)
         try:
-            self.expected_tokens = self.tokenDict[peername[0]]
+            self.expected_tokens = self.get_tokens_for_ip(peername[0])
             self.transport = transport
             self.pprefix = peername
             self.ip = peername[0]
@@ -153,7 +152,6 @@ class dataServerProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         #print(self.pprefix,data)
-        print('current token dict',self.tokenDict)
         if not self.token_received:
             token_start = data.find(b'\x99')
             if token_start != -1:
@@ -172,7 +170,7 @@ class dataServerProtocol(asyncio.Protocol):
         #actually process the response
 
     def eof_received(self):
-        self.tokenDict[self.ip].remove(self.token_received)
+        self.remove_token_for_ip(self.ip, self.token_received)
         print(self.pprefix,'got eof')
 
     def process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
@@ -216,22 +214,48 @@ class dataServerProtocol(asyncio.Protocol):
                 yield from self.process_data(rest[1:])  # FIXME this can triggers recursion error on too many ..
             self.__receiving__ = False
 
-    def update_token_data(self, ip, token):
-        self.tokenDict[ip].add(token)  # could have multiple connections per ip
-        print('token added',self.tokenDict)
+    def get_tokens_for_ip(self, ip):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
 
+    def remove_token_for_ip(self, ip, token):
+        raise NotImplemented('This should be set at run time really for message passing to shared state')
+
+    #def update_token_data(self, ip, token):
+        #self.tokenDict[ip].add(token)  # could have multiple connections per ip
+        #print('token added',self.tokenDict)
+
+
+class tokenManager:
+    def __init__(self):
+        self.tokenDict = defaultdict(set)
+    def update_token_data(self, ip, token):
+        self.tokenDict[ip].add(token)
+        print(self.tokenDict)
+    def get_tokens_for_ip(self, ip):
+        print(self.tokenDict)
+        return self.tokenDict[ip]
+    def remove_token_for_ip(self, ip, token):
+        self.tokenDict[ip].remove(token)
+        print(self.tokenDict)
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
 
-    conServ = connectionServerProtocol()
-    datServ = dataServerProtocol()
-    conServ.register_data_server_token_setter(datServ.update_token_data)  # hat now eaten
+    #conServ = connectionServerProtocol()
+
+
+    tm = tokenManager()  # keep the shared state out here! magic if this works
+
+    conServ = type('connectionServerProtocol', (connectionServerProtocol,),
+                   {'send_ip_token_pair':tm.update_token_data})
+    datServ = type('dataServerProtocol', (dataServerProtocol,),
+                   {'get_tokens_for_ip':tm.get_tokens_for_ip,
+                    'remove_token_for_ip':tm.remove_token_for_ip})
 
     serverLoop = asyncio.get_event_loop()
-    coro_conServer = serverLoop.create_server(lambda: conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
-    coro_dataServer = serverLoop.create_server(lambda: datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
+    coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
+    coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
     serverCon = serverLoop.run_until_complete(coro_conServer)
     serverData = serverLoop.run_until_complete(coro_dataServer)
     try:

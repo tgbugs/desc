@@ -111,8 +111,12 @@ class CommutativeDiagram:
 #   Simple data objects
 ###
 
-def dataTokenObject(object):
-    def __init__(self, uuid, 
+def dataTokenObject(object):  # tokens themselves are also types that need to be selectable and searchable for filtering and interacting
+    """ data tokens delegate all their major relations to their parent type
+        except for stuff like links to experiment metadata and nitty gritty
+    """
+    def __init__(self, uuid):
+        pass
 
 
 def dataObject(object):

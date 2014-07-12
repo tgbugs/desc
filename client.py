@@ -3,13 +3,22 @@
 import asyncio
 import random
 import pickle
+import zlib
 import ssl
 from time import sleep
 from IPython import embed
 from numpy.random import rand
 
 from defaults import CONNECTION_PORT, DATA_PORT
+from request import Request
 
+@asyncio.coroutine
+def run_panda():
+    """ make panda work with the event loop? I'm expecting bugs here... """
+    future = asyncio.Future()
+    yield future
+    run()
+    future.set_result(True)
 
 def dumps(object):
     """ Special dumps that adds a double stop to make deserializing easier """
@@ -19,11 +28,45 @@ def run_for_time(loop,time):
     """ use this to view responses inside embed """
     loop.run_until_complete(asyncio.sleep(time))
 
+dataOpCodes = {
+    #b'\x95':'start',
+    b'..':'stop',
+    b'.\x97':'collision resposne follow',
+    b'.\x98':'bam response follows',
+    b'.\x99':'256byte_token_follows',
+}
+
+class newConnectionProtocol(asyncio.Protocol):
+    """ this is going to be done with fixed byte sizes known small headers """
+    def connection_made(self, transport):
+        self.transport = transport
+        self.transport.write(b'I promis I real client, plz dataz')
+        #send public key (ie the account we are looking for) #their password should unlock a local key which 
+
+    def data_received(self, data):
+        token = b''
+        token_start = data.find(b'.\x99')  # FIXME sadly we'll probably need to deal with splits again
+        if token_start != -1:
+            token_start += 1
+            token = data[token_start:token_start+256]
+        if token:
+            self.future_token.set_result(token)
+            self.transport.write_eof()
+
+    def connection_lost(self, exc):
+        pass
+
+    @asyncio.coroutine
+    def get_data_token(self,future):
+        self.future_token = future
+        yield from future
 
 class dataProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         transport.write(b'hello there')
         self.transport = transport
+        self.__receiving__ = False
+        self.__block__ = b''  # TODO we almost certainly will need this
 
     def data_received(self, data):
         """ receive bam files that come back on request
@@ -33,7 +76,7 @@ class dataProtocol(asyncio.Protocol):
             arent cached
         """
         print("received",data)  # this *should* just be bam files coming back, no ids? or id header?
-        response_start = data.find(b'\x98')
+        response_start = data.find(b'.\x98')  # TODO modify this so that it can detect any of the types
         if response_start != -1:
             response_start += 1
             hash_start = response_start + 1
@@ -46,7 +89,7 @@ class dataProtocol(asyncio.Protocol):
             # TODO this is second field in header
             self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
         else:  # this data was generated in response to a request
-            self.render_bam(bam_data)
+            self.render_bam(request_hash, zlib.decompress(bam_data))
 
             # hrmmmm how do we get this data out!?
             # its a precache... and the server is the
@@ -93,58 +136,29 @@ class dataProtocol(asyncio.Protocol):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
     def render_bam(self, bam):
-        print('pretend like this print statement actually causes things to render')
-        print(bam)
         raise NotImplementedError('patch this function with a function from a DirectObject')
 
 class bamCacheManager:
     """ shared state bam cache """
-    def __init__(self):
+    def __init__(self,rootNode):
         self.cache = {}
+        self.rootNode
     def check_cache(self, request_hash):
         try:
-            self.render_bam(self.cache[request_hash])
+            bam = zlib.decompress(self.cache[request_hash])
+            self.render_bam(bam)
             return True
         except KeyError:
             return False
     def update_cache(self, request_hash, bam_data):
         self.cache[request_hash] = bam_data
 
-
-#authBytesPerBlock = 512
-authOpCodes = {
-    #b'\x95':'start',
-    #b'..':'stop',
-    b'\x97\x97':'',
-    b'\x98':'request response follows',
-    b'\x99':'256byte_token_follows',
-}
-
-
-class newConnectionProtocol(asyncio.Protocol):
-    """ this is going to be done with fixed byte sizes known small headers """
-    def connection_made(self, transport):
-        self.transport = transport
-        self.transport.write(b'I promis I real client, plz dataz')
-        #send public key (ie the account we are looking for) #their password should unlock a local key which 
-
-    def data_received(self, data):
-        token = b''
-        token_start = data.find(b'\x99')  # FIXME sadly we'll probably need to deal with splits again
-        if token_start != -1:
-            token_start += 1
-            token = data[token_start:token_start+256]
-        if token:
-            self.future_token.set_result(token)
-            self.transport.write_eof()
-
-    def connection_lost(self, exc):
-        pass
-
-    @asyncio.coroutine
-    def get_data_token(self,future):
-        self.future_token = future
-        yield from future
+    def render_bam(self, render_hash, bam):
+        """ render the GEOM only, will hang with nasty error if fed a collision node """
+        newNode = GeomNode(render_hash)
+        geom = newNode.decodeFromBamStream(bam)
+        newNode.addGeom(geom)
+        self.rootNode.attachNewNode(newNode)
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -169,19 +183,27 @@ def main():
     tokenFuture = asyncio.Future()
     conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
     clientLoop.run_until_complete(conProtocol.get_data_token(tokenFuture))
-    #while 1:
-        #try:
     print('got token',tokenFuture.result())
-            #break
-        #except:
-            #pass
         
+    class FakeNode:
+        def attachNewNode(self, node):
+            print('pretend like this print statement actually causes things to render')
+            print('bam length',len(bam))
 
-    transport, protocol = clientLoop.run_until_complete(coro_dataClient)
+    rootNode = FakeNode()
+
+    bcm = bamCacheManager(rootNode)
+
+    datCli = type('dataProtocol',(dataProtocol,),
+                  {'check_cache':bcm.check_cache,
+                   'update_cache':bcm.update_cache,
+                   'render_bam':bcm.render_bam})
+
+    transport, protocol = clientLoop.run_until_complete(datCli)
     transport.write(b'testing?')
     transport.write(b'testing?')
     transport.write(b'testing?')
-    transport.write(b'\x99'+tokenFuture.result())
+    transport.write(b'.\x99'+tokenFuture.result())
 
     #writer.write('does this work?')
     for i in range(10):
@@ -208,9 +230,14 @@ def main():
         #print('exiting...')
     #finally:
         #clientLoop.close()
+    request = Request('test')
+    protocol.send_request(request)
+    #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
+    # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     run_for_time(clientLoop,1)
     transport.write_eof()
     clientLoop.close()
+    #eventLoop.run_until_complete(run_panda)
 
 #def main():
     #print("WHAT IS GOING ON HERE")

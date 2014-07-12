@@ -3,6 +3,7 @@
 import asyncio
 import pickle
 import ssl
+import zlib
 import os  # for dealing with firewall stuff
 from collections import defaultdict
 from numpy.random import bytes as make_bytes
@@ -98,7 +99,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
             token = make_bytes(256)
-            token_message = b'\x99'+token
+            token_message = b'.\x99'+token
             self.send_ip_token_pair(self.ip, token)
             self.open_data_firewall(self.ip)
             #DO ALL THE THINGS
@@ -155,7 +156,7 @@ class dataServerProtocol(asyncio.Protocol):
     def data_received(self, data):
         #print(self.pprefix,data)
         if not self.token_received:
-            token_start = data.find(b'\x99')
+            token_start = data.find(b'.\x99')
             if token_start != -1:
                 token_start += 1
                 try:
@@ -226,17 +227,18 @@ class dataServerProtocol(asyncio.Protocol):
     def process_requests(self,request_generator):
         for request in request_generator:
             rh, bam = self.get_bam(request)
-            message = b'\x98'+b'0'+rh+bam+b'..'
+            message = b'.\x98'+b'0'+rh+bam+b'..'
             self.transport.write(message)
             self.request_prediction(request)
             yield
         return
 
     def get_bam(self,request):
+        """ returns the request hash and a compressed bam stream """
         rh = hash(request)
         bam = self.get_cache(rh)
         if bam is None:
-            bam = self.make_bam(request)
+            bam = zlib.compress(self.make_bam(request))  # LOL wow is there redundancy in these bams O_O zlib to the rescue
             self.update_cache(rh, bam)
         return rh, bam
 
@@ -244,7 +246,7 @@ class dataServerProtocol(asyncio.Protocol):
         #should compute a set of n related requests, and send their hash + bam to the client and to the local cache
         for preq in self.make_predictions(request):
             rh, bam = self.get_bam(preq)
-            message = b'\x98'+b'1'+rh+bam+b'..'
+            message = b'.\x98'+b'1'+rh+bam+b'..'
             self.transport.write(message)
             yield
         return
@@ -260,9 +262,6 @@ class dataServerProtocol(asyncio.Protocol):
     def get_cache(self, request_hash):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
-    def check_cache(self, request_hash):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
-
     def update_cache(self, request_hash, bam_data):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
@@ -272,12 +271,19 @@ class dataServerProtocol(asyncio.Protocol):
     def remove_token_for_ip(self, ip, token):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
-class bamManager:
+class bamManager:  # TODO we probably move this to its own file?
+    def __init__(self):
+        #setup at connection to whatever database we are going to use
+        pass
     def make_bam(self, request):
+        # TODO so encoding the collision nodes to a bam takes a REALLY LONG TIME
+        # it seems like it might be more prudent to serialize to (x,y,z,radius) or maybe a type code?
+        # yes, the size of the bam serialization is absolutely massive, easily 3x the size in memory
+        # also if we send it already in tree form... so that the child node positions are just nested
+        # it might be pretty quick to generate the collision nodes
         return example_bam
     def make_predictions(self, request):
         yield request
-
 
 class requestCacheManager:
     """ we want to use a global cache so that we don't recompute the same request
@@ -290,14 +296,14 @@ class requestCacheManager:
         self.cache = {}
         self.cache_age = deque()  # this is a nasty hack, probably need a real tree here at some point
 
-    def check_cache(self, request_hash):  # this is real supe slow :/
+    def check_cache(self, request_hash):  # XXX not used
         try:
             self.cach[request_hash]
             return True
         except KeyError:
             return False
 
-    def get_cache(self, request_hash):  # this is real supe slow :/
+    def get_cache(self, request_hash):
         try:
             bam = self.cache[request_hash]
             self.cache_age.remove(request_hash)
@@ -305,7 +311,6 @@ class requestCacheManager:
             return bam
         except KeyError:
             return None
-
 
     def update_cache(self, request_hash, bam_data):  # TODO only call this if 
         self.cache[request_hash] = bam_data
@@ -334,17 +339,22 @@ def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
 
-    #conServ = connectionServerProtocol()
-
-
     tm = tokenManager()  # keep the shared state out here! magic if this works
 
     # commence in utero monkey patching
     conServ = type('connectionServerProtocol', (connectionServerProtocol,),
                    {'send_ip_token_pair':tm.update_token_data})
+
+    #shared state, in theory this stuff could become its own Protocol
+    rcm = requestCacheManager(9999)
+    bm = bamManager()
     datServ = type('dataServerProtocol', (dataServerProtocol,),
                    {'get_tokens_for_ip':tm.get_tokens_for_ip,
-                    'remove_token_for_ip':tm.remove_token_for_ip})
+                    'remove_token_for_ip':tm.remove_token_for_ip,
+                    'get_cache':rcm.get_cache,
+                    'update_cache':rcm.update_cache,
+                    'make_bam':bm.make_bam,
+                    'make_predictions':bm.make_predictions})
 
     serverLoop = asyncio.get_event_loop()
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl

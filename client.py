@@ -55,7 +55,7 @@ class newConnectionProtocol(asyncio.Protocol):
 
     def connection_lost(self, exc):
         if exc is None:
-            print("Connection closed.")
+            print("New connection transport closed.")
 
     @asyncio.coroutine
     def get_data_token(self,future):
@@ -101,13 +101,16 @@ class dataProtocol(asyncio.Protocol):
     
     def connection_lost(self, exc):  # somehow this never triggers...
         if exc is None:
-            print('Connection closed')
+            print('Data connection closed')
         else:
             print('connection lost')
             #probably we want to try to renegotiate a new connection
             #but that could get really nast if we have a partition and
             #we try to reconnect repeatedly
             #asyncio.get_event_loop().close()  # FIXME probs don't need this
+
+    def send_token(self, token):
+        self.transport.write(b'.\x99'+token)
 
     def send_request(self, request):
         rh = hash(request)
@@ -207,7 +210,9 @@ def main():
     transport.write(b'testing?')
     transport.write(b'testing?')
     transport.write(b'testing?')
-    transport.write(b'.\x99'+tokenFuture.result())
+    protocol.send_token(tokenFuture.result())
+    #transport.write(b'.\x99'+tokenFuture.result())
+    #print("I get here")
 
     #writer.write('does this work?')
     for i in range(10):
@@ -245,5 +250,5 @@ def main():
 
 
 if __name__ == "__main__":
-    for _ in range(10):
-        main()
+    #for _ in range(10):
+    main()

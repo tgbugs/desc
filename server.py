@@ -158,7 +158,7 @@ class dataServerProtocol(asyncio.Protocol):
         if not self.token_received:
             token_start = data.find(b'.\x99')
             if token_start != -1:
-                token_start += 1
+                token_start += 2
                 try:
                     token = data[token_start:token_start+256]
                 except IndexError:
@@ -166,6 +166,7 @@ class dataServerProtocol(asyncio.Protocol):
                 if token in self.expected_tokens:
                     self.token_received = token
                     self.remove_token_for_ip(self.ip, self.token_received)  # do this immediately so that the token cannot be reused!
+                    print(self.pprefix,'token auth successful')
                     # TODO retry count??
         else:
             request_generator = self.process_data(data)
@@ -180,7 +181,7 @@ class dataServerProtocol(asyncio.Protocol):
 
     def eof_received(self):
         #close the firewall!
-        print(self.pprefix,'got eof')
+        print(self.pprefix,'data server got eof')
 
     def process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
         """ generator that generates requests from the incoming data stream """

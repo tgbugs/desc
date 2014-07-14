@@ -5,7 +5,7 @@ import pickle
 import ssl
 import zlib
 import os  # for dealing with firewall stuff
-from collections import defaultdict
+from collections import defaultdict, deque
 from numpy.random import bytes as make_bytes
 from IPython import embed
 
@@ -168,7 +168,7 @@ class dataServerProtocol(asyncio.Protocol):
                     self.remove_token_for_ip(self.ip, self.token_received)  # do this immediately so that the token cannot be reused!
                     # TODO retry count??
         else:
-            request_generator = self.process_data(data):
+            request_generator = self.process_data(data)
             self.process_request(request_generator)
             #self.transport.write(b'processed response\n')
         #try:
@@ -283,6 +283,9 @@ class bamManager:  # TODO we probably move this to its own file?
         # it might be pretty quick to generate the collision nodes
         return example_bam
     def make_predictions(self, request):
+        #TODO this is actually VERY easy, because all we need to do is use
+            #the list of connected UI elements that we SEND OUT ANYWAY and
+            #just prospectively load those models/views
         yield request
 
 class requestCacheManager:

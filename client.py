@@ -47,14 +47,15 @@ class newConnectionProtocol(asyncio.Protocol):
         token = b''
         token_start = data.find(b'.\x99')  # FIXME sadly we'll probably need to deal with splits again
         if token_start != -1:
-            token_start += 1
+            token_start += 2
             token = data[token_start:token_start+256]
         if token:
             self.future_token.set_result(token)
             self.transport.write_eof()
 
     def connection_lost(self, exc):
-        pass
+        if exc is None:
+            print("Connection closed.")
 
     @asyncio.coroutine
     def get_data_token(self,future):
@@ -78,12 +79,12 @@ class dataProtocol(asyncio.Protocol):
         print("received",data)  # this *should* just be bam files coming back, no ids? or id header?
         response_start = data.find(b'.\x98')  # TODO modify this so that it can detect any of the types
         if response_start != -1:
-            response_start += 1
+            response_start += 2
             hash_start = response_start + 1
             bam_start = hash_start + 20
             bam_stop = data[bam_start:].find(b'..')  # FIXME make sure the bam byte stream doesnt have this in there...
         cache = int(data[response_start:response_start + 1])
-        request_hash = [hash_start:hash_start + 20]
+        request_hash = data[hash_start:hash_start + 20]
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
         if cache:
             # TODO this is second field in header
@@ -99,13 +100,16 @@ class dataProtocol(asyncio.Protocol):
             # but mostly it hsould just be "here, get me this when you can"
     
     def connection_lost(self, exc):  # somehow this never triggers...
-        print('connection lost')
-        #probably we want to try to renegotiate a new connection
-        #but that could get really nast if we have a partition and
-        #we try to reconnect repeatedly
-        asyncio.get_event_loop().close()
+        if exc is None:
+            print('Connection closed')
+        else:
+            print('connection lost')
+            #probably we want to try to renegotiate a new connection
+            #but that could get really nast if we have a partition and
+            #we try to reconnect repeatedly
+            #asyncio.get_event_loop().close()  # FIXME probs don't need this
 
-    def send_reqeust(self, request):
+    def send_request(self, request):
         rh = hash(request)
         if not self.check_cache(rh):
             self.transport.write(dumps(request))
@@ -142,7 +146,7 @@ class bamCacheManager:
     """ shared state bam cache """
     def __init__(self,rootNode):
         self.cache = {}
-        self.rootNode
+        self.rootNode = rootNode
     def check_cache(self, request_hash):
         try:
             bam = zlib.decompress(self.cache[request_hash])
@@ -164,9 +168,6 @@ def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
 
-    clientLoop = asyncio.get_event_loop()
-    coro_conClient = clientLoop.create_connection(newConnectionProtocol, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
-    coro_dataClient = clientLoop.create_connection(dataProtocol, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     #embed()
     #transport, protocol = yield from clientLoop.create_connection(newConnectionProtocol, '127.0.0.1', 55555, ssl=None)  # TODO ssl
     #reader, writer = yield from asyncio.open_connection('127.0.0.1', 55555, loop=clientLoop, ssl=None)
@@ -179,9 +180,11 @@ def main():
     #def myfunc(data):
         #test.append(data)
 
+    clientLoop = asyncio.get_event_loop()
+    coro_conClient = clientLoop.create_connection(newConnectionProtocol, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
 
-    tokenFuture = asyncio.Future()
     conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
+    tokenFuture = asyncio.Future()
     clientLoop.run_until_complete(conProtocol.get_data_token(tokenFuture))
     print('got token',tokenFuture.result())
         
@@ -199,7 +202,8 @@ def main():
                    'update_cache':bcm.update_cache,
                    'render_bam':bcm.render_bam})
 
-    transport, protocol = clientLoop.run_until_complete(datCli)
+    coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
+    transport, protocol = clientLoop.run_until_complete(coro_dataClient)
     transport.write(b'testing?')
     transport.write(b'testing?')
     transport.write(b'testing?')
@@ -230,7 +234,7 @@ def main():
         #print('exiting...')
     #finally:
         #clientLoop.close()
-    request = Request('test')
+    request = Request('test','test',(1,2,3),None)
     protocol.send_request(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
@@ -239,8 +243,6 @@ def main():
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)
 
-#def main():
-    #print("WHAT IS GOING ON HERE")
 
 if __name__ == "__main__":
     for _ in range(10):

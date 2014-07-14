@@ -1,3 +1,4 @@
+import hashlib
 
 class Request:  # testing only since this will need to be in its own module to keep python happy
     """ the serializable object used for transporting the requested data
@@ -18,9 +19,18 @@ class Request:  # testing only since this will need to be in its own module to k
         self.request_type = request_type
         self.type_ = type_   #FIXME if the request type is for know then here we should expect a list... HRM
         self.properties = properties
-        self.hash_ = None
-        def __hash__(self):
-            return self.hash_
+        pbytes = ''.join(['{}'.format(p) for p in properties])
+        md5 = hashlib.md5()
+        md5.update((request_type+type_+pbytes).encode())
+        self.hash_ = md5.digest()
+        def __eq__(self, other):
+            if type(self) != type(other):
+                return False
+            elif self.hash_ == other.hash_:  # TODO cache inval? goes here or elsewhere
+                return True
+                
+        #def __hash__(self):
+            #return self.hash_
 
 def main():
     from enum import Enum

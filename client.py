@@ -9,6 +9,8 @@ from time import sleep
 from IPython import embed
 from numpy.random import rand
 
+from panda3d.core import GeomNode
+
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import Request
 
@@ -27,7 +29,6 @@ def dumps(object):
 def run_for_time(loop,time):
     """ use this to view responses inside embed """
     loop.run_until_complete(asyncio.sleep(time))
-
 dataOpCodes = {
     #b'\x95':'start',
     b'..':'stop',
@@ -81,11 +82,13 @@ class dataProtocol(asyncio.Protocol):
         if response_start != -1:
             response_start += 2
             hash_start = response_start + 1
-            bam_start = hash_start + 20
-            bam_stop = data[bam_start:].find(b'..')  # FIXME make sure the bam byte stream doesnt have this in there...
+            bam_start = hash_start + 16
+            bam_stop = bam_start + data[bam_start:].find(b'..')  # FIXME make sure the bam byte stream doesnt have this in there...
         cache = int(data[response_start:response_start + 1])
-        request_hash = data[hash_start:hash_start + 20]
+        request_hash = data[hash_start:hash_start + 16]
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
+        print('')
+        print('bam_data',bam_data)
         if cache:
             # TODO this is second field in header
             self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
@@ -115,7 +118,9 @@ class dataProtocol(asyncio.Protocol):
     def send_request(self, request):
         rh = hash(request)
         if not self.check_cache(rh):
-            self.transport.write(dumps(request))
+            out = dumps(request)
+            self.transport.write(out)
+            print(out)
 
     @asyncio.coroutine
     def _send_request(self, request, future):  # see if we need this / relates to how we deal with data_received
@@ -163,8 +168,8 @@ class bamCacheManager:
     def render_bam(self, render_hash, bam):
         """ render the GEOM only, will hang with nasty error if fed a collision node """
         newNode = GeomNode(render_hash)
-        geom = newNode.decodeFromBamStream(bam)
-        newNode.addGeom(geom)
+        geomNode = newNode.decodeFromBamStream(bam)  # apparently the thing I'm encoding is a node for test purposes... may need something
+        #newNode.addGeom(geom)
         self.rootNode.attachNewNode(newNode)
 
 def main():
@@ -194,7 +199,6 @@ def main():
     class FakeNode:
         def attachNewNode(self, node):
             print('pretend like this print statement actually causes things to render')
-            print('bam length',len(bam))
 
     rootNode = FakeNode()
 
@@ -239,7 +243,9 @@ def main():
         #print('exiting...')
     #finally:
         #clientLoop.close()
-    request = Request('test','test',(1,2,3),None)
+    #request = Request('test..','test',(1,2,3),None)  # FIXME this breaks stop detection!
+    request = Request('test.','test',(1,2,3),None)
+    print('th',request.hash_,'rh',hash(request))
     protocol.send_request(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity

@@ -10,6 +10,7 @@ from numpy.random import bytes as make_bytes
 from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
+from request import Request
 
 from massive_bam import massive_bam as example_bam
 
@@ -170,7 +171,7 @@ class dataServerProtocol(asyncio.Protocol):
                     # TODO retry count??
         else:
             request_generator = self.process_data(data)
-            self.process_request(request_generator)
+            self.process_requests(request_generator)
             #self.transport.write(b'processed response\n')
         #try:
             #print(self.pprefix,'data tail:',data[-10])
@@ -211,6 +212,8 @@ class dataServerProtocol(asyncio.Protocol):
         elif self.__block__:  # make sure we don't have another pickle lurking in the rest of the data!
             try:
                 thing = pickle.loads(self.__block__)
+                if type(thing) != Request:  # throw out any data that is not a request
+                    thing = None
             except (ValueError, EOFError, pickle.UnpicklingError) as e:
                 block = self.__block__
                 self.__block__ = b''
@@ -226,17 +229,21 @@ class dataServerProtocol(asyncio.Protocol):
             self.__receiving__ = False
 
     def process_requests(self,request_generator):
+        print('processing requests')
         for request in request_generator:
-            rh, bam = self.get_bam(request)
-            message = b'.\x98'+b'0'+rh+bam+b'..'
-            self.transport.write(message)
-            self.request_prediction(request)
-            yield
-        return
+            if request is not None:
+                rh, bam = self.get_bam(request)
+                message = b'.\x98'+b'0'+rh+bam+b'..'
+                self.transport.write(message)
+                self.request_prediction(request)
+            #yield
+        #return
 
     def get_bam(self,request):
         """ returns the request hash and a compressed bam stream """
-        rh = hash(request)
+        print('th',request.hash_,'rh',hash(request))
+        rh =  request.hash_
+        print(rh)
         bam = self.get_cache(rh)
         if bam is None:
             bam = zlib.compress(self.make_bam(request))  # LOL wow is there redundancy in these bams O_O zlib to the rescue
@@ -318,6 +325,7 @@ class requestCacheManager:
 
     def update_cache(self, request_hash, bam_data):  # TODO only call this if 
         self.cache[request_hash] = bam_data
+        self.cache_age.append(request_hash)
         while len(self.cache_age) > self.cache_limit:
             self.cache.pop(self.cache_age.popleft())
 

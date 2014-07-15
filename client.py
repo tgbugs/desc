@@ -12,7 +12,13 @@ from numpy.random import rand
 from panda3d.core import GeomNode
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import Request
+from request import Request, DataByteStream
+
+
+# XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
+    #that would vastly simplify life...? ehhhhh
+
+
 
 @asyncio.coroutine
 def run_panda():
@@ -29,13 +35,6 @@ def dumps(object):
 def run_for_time(loop,time):
     """ use this to view responses inside embed """
     loop.run_until_complete(asyncio.sleep(time))
-dataOpCodes = {
-    #b'\x95':'start',
-    b'..':'stop',
-    b'.\x97':'collision resposne follow',
-    b'.\x98':'bam response follows',
-    b'.\x99':'256byte_token_follows',
-}
 
 class newConnectionProtocol(asyncio.Protocol):
     """ this is going to be done with fixed byte sizes known small headers """
@@ -46,10 +45,10 @@ class newConnectionProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         token = b''
-        token_start = data.find(b'.\x99')  # FIXME sadly we'll probably need to deal with splits again
+        token_start = data.find(DataByteStream.OP_TOKEN)  # FIXME sadly we'll probably need to deal with splits again
         if token_start != -1:
-            token_start += 2
-            token = data[token_start:token_start+256]
+            token_start += DataByteStream.OPCODE_LEN
+            token = data[token_start:token_start+DataByteStream.TOKEN_LEN]
         if token:
             self.future_token.set_result(token)
             self.transport.write_eof()
@@ -78,14 +77,14 @@ class dataProtocol(asyncio.Protocol):
             arent cached
         """
         print("received",data)  # this *should* just be bam files coming back, no ids? or id header?
-        response_start = data.find(b'.\x98')  # TODO modify this so that it can detect any of the types
+        response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
         if response_start != -1:
-            response_start += 2
-            hash_start = response_start + 1
-            bam_start = hash_start + 16
-            bam_stop = bam_start + data[bam_start:].find(b'..')  # FIXME make sure the bam byte stream doesnt have this in there...
-        cache = int(data[response_start:response_start + 1])
-        request_hash = data[hash_start:hash_start + 16]
+            response_start += DataByteStream.OPCODE_LEN
+            hash_start = response_start + DataByteStream.CACHE_LEN
+            bam_start = hash_start + DataByteStream.MD5_HASH_LEN
+            bam_stop = bam_start + data[bam_start:].find(DataByteStream.STOP)  # FIXME make sure the bam byte stream doesnt have this in there...
+        cache = int(data[response_start:response_start + DataByteStream.CACHE_LEN])
+        request_hash = data[hash_start:hash_start + DataByteStream.MD5_HASH_LEN]
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
         print('')
         print('bam_data',bam_data)
@@ -116,11 +115,13 @@ class dataProtocol(asyncio.Protocol):
         self.transport.write(b'.\x99'+token)
 
     def send_request(self, request):
-        rh = hash(request)
+        rh = request.hash_
         if not self.check_cache(rh):
             out = dumps(request)
             self.transport.write(out)
             print(out)
+        # TODO add that hash to a 'waiting' list and then cross it off when we are done
+            # could use that to quantify performance
 
     @asyncio.coroutine
     def _send_request(self, request, future):  # see if we need this / relates to how we deal with data_received
@@ -150,18 +151,28 @@ class dataProtocol(asyncio.Protocol):
     def render_bam(self, bam):
         raise NotImplementedError('patch this function with a function from a DirectObject')
 
+
+class collCacheManager:
+    def __init__(self,rootNode):
+        pass
+    
+
 class bamCacheManager:
     """ shared state bam cache """
     def __init__(self,rootNode):
         self.cache = {}
         self.rootNode = rootNode
+
     def check_cache(self, request_hash):
         try:
-            bam = zlib.decompress(self.cache[request_hash])
+            bam = zlib.decompress(self.cache[request_hash])  # FIXME is there some way to make the gzing more transparent?
             self.render_bam(bam)
+            print('local cache hit')
             return True
         except KeyError:
+            print('local cache miss')
             return False
+
     def update_cache(self, request_hash, bam_data):
         self.cache[request_hash] = bam_data
 
@@ -246,6 +257,7 @@ def main():
     #request = Request('test..','test',(1,2,3),None)  # FIXME this breaks stop detection!
     request = Request('test.','test',(1,2,3),None)
     print('th',request.hash_,'rh',hash(request))
+    protocol.send_request(request)
     protocol.send_request(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity

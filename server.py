@@ -10,9 +10,11 @@ from numpy.random import bytes as make_bytes
 from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import Request
+from request import Request, DataByteStream
 
 from massive_bam import massive_bam as example_bam
+
+#TODO logging...
 
 class requestManager(object):
     """ Server side class that listens for requests to render data to bam
@@ -99,8 +101,8 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
         print(self.ip,data)
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
-            token = make_bytes(256)
-            token_message = b'.\x99'+token
+            token = make_bytes(DataByteStream.TOKEN_LEN)
+            token_stream = DataByteStream.makeTokenStream(token)
             self.send_ip_token_pair(self.ip, token)
             self.open_data_firewall(self.ip)
             #DO ALL THE THINGS
@@ -108,7 +110,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
                 #if we use client certs then honestly we dont really need the token at all
                 #so we do need the token, but really only as a "we're ready for you" message
             #open up the firewall to give that ip address access to that port
-            self.transport.write(token_message)
+            self.transport.write(token_stream)
         if done:
             self.transport.write_eof()
 
@@ -133,6 +135,9 @@ class dataServerProtocol(asyncio.Protocol):
     #the port in question that have not passed auth
     def __init__(self):
         self.token_received = False
+        self.__splitStopPossible__ = False
+        self.__receiving__ = False
+        self.__block__ = b''
 
     def connection_made(self, transport):
         #check for session token
@@ -143,8 +148,6 @@ class dataServerProtocol(asyncio.Protocol):
             self.transport = transport
             self.pprefix = peername
             self.ip = peername[0]
-            self.__receiving__ = False
-            self.__block__ = b''
         except KeyError:
             transport.write(b'This is a courtesy message alerting you that your'
                             b' IP is not on the list of IPs authorized to make'
@@ -155,38 +158,71 @@ class dataServerProtocol(asyncio.Protocol):
             print(peername,'This IP is not in the list (dict) of know ips. Terminated.')
 
     def data_received(self, data):
-        #print(self.pprefix,data)
         if not self.token_received:
-            token_start = data.find(b'.\x99')
-            if token_start != -1:
-                token_start += 2
-                try:
-                    token = data[token_start:token_start+256]
-                except IndexError:
-                    raise IndexError('This token is not long enough!')
+            if self.__receiving__:
+                self.__block__ += data
+                data = self.__block__
+            try:
+                token = DataByteStream.decodeToken(data)
                 if token in self.expected_tokens:
                     self.token_received = token
                     self.remove_token_for_ip(self.ip, self.token_received)  # do this immediately so that the token cannot be reused!
                     print(self.pprefix,'token auth successful')
-                    # TODO retry count??
+                    self.process_requests(self.process_data(data))  # run this in case a request follows the token
+                else:
+                    print(self.pprefix,'token auth failed, received token not expected')
+                    # should probably send a fail message? where else are they going to get their token??
+                self.__receiving__ = False
+                self.__block__ = b''
+            except IndexError:
+                if not self.__receiving__:
+                    self.__receiving__ = True
+                    self.__block__ = data
+
         else:
             request_generator = self.process_data(data)
             self.process_requests(request_generator)
-            #self.transport.write(b'processed response\n')
-        #try:
-            #print(self.pprefix,'data tail:',data[-10])
-        #except IndexError:
-            #print(self.pprefix,'data received: %s'%data)
-        #print([t for t in self.process_data(data)])
-        #actually process the response
 
     def eof_received(self):
         #close the firewall!
         print(self.pprefix,'data server got eof')
 
-    def process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
+    def process_data(self,data):
+        if self.__block__:
+            data = self.__block__ + data
+
+        split = data.split(DataByteStream.STOP)
+
+        if len(split) is 1:  # NO STOPS
+            self.__block__ += data
+            yield None
+        else:  # len(split) > 1:
+            self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
+            for bytes_ in split:
+                pickleStart = 0
+                if pck[pickleStart] != b'\x80':
+                    print(self.pprefix,'what the heck kind of data is this!?')
+                    pickleStart = bytes_.find(b'\x80')
+                    if pickleStart == -1:
+                        print(self.pprefix,'what is this garbage?',bytes_)
+                        yield None
+
+                try:
+                    thing = pickle.loads(bytes_[pickleStart:]+b'.')  # have to add the stop back in
+                    if type(thing) is not Request:
+                        yield None
+                    else:
+                        yield thing
+                except (ValueError, EOFError, pickle.UnpicklingError) as e:
+                    print(self.pprefix,'what is this garbage?',bytes_)
+                    print('error was',e)
+                    yield None
+
+
+        
+
+    def _process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
         """ generator that generates requests from the incoming data stream """
-        self.__splitStopPossible__ = False
         pickleStop = 0
         if not self.__receiving__:
             pickleStart = data.find(b'\x80')
@@ -200,6 +236,7 @@ class dataServerProtocol(asyncio.Protocol):
                 pickleStop = data.find(b'..') + 1
                 if self.__splitStopPossible__ and data[0] == b'.':
                     pickleStop = 0
+                    self.__splitStopPossible__ = False
                 elif not pickleStop:
                     pickleStop = None
                 self.__block__ += data[:pickleStop]
@@ -232,12 +269,17 @@ class dataServerProtocol(asyncio.Protocol):
         print('processing requests')
         for request in request_generator:
             if request is not None:
-                rh, bam = self.get_bam(request)
-                message = b'.\x98'+b'0'+rh+bam+b'..'
-                self.transport.write(message)
+                rh, bam_data = self.get_bam(request)
+                coll_data = b'this is collision data'
+                ui_data = b'this is ui data'
+                bam_stream = DataByteStream.makeBamStream(rh, bam_data, cache=False)
+                coll_stream = DataByteStream.makeCollStream(rh, coll_data, cache=False)
+                ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=False)
+                self.transport.write(bam_stream + coll_stream + ui_stream)
                 self.request_prediction(request)
             #yield
         #return
+        #yield
 
     def get_bam(self,request):
         """ returns the request hash and a compressed bam stream """
@@ -253,11 +295,16 @@ class dataServerProtocol(asyncio.Protocol):
     def request_prediction(self, request):
         #should compute a set of n related requests, and send their hash + bam to the client and to the local cache
         for preq in self.make_predictions(request):
-            rh, bam = self.get_bam(preq)
-            message = b'.\x98'+b'1'+rh+bam+b'..'
-            self.transport.write(message)
-            yield
-        return
+            rh, bam_data = self.get_bam(preq)
+            coll_data = b'this is collision data'
+            ui_data = b'this is ui data'
+            bam_stream = DataByteStream.makeBamStream(rh, bam_data, cache=True)
+            coll_stream = DataByteStream.makeCollStream(rh, coll_data, cache=True)
+            ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=True)
+            self.transport.write(bam_stream + coll_stream + ui_stream)
+            #yield
+        #return
+        yield
 
     #things that go to the database
     def make_bam(self, request):

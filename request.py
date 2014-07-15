@@ -32,6 +32,82 @@ class Request:  # testing only since this will need to be in its own module to k
         #def __hash__(self):
             #return self.hash_
 
+class DataByteStream:
+    """ Named struct for defining fields of serialized byte streams """
+
+    #opcodes
+    STOP = b'..'
+    OP_TOKEN = b'.\x99'
+    OP_BAM = b'.\x98'
+    OP_COLL = b'.\x97'
+    OP_UI = b'.\x96'
+
+    #shared filed lengths
+    OPCODE_LEN = 2
+
+    #token stream
+    TOKEN_LEN = 256
+
+    #request stream
+
+    #request response data stream
+    CACHE_LEN = 1
+    MD5_HASH_LEN = 16
+
+    @classmethod
+    def makeTokenStream(cls, token):
+        if len(token) != cls.TOKEN_LEN:
+            raise ValueError('Wrong token length! You have %s you need %s'%(len(token), cls.TOKEN_LEN))
+        return cls.OP_TOKEN + token  # no stop needed here
+
+    @classmethod
+    def makeRequestStream(cls, request):
+        return request + cls.STOP
+
+    @classmethod
+    def makeBamStream(cls, request_hash, bam_data, cache=False):
+        if cache:
+            cache_bit = b'1'
+        else:
+            cache_bit = b'0'
+        return cls.OP_BAM + cache_bit + request_hash + bam_data + cls.STOP
+
+    @classmethod
+    def makeCollStream(cls, request_hash, coll_data, cache=False):
+        if cache:
+            cache_bit = b'1'
+        else:
+            cache_bit = b'0'
+        return cls.OP_COLL + cache_bit + request_hash + coll_data + cls.STOP
+
+    @classmethod
+    def makeUIStream(cls, request_hash, ui_data, cache=False):
+        if cache:
+            cache_bit = b'1'
+        else:
+            cache_bit = b'0'
+        return cls.OP_COLL + cache_bit + request_hash + ui_data + cls.STOP
+
+    @classmethod
+    def decodeStart(cls, stream):
+        pass
+
+    @classmethod
+    def decodeStop(cls, stream):
+        pass
+
+    @classmethod
+    def decodeToken(cls, stream):
+        start = stream.find(cls.OP_TOKEN)
+        if start != -1:
+            start += cls.OPCODE_LEN
+            try:
+                return stream[start:start + cls.TOKEN_LEN]
+            except IndexError:
+                raise IndexError('This token is not long enough!')
+
+
+
 def main():
     from enum import Enum
     from IPython import embed

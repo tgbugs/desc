@@ -1,4 +1,9 @@
 import hashlib
+import pickle
+import sys
+import traceback
+
+from IPython import embed
 
 class Request:  # testing only since this will need to be in its own module to keep python happy
     """ the serializable object used for transporting the requested data
@@ -42,6 +47,11 @@ class DataByteStream:
     OP_COLL = b'.\x97'
     OP_UI = b'.\x96'
 
+    #pickle codes
+    OP_PICKLE = b'\x80'
+    OP_PICKLE_INT = OP_PICKLE[0]
+    PICKLE_STOP = b'.'
+
     #shared filed lengths
     OPCODE_LEN = 2
 
@@ -61,7 +71,7 @@ class DataByteStream:
         return cls.OP_TOKEN + token  # no stop needed here
 
     @classmethod
-    def makeRequestStream(cls, request):
+    def makeRequestStream(cls, request):  # TODO should pickle here too? since this doesn't take request_data
         return request + cls.STOP
 
     @classmethod
@@ -106,7 +116,28 @@ class DataByteStream:
             except IndexError:
                 raise IndexError('This token is not long enough!')
 
-
+    @classmethod
+    def decodePickleStreams(cls, split):
+        for bytes_ in split:
+            pickleStart = 0
+            if bytes_[pickleStart] != cls.OP_PICKLE_INT: #apparently indexing into bytes returns ints not bytes
+                print('what the heck kind of data is this!?')
+                print(bytes_)
+                print('')
+                pickleStart = bytes_.find(cls.OP_PICKLE)
+                if pickleStart == -1:
+                    print('What is this garbage? You have a stop but no start?!')
+                    yield None
+            try:
+                thing = pickle.loads(bytes_[pickleStart:]+cls.PICKLE_STOP)  # have to add the stop back in
+                if type(thing) is not Request:
+                    yield None
+                else:
+                    yield thing
+            except (EOFError, pickle.UnpicklingError) as e:  #I do not remember why I got a ValueError...
+                print('What is this garbage?',bytes_)
+                print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
+                yield None  # we cannot raise here because we won't evaluate the rest of the loop
 
 def main():
     from enum import Enum

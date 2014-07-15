@@ -6,6 +6,8 @@ import pickle
 import zlib
 import ssl
 from time import sleep
+from threading import Lock
+
 from IPython import embed
 from numpy.random import rand
 
@@ -44,13 +46,15 @@ class newConnectionProtocol(asyncio.Protocol):
         #send public key (ie the account we are looking for) #their password should unlock a local key which 
 
     def data_received(self, data):
-        token = b''
+        token_data = b''
         token_start = data.find(DataByteStream.OP_TOKEN)  # FIXME sadly we'll probably need to deal with splits again
+        print('token?',data)
         if token_start != -1:
-            token_start += DataByteStream.OPCODE_LEN
-            token = data[token_start:token_start+DataByteStream.TOKEN_LEN]
-        if token:
-            self.future_token.set_result(token)
+            #token_start += DataByteStream.OPCODE_LEN
+            print('token_start',token_start)
+            token_data = data[token_start:token_start+DataByteStream.OPCODE_LEN+DataByteStream.TOKEN_LEN]
+        if token_data:
+            self.future_token.set_result(token_data)
             self.transport.write_eof()
 
     def connection_lost(self, exc):
@@ -76,7 +80,7 @@ class dataProtocol(asyncio.Protocol):
             as soon as the connection has been created if they
             arent cached
         """
-        print("received",data)  # this *should* just be bam files coming back, no ids? or id header?
+        print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
         response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
         if response_start != -1:
             response_start += DataByteStream.OPCODE_LEN
@@ -86,9 +90,10 @@ class dataProtocol(asyncio.Protocol):
         cache = int(data[response_start:response_start + DataByteStream.CACHE_LEN])
         request_hash = data[hash_start:hash_start + DataByteStream.MD5_HASH_LEN]
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
-        print('')
-        print('bam_data',bam_data)
-        if cache:
+        self.del_out_request(request_hash)  # this *could* error in some very strange world but leave so we can discover it
+        #print('')
+        #print('bam_data',bam_data)
+        if cache:  # FIXME this needs to be controlled locally based soley on request hash NOT cache bit
             # TODO this is second field in header
             self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
         else:  # this data was generated in response to a request
@@ -111,17 +116,20 @@ class dataProtocol(asyncio.Protocol):
             #we try to reconnect repeatedly
             #asyncio.get_event_loop().close()  # FIXME probs don't need this
 
-    def send_token(self, token):
-        self.transport.write(b'.\x99'+token)
+    def send_token_data(self, token_data):
+        #self.transport.write(b'.\x99'+token)
+        self.transport.write(token_data)
 
     def send_request(self, request):
         rh = request.hash_
-        if not self.check_cache(rh):
-            out = dumps(request)
-            self.transport.write(out)
-            print(out)
+        if self.add_out_request(rh):  # NOOOOOO race conditions ;_:
+            if not self.check_cache(rh):
+                out = dumps(request)
+                self.transport.write(out)
+                print(out)
         # TODO add that hash to a 'waiting' list and then cross it off when we are done
             # could use that to quantify performance
+            # XXX need this to prevent sending duplicate requests
 
     @asyncio.coroutine
     def _send_request(self, request, future):  # see if we need this / relates to how we deal with data_received
@@ -163,6 +171,25 @@ class bamCacheManager:
         self.cache = {}
         self.rootNode = rootNode
 
+        self.reqLock = Lock()  # this works, the issue is that I havent written the deserializer for the client yet!
+        self.__outstanding_requests__ = set()
+
+    def add_out_request(self, request_hash):
+        with self.reqLock:
+            if request_hash in self.__outstanding_requests__:
+                print('the request is already outstanding')
+                return False
+            else:
+                self.__outstanding_requests__.add(request_hash)
+                return True
+
+    def del_out_request(self, request_hash):
+        with self.reqLock:
+            print('')
+            print(self.__outstanding_requests__)
+            print(request_hash)
+            self.__outstanding_requests__.remove(request_hash)
+
     def check_cache(self, request_hash):
         try:
             bam = zlib.decompress(self.cache[request_hash])  # FIXME is there some way to make the gzing more transparent?
@@ -174,6 +201,7 @@ class bamCacheManager:
             return False
 
     def update_cache(self, request_hash, bam_data):
+        print('cache updated')
         self.cache[request_hash] = bam_data
 
     def render_bam(self, render_hash, bam):
@@ -218,14 +246,16 @@ def main():
     datCli = type('dataProtocol',(dataProtocol,),
                   {'check_cache':bcm.check_cache,
                    'update_cache':bcm.update_cache,
-                   'render_bam':bcm.render_bam})
+                   'render_bam':bcm.render_bam,
+                   'add_out_request':bcm.add_out_request,
+                   'del_out_request':bcm.del_out_request })
 
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
     transport.write(b'testing?')
     transport.write(b'testing?')
     transport.write(b'testing?')
-    protocol.send_token(tokenFuture.result())
+    protocol.send_token_data(tokenFuture.result())
     #transport.write(b'.\x99'+tokenFuture.result())
     #print("I get here")
 
@@ -259,9 +289,15 @@ def main():
     print('th',request.hash_,'rh',hash(request))
     protocol.send_request(request)
     protocol.send_request(request)
+    protocol.send_request(request)
+    protocol.send_request(request)
+    protocol.send_request(request)
+    protocol.send_request(request)
+    protocol.send_request(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
-    run_for_time(clientLoop,1)
+    #embed()
+    run_for_time(clientLoop,10)
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)

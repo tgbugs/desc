@@ -6,6 +6,8 @@ import ssl
 import zlib
 import os  # for dealing with firewall stuff
 from collections import defaultdict, deque
+from time import sleep
+
 from numpy.random import bytes as make_bytes
 from IPython import embed
 
@@ -103,13 +105,14 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
             self.transport.write(b'ok here dataz')
             token = make_bytes(DataByteStream.TOKEN_LEN)
             token_stream = DataByteStream.makeTokenStream(token)
-            self.send_ip_token_pair(self.ip, token)
+            self.update_ip_token_pair(self.ip, token)
             self.open_data_firewall(self.ip)
             #DO ALL THE THINGS
             #TODO pass that token value paired with the peer cert to the data server...
                 #if we use client certs then honestly we dont really need the token at all
                 #so we do need the token, but really only as a "we're ready for you" message
             #open up the firewall to give that ip address access to that port
+            print('token stream',token_stream)
             self.transport.write(token_stream)
         if done:
             self.transport.write_eof()
@@ -198,28 +201,7 @@ class dataServerProtocol(asyncio.Protocol):
             yield None
         else:  # len(split) > 1:
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
-            for bytes_ in split:
-                pickleStart = 0
-                if pck[pickleStart] != b'\x80':
-                    print(self.pprefix,'what the heck kind of data is this!?')
-                    pickleStart = bytes_.find(b'\x80')
-                    if pickleStart == -1:
-                        print(self.pprefix,'what is this garbage?',bytes_)
-                        yield None
-
-                try:
-                    thing = pickle.loads(bytes_[pickleStart:]+b'.')  # have to add the stop back in
-                    if type(thing) is not Request:
-                        yield None
-                    else:
-                        yield thing
-                except (ValueError, EOFError, pickle.UnpicklingError) as e:
-                    print(self.pprefix,'what is this garbage?',bytes_)
-                    print('error was',e)
-                    yield None
-
-
-        
+            yield from DataByteStream.decodePickleStreams(split)
 
     def _process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
         """ generator that generates requests from the incoming data stream """
@@ -265,21 +247,23 @@ class dataServerProtocol(asyncio.Protocol):
                 yield from self.process_data(rest[1:])  # FIXME this can triggers recursion error on too many ..
             self.__receiving__ = False
 
-    def process_requests(self,request_generator):
+    #@asyncio.coroutine
+    def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         print('processing requests')
+        def do_request(request):
+            rh, bam_data = self.get_bam(request)
+            coll_data = b'this is collision data'
+            ui_data = b'this is ui data'
+            sleep(1)
+            bam_stream = DataByteStream.makeBamStream(rh, bam_data, cache=False)
+            coll_stream = DataByteStream.makeCollStream(rh, coll_data, cache=False)
+            ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=False)
+            self.transport.write(bam_stream + coll_stream + ui_stream)
+
         for request in request_generator:
             if request is not None:
-                rh, bam_data = self.get_bam(request)
-                coll_data = b'this is collision data'
-                ui_data = b'this is ui data'
-                bam_stream = DataByteStream.makeBamStream(rh, bam_data, cache=False)
-                coll_stream = DataByteStream.makeCollStream(rh, coll_data, cache=False)
-                ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=False)
-                self.transport.write(bam_stream + coll_stream + ui_stream)
-                self.request_prediction(request)
-            #yield
-        #return
-        #yield
+                self.event_loop.run_in_executor( None, lambda: do_request(request) )
+                self.event_loop.run_in_executor( None, lambda: self.request_prediction(request) )
 
     def get_bam(self,request):
         """ returns the request hash and a compressed bam stream """
@@ -302,9 +286,9 @@ class dataServerProtocol(asyncio.Protocol):
             coll_stream = DataByteStream.makeCollStream(rh, coll_data, cache=True)
             ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=True)
             self.transport.write(bam_stream + coll_stream + ui_stream)
-            #yield
+            #yield None
         #return
-        yield
+        #yield
 
     #things that go to the database
     def make_bam(self, request):
@@ -395,6 +379,8 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
         print(self.tokenDict)
 
 def main():
+    serverLoop = asyncio.get_event_loop()
+
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
 
@@ -402,7 +388,7 @@ def main():
 
     # commence in utero monkey patching
     conServ = type('connectionServerProtocol', (connectionServerProtocol,),
-                   {'send_ip_token_pair':tm.update_token_data})
+                   {'update_ip_token_pair':tm.update_token_data})
 
     #shared state, in theory this stuff could become its own Protocol
     rcm = requestCacheManager(9999)
@@ -413,9 +399,9 @@ def main():
                     'get_cache':rcm.get_cache,
                     'update_cache':rcm.update_cache,
                     'make_bam':bm.make_bam,
-                    'make_predictions':bm.make_predictions})
+                    'make_predictions':bm.make_predictions,
+                    'event_loop':serverLoop })
 
-    serverLoop = asyncio.get_event_loop()
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
     serverCon = serverLoop.run_until_complete(coro_conServer)

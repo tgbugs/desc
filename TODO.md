@@ -60,3 +60,7 @@ things
      but will need to sync with the collision surfaces somehow :/
  12. random thought, if we get a token uuid here, fine, great awesome, we can switch back to know view from data view and just move the camera that was in know view so that the size and location of the token object doesnt change!
  13. marks, store tuples of camera positions and scene node visibility so we can just set those particular nodes back to visible
+
+ 14. SUPER CRITICIAL: we do need to deal with the fact that what the user wants may change between the time they request it and they time
+     they receive it, so we need to keep track of what should be rendered locally even if we end up sending all of it. Basically we need
+     one additional layer of separation cache=True/False is not sufficient

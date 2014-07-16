@@ -381,7 +381,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             if lX <= pX and pX <= uX: 
                 if lZ <= pZ and pZ <= uZ: 
                     points.append([pX, 0, pZ])
-                    #self.processTarget(node)
+                    self.processTarget(node)
                     #self.projRoot.attachNewNode(makePoint(Point3(p2[0], 0, p2[1])))
 
         l2points = []

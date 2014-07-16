@@ -28,6 +28,18 @@ notes:
  bugs:
   1. turn on threading-mode Cull/Draw, do mouse collision with showCollisions(render) on the CollisionTraverser will segfault
 
+caching hierarchy
+=================
+currently visible -> attached to the scene graph but hidden ->
+detached from scene graph -> still in bam file form in local cache ->
+in server cache -> in server persistent store -> has not been computed yet
+
+the cache really needs to hold the gzed bam geometry and the associated serialized
+collision data and UI data, we *might* want to break up the UI data if possible and
+just setPythonTag (and increase the priority if empty) of that node when we get a chance
+(this is only really and issue if we are working with MASSIVE numbers of nodes)
+
+
 things
 ======
  7. we could use getPythonTag to make it really easy to link collision nodes to vertecies...
@@ -42,3 +54,14 @@ things
  5. simple way to represent relations as lines with colors to mark their type
  6. multipe camera views/ windows, get multiple perspectives on a problem at the same time... well, each diferent arragment will require its own model... but it will be nice to have them side by side at least
  8. http://eli.thegreenplace.net/2012/01/04/shared-counter-with-pythons-multiprocessing/ << counter things irritating :/
+ 9. make it possible to view a 'slice' through a 3d structure specifically by hiding all points/geom along an axis
+    support for arbitrary axes *should* be possible though their meaning outside say a raw data pixel volume is nebulous
+ 10. Write a function to convert selected objects, and the relevant set of properties to a set of points!
+ 11. Relative scaling of the base grid for different objects can be handled locally using the scale property on geoms?
+     but will need to sync with the collision surfaces somehow :/
+ 12. random thought, if we get a token uuid here, fine, great awesome, we can switch back to know view from data view and just move the camera that was in know view so that the size and location of the token object doesnt change!
+ 13. marks, store tuples of camera positions and scene node visibility so we can just set those particular nodes back to visible
+
+ 14. SUPER CRITICIAL: we do need to deal with the fact that what the user wants may change between the time they request it and they time
+     they receive it, so we need to keep track of what should be rendered locally even if we end up sending all of it. Basically we need
+     one additional layer of separation cache=True/False is not sufficient

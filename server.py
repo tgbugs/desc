@@ -128,26 +128,26 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
         """ probably nftables? """
         # TODO NOTE: this should probably be implemented under the assumption that
             #the data server is NOT the same as the connection server
-        os.system('echo "kittens!"')
+        os.system('echo "firewall is now kittens!"')
     
     def update_token_data(self, ip, token):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
 class dataServerProtocol(asyncio.Protocol):
-    #first of all ignore all packets received on 
-    #the port in question that have not passed auth
+    """ Data server protocol that holds the code for managing incoming data
+        streams. It should be data agnoistic, thus try to keep the code that
+        actually manipulates the data in DataByteStream.
+    """
     def __init__(self):
         self.token_received = False
-        self.__splitStopPossible__ = False
-        self.__receiving__ = False
         self.__block__ = b''
 
     def connection_made(self, transport):
-        #check for session token
         peername = transport.get_extra_info('peername')
         print("connection from:",peername)
         try:
             self.expected_tokens = self.get_tokens_for_ip(peername[0])
+            #self.get_tokesn_for_ip = None  # XXX will fail, reference to method persists
             self.transport = transport
             self.pprefix = peername
             self.ip = peername[0]
@@ -162,92 +162,43 @@ class dataServerProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         if not self.token_received:
-            if self.__receiving__:
-                self.__block__ += data
-                data = self.__block__
+            self.__block__ += data
             try:
-                token = DataByteStream.decodeToken(data)
+                token = DataByteStream.decodeToken(self.__block__)
                 if token in self.expected_tokens:
-                    self.token_received = token
-                    self.remove_token_for_ip(self.ip, self.token_received)  # do this immediately so that the token cannot be reused!
+                    self.token_received = True  # dont store the token anywhere in memory, ofc if you can find the t_r bit and flip it...
+                    self.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
+                    #self.remove_token_for_ip = None  # done with it, remove it from this instance XXX will fail
+                    self.expected_tokens = None  # we don't need access to those tokens anymore
+                    del self.expected_tokens
                     print(self.pprefix,'token auth successful')
-                    self.process_requests(self.process_data(data))  # run this in case a request follows the token
+                    self.process_requests(self.process_data(b''))  # run this in case a request follows the token, this will reset block
                 else:
                     print(self.pprefix,'token auth failed, received token not expected')
+                    self.__block__ = b''
                     # should probably send a fail message? where else are they going to get their token??
-                self.__receiving__ = False
-                self.__block__ = b''
             except IndexError:
-                if not self.__receiving__:
-                    self.__receiving__ = True
-                    self.__block__ = data
+                pass  # block already has the existing data wait for more
 
         else:
             request_generator = self.process_data(data)
             self.process_requests(request_generator)
 
     def eof_received(self):
-        #close the firewall!
+        os.system("echo 'firewall is now DRAGONS!'")  # TODO actually close
         print(self.pprefix,'data server got eof')
 
-    def process_data(self,data):
-        if self.__block__:
-            data = self.__block__ + data
-
-        split = data.split(DataByteStream.STOP)
-
+    def process_data(self,data):  # XXX is this actually a coroutine?
+        self.__block__ += data
+        split = self.__block__.split(DataByteStream.STOP)  # split requires a copy?
         if len(split) is 1:  # NO STOPS
-            self.__block__ += data
-            yield None
+            if DataByteStream.OP_PICKLE not in self.__block__:  # NO OPS
+                self.__block__ = b''
+            yield None  # self.__block__ already updated
         else:  # len(split) > 1:
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
             yield from DataByteStream.decodePickleStreams(split)
 
-    def _process_data(self,data):  # FIXME does this actually go here? or should it be in code that works directly on the transport object??!
-        """ generator that generates requests from the incoming data stream """
-        pickleStop = 0
-        if not self.__receiving__:
-            pickleStart = data.find(b'\x80')
-            if pickleStart != -1:
-                pickleStop = data.find(b'..') + 1
-                if not pickleStop:
-                    pickleStop = None
-                self.__block__ += data[pickleStart:pickleStop]
-        else:
-            if self.__receiving__ == 'pickle':
-                pickleStop = data.find(b'..') + 1
-                if self.__splitStopPossible__ and data[0] == b'.':
-                    pickleStop = 0
-                    self.__splitStopPossible__ = False
-                elif not pickleStop:
-                    pickleStop = None
-                self.__block__ += data[:pickleStop]
-
-        if pickleStop is None:  # this is confusing, None only occurs if we are receiving and assumes all transport is done by pickle
-            self.__receiving__ = 'pickle'  # FIXME why we set this every time >_<
-            if data[-1] == b'.':
-                self.__splitStopPossible__ == True
-            yield None
-        elif self.__block__:  # make sure we don't have another pickle lurking in the rest of the data!
-            try:
-                thing = pickle.loads(self.__block__)
-                if type(thing) != Request:  # throw out any data that is not a request
-                    thing = None
-            except (ValueError, EOFError, pickle.UnpicklingError) as e:
-                block = self.__block__
-                self.__block__ = b''
-                self.__receiving__ = False
-                print(self.pprefix,block)
-                raise e
-            self.__block__ = b''
-            yield thing
-            rest = data[pickleStop:]
-            self.__receiving__ = False  # dont know if need this here, but just incase
-            if len(rest) > 1:
-                yield from self.process_data(rest[1:])  # FIXME this can triggers recursion error on too many ..
-            self.__receiving__ = False
-
-    #@asyncio.coroutine
     def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         print('processing requests')
         def do_request(request):
@@ -260,7 +211,7 @@ class dataServerProtocol(asyncio.Protocol):
             ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=False)
             self.transport.write(bam_stream + coll_stream + ui_stream)
 
-        for request in request_generator:
+        for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
                 self.event_loop.run_in_executor( None, lambda: do_request(request) )
                 self.event_loop.run_in_executor( None, lambda: self.request_prediction(request) )
@@ -325,7 +276,8 @@ class bamManager:  # TODO we probably move this to its own file?
         #TODO this is actually VERY easy, because all we need to do is use
             #the list of connected UI elements that we SEND OUT ANYWAY and
             #just prospectively load those models/views
-        yield request
+        request = Request('prediction','who knows',(2,3,4),None)
+        yield request  # XXX NOTE: yielding the request itself causes a second copy to be sent
 
 class requestCacheManager:
     """ we want to use a global cache so that we don't recompute the same request
@@ -362,6 +314,7 @@ class requestCacheManager:
 
 
 class tokenManager:  # TODO this thing could be its own protocol and run as a shared state server using lambda: instance
+#FIXME this may be suceptible to race conditions on remove_token!
     """ shared state for tokens O_O (I cannot believe this works
         As long as these functions do what they say they do this
         could run on mars and no one would really care.
@@ -393,6 +346,11 @@ def main():
     #shared state, in theory this stuff could become its own Protocol
     rcm = requestCacheManager(9999)
     bm = bamManager()
+    # FIXME here we cannot remove references to these methods from instances
+        # because they are defined at the class level and not passed in at
+        # run time. We MAY be able to fix this by using a metaclass that
+        # constructs these so that when a new protocol is started those methods
+        # are passed in and thus can successfully be deleted from a class instance
     datServ = type('dataServerProtocol', (dataServerProtocol,),
                    {'get_tokens_for_ip':tm.get_tokens_for_ip,
                     'remove_token_for_ip':tm.remove_token_for_ip,

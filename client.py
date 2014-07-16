@@ -21,6 +21,22 @@ from request import Request, DataByteStream
     #that would vastly simplify life...? ehhhhh
 
 
+def become_future(function):
+    """ Decorator function to make a normal function run in a future """
+    @asyncio.coroutine
+    def wrapped(*args, **kwargs):
+        future = asyncio.Future()
+        yield future
+        future.set_result(function(*args, **kwargs))
+    return wrapped
+
+@asyncio.coroutine
+def run_future(function, *args, **kwargs):
+    """ Run a function in a future """
+    future = asyncio.Future()
+    yield future
+    future.set_result(function(*args,**kwargs))
+
 
 @asyncio.coroutine
 def run_panda():
@@ -70,7 +86,6 @@ class dataProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         transport.write(b'hello there')
         self.transport = transport
-        self.__receiving__ = False
         self.__block__ = b''  # TODO we almost certainly will need this
 
     def data_received(self, data):
@@ -90,7 +105,6 @@ class dataProtocol(asyncio.Protocol):
         cache = int(data[response_start:response_start + DataByteStream.CACHE_LEN])
         request_hash = data[hash_start:hash_start + DataByteStream.MD5_HASH_LEN]
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
-        self.del_out_request(request_hash)  # this *could* error in some very strange world but leave so we can discover it
         #print('')
         #print('bam_data',bam_data)
         if cache:  # FIXME this needs to be controlled locally based soley on request hash NOT cache bit
@@ -98,6 +112,7 @@ class dataProtocol(asyncio.Protocol):
             self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
         else:  # this data was generated in response to a request
             self.render_bam(request_hash, zlib.decompress(bam_data))
+
 
             # hrmmmm how do we get this data out!?
             # its a precache... and the server is the
@@ -109,6 +124,8 @@ class dataProtocol(asyncio.Protocol):
     def connection_lost(self, exc):  # somehow this never triggers...
         if exc is None:
             print('Data connection closed')
+            self.event_loop.close()  # FIXME we use this for now, but tis dangerous
+            # FIXME why does literally terminiating the server cause this to survive?
         else:
             print('connection lost')
             #probably we want to try to renegotiate a new connection
@@ -169,26 +186,42 @@ class bamCacheManager:
     """ shared state bam cache """
     def __init__(self,rootNode):
         self.cache = {}
+        # XXX FIXME a better way to do this is to use make it a future aware cache and just put a future at the index
+            # until the result arrives
+            # this way we can just maintain a list of all future stuff and add 'unexpected' data too
+            # the one question is what to do about gzing stuff... maybe use other cycles to go ahead and prep the nodes?
+            # in which case we degz and convert to a node asap and stick the node in the cache?
+            # that seems like a better idea...
         self.rootNode = rootNode
 
         self.reqLock = Lock()  # this works, the issue is that I havent written the deserializer for the client yet!
-        self.__outstanding_requests__ = set()
+        self.__future_hashes__ = set()  # the set of all future (or current) hashes should be similar to cache_age
 
     def add_out_request(self, request_hash):
         with self.reqLock:
-            if request_hash in self.__outstanding_requests__:
+            if request_hash in self.__future_hashes__:
                 print('the request is already outstanding')
                 return False
             else:
-                self.__outstanding_requests__.add(request_hash)
+                self.__future_hashes__.add(request_hash)
                 return True
 
     def del_out_request(self, request_hash):
+        """ This method should be called when the data for a hash has
+            a) been removed from the render tree
+            b) has passed out of the cache_age queue
+        """
         with self.reqLock:
             print('')
-            print(self.__outstanding_requests__)
+            print(self.__future_hashes__)
             print(request_hash)
-            self.__outstanding_requests__.remove(request_hash)
+            try:
+                self.__future_hashes__.remove(request_hash)
+            except KeyError as e:
+                pass
+                #print('somehow we received a hash for a request response that we did not request')
+                #print('error was ',e)
+                # FIXME actually we definitely want to receive all of these requests
 
     def check_cache(self, request_hash):
         try:
@@ -210,6 +243,61 @@ class bamCacheManager:
         geomNode = newNode.decodeFromBamStream(bam)  # apparently the thing I'm encoding is a node for test purposes... may need something
         #newNode.addGeom(geom)
         self.rootNode.attachNewNode(newNode)
+
+
+def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data, cache=False):
+    """ fire and forget """
+    bam = makeBam(bam_data)  #needs to return a node
+    coll = makeColl(coll_data)  #needs to return a node
+    ui = makeUI(ui_data)  #needs to return a node (or something)
+    if cache:
+        rcMan.update_cache(request_hash, (bam, coll, ui))
+    else:
+        rcman.render(bam, coll, ui)
+
+
+
+class renderCacheManager:
+    """ a class to manage, bam, coll, and ui (and more?) incoming data
+        all of those streams should be decompressed and reconstructed before
+        showing up here so that there are just two or three nodes that can be
+        attached to the scene graph if the call comes
+        
+        wait... why would we not just go ahead and construct this stuff in another
+        process pool?? it shouldn't affect framerates if I'm thinking about this the
+        right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
+    """
+    
+    def __init__(self, bamNode, collNode, uiNode):
+        self.bamNode = bamNode
+        self.collNode = collNode
+        self.uiNode = uiNode
+
+        self.cache = {}
+        self.cache_age = deque()
+
+        self.checkLock = Lock()  # TODO see if we need this
+
+    def get_cache(self, request_hash):
+        try:
+            bam, coll, ui = self.cache[request_hash]
+            print('local cache hit')
+            return True
+        except KeyError:
+            print('local cache miss')
+            return False
+
+    def update_cache(self, request_hash, node_tuple):
+        print('cache updated')
+        self.cache[request_hash] = node_tuple
+
+    def render(bam, coll, ui):
+            self.bamNode.attachNewNode(bam)
+            self.collNode.attatchNewNode(coll)
+            self.uiNode.attachNewNode(ui)
+
+
+
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -248,16 +336,22 @@ def main():
                    'update_cache':bcm.update_cache,
                    'render_bam':bcm.render_bam,
                    'add_out_request':bcm.add_out_request,
-                   'del_out_request':bcm.del_out_request })
+                   'del_out_request':bcm.del_out_request,
+                   'event_loop':clientLoop })
 
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
+
+    coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
+    transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
+
     transport.write(b'testing?')
     transport.write(b'testing?')
     transport.write(b'testing?')
+
+    #protocol2.send_token_data(tokenFuture.result())  # testing race condition, bet is both can get it
     protocol.send_token_data(tokenFuture.result())
-    #transport.write(b'.\x99'+tokenFuture.result())
-    #print("I get here")
+
 
     #writer.write('does this work?')
     for i in range(10):
@@ -297,7 +391,7 @@ def main():
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()
-    run_for_time(clientLoop,10)
+    run_for_time(clientLoop,3)
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)

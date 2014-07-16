@@ -134,7 +134,7 @@ class DataByteStream:
                     yield None
                 else:
                     yield thing
-            except (EOFError, pickle.UnpicklingError) as e:  #I do not remember why I got a ValueError...
+            except (ValueError, EOFError, pickle.UnpicklingError) as e:  # ValueError is for bad pickle protocol
                 print('What is this garbage?',bytes_)
                 print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
                 yield None  # we cannot raise here because we won't evaluate the rest of the loop

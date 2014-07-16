@@ -46,12 +46,7 @@ class DataByteStream:
     STOP = b'..'
     OP_TOKEN = b'.\x99'
 
-    OP_DATA = b'.\x97'
-
-    #OP_DATA_SEP = b'.\x96'
-    #OP_BAM = b'.\x98'
-    #OP_COLL = b'.\x97'
-    #OP_UI = b'.\x96'
+    OP_DATA = b'.\x98'
 
     #shared filed lengths
     OPCODE_LEN = 2
@@ -149,10 +144,11 @@ class DataByteStream:
             offsets = [0] + \
                 list(cumsum([struct.unpack(cls.OFFSET_TYPE,
                     offblock[cls.OFFSET_LEN * i : cls.OFFSET_LEN * (i + 1)])
-                            for b in range(n_fields)])) + \
-                [None]
+                            for b in range(n_fields)])) + [None]
 
-            data_tuple = tuple([ data[offsets[i] : offsets[i + 1]] for i in range(n_fields + 1) ])
+            offslice = zip(offsets[:-1],offsets[1:])
+            data_tuple = tuple([ data[start:stop] for start, stop in offslice ])
+            #data_tuple = tuple([ data[offsets[i] : offsets[i + 1]] for i in range(n_fields + 1) ])  # check perf?
             yield request_hash, data_tuple
 
 

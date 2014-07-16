@@ -82,13 +82,20 @@ class newConnectionProtocol(asyncio.Protocol):
         self.future_token = future
         yield from future
 
-class dataProtocol(asyncio.Protocol):
+class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
+    def __new__(cls, token):
+        cls.__new__ = super().__new__  # we don't want to invoke this new again
+        cls.token = token
+        return cls
+
     def __init__(self):
         self.__block__ = b''
 
     def connection_made(self, transport):
         transport.write(b'hello there')
+        transport.write(self.token)
         self.transport = transport
+        self.render_set_send_request(self.send_request)
 
     def data_received(self, data):
         """ receive bam files that come back on request
@@ -100,8 +107,14 @@ class dataProtocol(asyncio.Protocol):
         self.__block__ += data
         split = self.__block__.split(DataByteStream.STOP)
         if len(split) is 1:  # no stops
-            # if we have no start codes
-
+            if OP_DATA not in self.__block__:  # no ops
+                self.__block__ = b''
+        else:
+            self.__block__ = split.pop()
+            response_generator = DataByteStream.decodeResponseStreams(split)
+            self.process_responses(response_generator)
+    
+    def _data_received(self, data):  # XXX deprecated
         print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
         response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
         if response_start != -1:
@@ -142,17 +155,11 @@ class dataProtocol(asyncio.Protocol):
             #we try to reconnect repeatedly
             #asyncio.get_event_loop().close()  # FIXME probs don't need this
 
-    def send_token_data(self, token_data):
-        #self.transport.write(b'.\x99'+token)
-        self.transport.write(token_data)
-
     def send_request(self, request):
-        rh = request.hash_
-        if self.add_out_request(rh):  # NOOOOOO race conditions ;_:
-            if not self.check_cache(rh):
-                out = dumps(request)
-                self.transport.write(out)
-                print(out)
+        """ this is called BY renderManager.get_cache !!!!"""
+        out = dumps(request)
+        self.transport.write(out)
+
         # TODO add that hash to a 'waiting' list and then cross it off when we are done
             # could use that to quantify performance
             # XXX need this to prevent sending duplicate requests
@@ -176,20 +183,17 @@ class dataProtocol(asyncio.Protocol):
         self.transport.write(dumps(request))
         yield from future
 
-    def update_cache(self, request_hash, bam_data):
+    def process_response(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
+        for request_hash, data_tuple in response_generator:
+            self.event_loop.run_in_executor( None, lambda: self.update_cache(request_hash, data_tuple) )
+            # XXX FIXME panda *should* be ok with this, hopefully this gets around the gil or we have problems
+
+    def update_cache(self, request_hash, data_tuple):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
-    def check_cache(self, request_hash):
+    def get_cache(self, request_hash):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
-    def render_bam(self, bam):
-        raise NotImplementedError('patch this function with a function from a DirectObject')
-
-
-class collCacheManager:
-    def __init__(self,rootNode):
-        pass
-    
 
 class bamCacheManager:
     """ shared state bam cache """
@@ -254,7 +258,7 @@ class bamCacheManager:
         self.rootNode.attachNewNode(newNode)
 
 
-def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data, cache=False):
+def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data):  # TODO yes we do need this between dataProtocol and renderManager...
     """ fire and forget """
     bam = makeBam(bam_data)  #needs to return a node
     coll = makeColl(coll_data)  #needs to return a node
@@ -263,8 +267,6 @@ def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data, cache=False):
         rcMan.update_cache(request_hash, (bam, coll, ui))
     else:
         rcman.render(bam, coll, ui)
-
-
 
 class renderManager:
     """ a class to manage, bam, coll, and ui (and more?) incoming data
@@ -287,18 +289,38 @@ class renderManager:
 
         self.checkLock = Lock()  # TODO see if we need this
 
-    def get_cache(self, request_hash):
-        try:
-            bam, coll, ui = self.cache[request_hash]
-            print('local cache hit')
-            return True
-        except KeyError:
-            print('local cache miss')
-            return False
+    def set_send_request(self, send_request:'function *args = (request,)')
+        self.send_request = send_request
 
-    def update_cache(self, request_hash, node_tuple):
+    def get_nodes(self, request):  # FIXME 
+        """ this should only be called after failing a search for hidden nodes
+            matching a request in the scene graph
+        """
+        request_hash = request.hash_
+        try:
+            #bam, coll, ui = self.cache[request_hash]
+            self.render(*self.cache[request_hash])
+            print('local cache hit')
+        except KeyError:  # ValueError if a future is in there, maybe just use False?
+            self.cache[request_hash] = False
+            self.send_request(request)
+            print('local cache miss')
+        except ValueError:
+            print('the request has been sent, if it is still wanted when it gets here we will render it')
+            # FIXME really we should only render the last thing... so yes we do need a
+                # bit more advanced system so we only render the last requested thing (could change)
+                # TODO this means that each UI element / collisionSolid needs to send a "not active" signal
+                # when a request is no longer wanted
+
+    def set_nodes(self, request_hash, node_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
+        """ this is the callback used by the data protocol """
         print('cache updated')
-        self.cache[request_hash] = node_tuple
+        try:
+            #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
+            if not self.cache[request_hash]:
+                self.render(*self.cache[request_hash])
+        except KeyError:
+            self.cache[request_hash] = node_tuple
 
     def render(bam, coll, ui):
         self.bamNode.attachNewNode(bam)
@@ -340,13 +362,14 @@ def main():
 
     bcm = bamCacheManager(rootNode)
 
-    datCli = type('dataProtocol',(dataProtocol,),
-                  {'check_cache':bcm.check_cache,
-                   'update_cache':bcm.update_cache,
-                   'render_bam':bcm.render_bam,
-                   'add_out_request':bcm.add_out_request,
-                   'del_out_request':bcm.del_out_request,
+    rendMan = renderManager(*[rootNode]*3)
+
+    datCli_base = type('dataProtocol',(dataProtocol,),
+                  {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
+                   'render_set_send_request':rendMan.add_send_request,
                    'event_loop':clientLoop })
+
+    dataCli = dataCli_base(tokenFuture.result())  # __new__ magic, we don't use type() since tokens arent shared
 
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
@@ -359,7 +382,7 @@ def main():
     transport.write(b'testing?')
 
     #protocol2.send_token_data(tokenFuture.result())  # testing race condition, bet is both can get it
-    protocol.send_token_data(tokenFuture.result())
+    #protocol.send_token_data(tokenFuture.result())
 
 
     #writer.write('does this work?')
@@ -390,13 +413,13 @@ def main():
     #request = Request('test..','test',(1,2,3),None)  # FIXME this breaks stop detection!
     request = Request('test.','test',(1,2,3),None)
     print('th',request.hash_,'rh',hash(request))
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
+    rendMan.get_cache(request)
+    rendMan.get_cache(request)
+    rendMan.get_cache(request)
+    rendMan.get_cache(request)
+    rendMan.get_cache(request)
+    rendMan.get_cache(request)
+    rendMan.get_cache(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()

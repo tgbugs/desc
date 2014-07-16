@@ -83,10 +83,12 @@ class newConnectionProtocol(asyncio.Protocol):
         yield from future
 
 class dataProtocol(asyncio.Protocol):
+    def __init__(self):
+        self.__block__ = b''
+
     def connection_made(self, transport):
         transport.write(b'hello there')
         self.transport = transport
-        self.__block__ = b''  # TODO we almost certainly will need this
 
     def data_received(self, data):
         """ receive bam files that come back on request
@@ -95,6 +97,11 @@ class dataProtocol(asyncio.Protocol):
             as soon as the connection has been created if they
             arent cached
         """
+        self.__block__ += data
+        split = self.__block__.split(DataByteStream.STOP)
+        if len(split) is 1:  # no stops
+            # if we have no start codes
+
         print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
         response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
         if response_start != -1:
@@ -107,6 +114,8 @@ class dataProtocol(asyncio.Protocol):
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
         #print('')
         #print('bam_data',bam_data)
+
+        # TODO if the request hash is not in cache.keys() stick it in there and don't render it
         if cache:  # FIXME this needs to be controlled locally based soley on request hash NOT cache bit
             # TODO this is second field in header
             self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
@@ -257,7 +266,7 @@ def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data, cache=False):
 
 
 
-class renderCacheManager:
+class renderManager:
     """ a class to manage, bam, coll, and ui (and more?) incoming data
         all of those streams should be decompressed and reconstructed before
         showing up here so that there are just two or three nodes that can be
@@ -292,9 +301,9 @@ class renderCacheManager:
         self.cache[request_hash] = node_tuple
 
     def render(bam, coll, ui):
-            self.bamNode.attachNewNode(bam)
-            self.collNode.attatchNewNode(coll)
-            self.uiNode.attachNewNode(ui)
+        self.bamNode.attachNewNode(bam)
+        self.collNode.attatchNewNode(coll)
+        self.uiNode.attachNewNode(ui)
 
 
 

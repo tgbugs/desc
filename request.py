@@ -2,7 +2,9 @@ import hashlib
 import pickle
 import sys
 import traceback
+import struct
 
+from numpy import cumsum
 from IPython import embed
 
 class Request:  # testing only since this will need to be in its own module to keep python happy
@@ -43,14 +45,13 @@ class DataByteStream:
     #opcodes
     STOP = b'..'
     OP_TOKEN = b'.\x99'
-    OP_BAM = b'.\x98'
-    OP_COLL = b'.\x97'
-    OP_UI = b'.\x96'
 
-    #pickle codes
-    OP_PICKLE = b'\x80'
-    OP_PICKLE_INT = OP_PICKLE[0]
-    PICKLE_STOP = b'.'
+    OP_DATA = b'.\x97'
+
+    #OP_DATA_SEP = b'.\x96'
+    #OP_BAM = b'.\x98'
+    #OP_COLL = b'.\x97'
+    #OP_UI = b'.\x96'
 
     #shared filed lengths
     OPCODE_LEN = 2
@@ -59,10 +60,17 @@ class DataByteStream:
     TOKEN_LEN = 256
 
     #request stream
+    #pickle codes
+    OP_PICKLE = b'\x80'
+    OP_PICKLE_INT = OP_PICKLE[0]
+    PICKLE_STOP = b'.'
 
     #request response data stream
-    CACHE_LEN = 1
-    MD5_HASH_LEN = 16
+    HASH_LEN = 16
+    FIELDS_LEN = 1
+    OFFSET_LEN = 4
+    FIELDS_TYPE = 'B'  # this gives an 8bit unsigned int
+    OFFSET_TYPE = 'I'  # this gives a 32bit unsigned int
 
     @classmethod
     def makeTokenStream(cls, token):
@@ -72,39 +80,16 @@ class DataByteStream:
 
     @classmethod
     def makeRequestStream(cls, request):  # TODO should pickle here too? since this doesn't take request_data
-        return request + cls.STOP
+        return request + cls.STOP  # FIXME
 
     @classmethod
-    def makeBamStream(cls, request_hash, bam_data, cache=False):
-        if cache:
-            cache_bit = b'1'
-        else:
-            cache_bit = b'0'
-        return cls.OP_BAM + cache_bit + request_hash + bam_data + cls.STOP
+    def makeResponseStream(cls, request_hash, data_tuple):
+        # headers have fixed length so no opcode is needed between the header and the first data block
+        n_fields = struct.pack(cls.FIELDS_TYPE, len(data_tuple) - 1)  # this is actually N offsets.... fix?
+        offsets = b''.join([struct.pack(cls.OFFSET_TYPE, len(data)) for data in data_tuple[:-1]])
+        data = zlib.compress(b''.join(data_tuple))
 
-    @classmethod
-    def makeCollStream(cls, request_hash, coll_data, cache=False):
-        if cache:
-            cache_bit = b'1'
-        else:
-            cache_bit = b'0'
-        return cls.OP_COLL + cache_bit + request_hash + coll_data + cls.STOP
-
-    @classmethod
-    def makeUIStream(cls, request_hash, ui_data, cache=False):
-        if cache:
-            cache_bit = b'1'
-        else:
-            cache_bit = b'0'
-        return cls.OP_COLL + cache_bit + request_hash + ui_data + cls.STOP
-
-    @classmethod
-    def decodeStart(cls, stream):
-        pass
-
-    @classmethod
-    def decodeStop(cls, stream):
-        pass
+        return cls.OP_DATA + request_hash + n_fields + offsets + data + cls.STOP
 
     @classmethod
     def decodeToken(cls, stream):
@@ -138,6 +123,39 @@ class DataByteStream:
                 print('What is this garbage?',bytes_)
                 print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
                 yield None  # we cannot raise here because we won't evaluate the rest of the loop
+
+    @classmethod
+    def decodeResponseStreams(cls, split):
+        for bytes_ in split:
+            dataStart = 0
+            if bytes_[dataStart:dataStart + cls.OPCODE_LEN] != cls.OP_DATA:
+                dataStart = bytes_.find(cls.OP_DATA)
+                if dataStart is -1:
+                    yield None, None
+            
+            hashStart = dataStart + cls.OPCODE_LEN
+            fieldStart = hashStart + cls.HASH_LEN
+            offStart = fieldStart + cls.FILEDS_LEN
+
+            request_hash = bytes_[hashStart:hashStart + cls.HASH_LEN]
+            n_fileds = bytes_[fieldStart:fieldStart + cls.FIELDS_LEN]  # FIXME if it is a single byte it will decode automatically
+
+            offLen = cls.OFFSET_LEN * n_fields
+            compressStart = offStart + offLen
+
+            offblock = bytes_[offStart:offStart + offLen]
+            data = zlib.decompress(bytes_[compressStart:])
+
+            offsets = [0] + \
+                list(cumsum([struct.unpack(cls.OFFSET_TYPE,
+                    offblock[cls.OFFSET_LEN * i : cls.OFFSET_LEN * (i + 1)])
+                            for b in range(n_fields)])) + \
+                [None]
+
+            data_tuple = tuple([ data[offsets[i] : offsets[i + 1]] for i in range(n_fields + 1) ])
+            yield request_hash, data_tuple
+
+
 
 def main():
     from enum import Enum

@@ -84,6 +84,8 @@ class DataByteStream:
         offsets = b''.join([struct.pack(cls.OFFSET_TYPE, len(data)) for data in data_tuple[:-1]])
         data = zlib.compress(b''.join(data_tuple))
 
+        print("response stream is being made")
+
         return cls.OP_DATA + request_hash + n_fields + offsets + data + cls.STOP
 
     @classmethod

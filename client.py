@@ -5,6 +5,7 @@ import random
 import pickle
 import zlib
 import ssl
+from collections import deque
 from time import sleep
 from threading import Lock
 
@@ -183,9 +184,10 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         self.transport.write(dumps(request))
         yield from future
 
-    def process_response(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
+    def process_responses(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
         for request_hash, data_tuple in response_generator:
-            self.event_loop.run_in_executor( None, lambda: self.update_cache(request_hash, data_tuple) )
+            print('yes we are trying to render stuff')
+            self.event_loop.run_in_executor( None, lambda: self.set_nodes(request_hash, data_tuple) )
             # XXX FIXME panda *should* be ok with this, hopefully this gets around the gil or we have problems
 
     def update_cache(self, request_hash, data_tuple):
@@ -289,10 +291,10 @@ class renderManager:
 
         self.checkLock = Lock()  # TODO see if we need this
 
-    def set_send_request(self, send_request:'function *args = (request,)')
+    def set_send_request(self, send_request:'function *args = (request,)'):
         self.send_request = send_request
 
-    def get_nodes(self, request):  # FIXME 
+    def submit_request(self, request):  # FIXME 
         """ this should only be called after failing a search for hidden nodes
             matching a request in the scene graph
         """
@@ -303,14 +305,34 @@ class renderManager:
             print('local cache hit')
         except KeyError:  # ValueError if a future is in there, maybe just use False?
             self.cache[request_hash] = False
+            #self.cache[request_hash] = False
             self.send_request(request)
             print('local cache miss')
-        except ValueError:
+        except TypeError:  # TypeError will catch incorrect lenght on the input
             print('the request has been sent, if it is still wanted when it gets here we will render it')
+            #self.cache[request_hash]
             # FIXME really we should only render the last thing... so yes we do need a
                 # bit more advanced system so we only render the last requested thing (could change)
                 # TODO this means that each UI element / collisionSolid needs to send a "not active" signal
                 # when a request is no longer wanted
+
+    def unrender(self, request_hash):  # FIXME what do we need this fellow sending? ie: how generate requests from UI
+        # FIXME this needs to be "unrender" and we can work from there, no canceling, because we pretend like it completed
+        try:
+            self.cache.pop(request_hash)
+        except KeyError:
+            pass
+
+        # use an rx reactive extensions construction with a temporal list or whatever?
+        #try:
+            #self.cache.pop(request_hash)  # so may problems with ordering and state O_O
+            # TODO it is not this simple, there needs to be a temoral list and if the 'current' state includes a cancel render request...
+                # argh this is a mess so think about, need better abstraction
+                # no, this is easy, the render request shall be considered to have been _completed_
+                # when it is submitted, even if it hasnt, so all we need to do is use a future to
+                # synchronize execution? ... or does that... wait...
+        #except KeyError:
+            #pass
 
     def set_nodes(self, request_hash, node_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
         """ this is the callback used by the data protocol """
@@ -318,7 +340,9 @@ class renderManager:
         try:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:
-                self.render(*self.cache[request_hash])
+                #self.render(*self.cache[request_hash])
+                self.render(*node_tuple)
+            print('we get here')
         except KeyError:
             self.cache[request_hash] = node_tuple
 
@@ -362,14 +386,15 @@ def main():
 
     bcm = bamCacheManager(rootNode)
 
-    rendMan = renderManager(*[rootNode]*3)
+    rendMan = renderManager(*[rootNode]*3)  # in theory we can have multiple connections for a single render manager if we have disconnects
+    # if fact renderMan might even spin up its own connections! so render before connection is correct
 
     datCli_base = type('dataProtocol',(dataProtocol,),
                   {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
-                   'render_set_send_request':rendMan.add_send_request,
+                   'render_set_send_request':rendMan.set_send_request,
                    'event_loop':clientLoop })
 
-    dataCli = dataCli_base(tokenFuture.result())  # __new__ magic, we don't use type() since tokens arent shared
+    datCli = datCli_base(tokenFuture.result())  # __new__ magic, we don't use type() since tokens arent shared
 
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
@@ -413,13 +438,13 @@ def main():
     #request = Request('test..','test',(1,2,3),None)  # FIXME this breaks stop detection!
     request = Request('test.','test',(1,2,3),None)
     print('th',request.hash_,'rh',hash(request))
-    rendMan.get_cache(request)
-    rendMan.get_cache(request)
-    rendMan.get_cache(request)
-    rendMan.get_cache(request)
-    rendMan.get_cache(request)
-    rendMan.get_cache(request)
-    rendMan.get_cache(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()

@@ -3,7 +3,7 @@
 import asyncio
 import random
 import pickle
-import zlib
+#import zlib
 import ssl
 from collections import deque
 from time import sleep
@@ -133,8 +133,8 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         if cache:  # FIXME this needs to be controlled locally based soley on request hash NOT cache bit
             # TODO this is second field in header
             self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
-        else:  # this data was generated in response to a request
-            self.render_bam(request_hash, zlib.decompress(bam_data))
+        #else:  # this data was generated in response to a request
+            #self.render_bam(request_hash, zlib.decompress(bam_data))
 
 
             # hrmmmm how do we get this data out!?
@@ -240,7 +240,8 @@ class bamCacheManager:
 
     def check_cache(self, request_hash):
         try:
-            bam = zlib.decompress(self.cache[request_hash])  # FIXME is there some way to make the gzing more transparent?
+            #bam = zlib.decompress(self.cache[request_hash])  # FIXME is there some way to make the gzing more transparent?
+            bam = None
             self.render_bam(bam)
             print('local cache hit')
             return True
@@ -380,7 +381,7 @@ def main():
         
     class FakeNode:
         def attachNewNode(self, node):
-            print('pretend like this print statement actually causes things to render')
+            print('pretend like this print statement actually causes things to render',node)
 
     rootNode = FakeNode()
 
@@ -399,8 +400,8 @@ def main():
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
 
-    coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
-    transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
+    #coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
+    #transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
 
     transport.write(b'testing?')
     transport.write(b'testing?')

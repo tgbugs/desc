@@ -2,7 +2,7 @@ import hashlib
 import pickle
 import sys
 import traceback
-import struct
+import zlib
 
 from numpy import cumsum
 from IPython import embed
@@ -61,11 +61,12 @@ class DataByteStream:
     PICKLE_STOP = b'.'
 
     #request response data stream
+    BYTEORDER = 'little'
     HASH_LEN = 16
     FIELDS_LEN = 1
     OFFSET_LEN = 4
-    FIELDS_TYPE = 'B'  # this gives an 8bit unsigned int
-    OFFSET_TYPE = 'I'  # this gives a 32bit unsigned int
+    #FIELDS_TYPE = 'B'  # this gives an 8bit unsigned int
+    #OFFSET_TYPE = 'I'  # this gives a 32bit unsigned int
 
     @classmethod
     def makeTokenStream(cls, token):
@@ -80,8 +81,8 @@ class DataByteStream:
     @classmethod
     def makeResponseStream(cls, request_hash, data_tuple):
         # headers have fixed length so no opcode is needed between the header and the first data block
-        n_fields = struct.pack(cls.FIELDS_TYPE, len(data_tuple) - 1)  # this is actually N offsets.... fix?
-        offsets = b''.join([struct.pack(cls.OFFSET_TYPE, len(data)) for data in data_tuple[:-1]])
+        n_fields = int.to_bytes(len(data_tuple) - 1, cls.FIELDS_LEN, cls.BYTEORDER)  # this is actually N offsets.... fix?
+        offsets = b''.join([int.to_bytes(len(data), cls.OFFSET_LEN, cls.BYTEORDER) for data in data_tuple[:-1]])
         data = zlib.compress(b''.join(data_tuple))
 
         print("response stream is being made")
@@ -132,10 +133,10 @@ class DataByteStream:
             
             hashStart = dataStart + cls.OPCODE_LEN
             fieldStart = hashStart + cls.HASH_LEN
-            offStart = fieldStart + cls.FILEDS_LEN
+            offStart = fieldStart + cls.FIELDS_LEN
 
             request_hash = bytes_[hashStart:hashStart + cls.HASH_LEN]
-            n_fileds = bytes_[fieldStart:fieldStart + cls.FIELDS_LEN]  # FIXME if it is a single byte it will decode automatically
+            n_fields = int.from_bytes(bytes_[fieldStart:fieldStart + cls.FIELDS_LEN], cls.BYTEORDER)
 
             offLen = cls.OFFSET_LEN * n_fields
             compressStart = offStart + offLen
@@ -144,9 +145,10 @@ class DataByteStream:
             data = zlib.decompress(bytes_[compressStart:])
 
             offsets = [0] + \
-                list(cumsum([struct.unpack(cls.OFFSET_TYPE,
-                    offblock[cls.OFFSET_LEN * i : cls.OFFSET_LEN * (i + 1)])
-                            for b in range(n_fields)])) + [None]
+                list(cumsum([int.from_bytes(offblock[cls.OFFSET_LEN * i :
+                                                     cls.OFFSET_LEN * (i + 1)],
+                                            cls.BYTEORDER)
+                            for i in range(n_fields)])) + [None]
 
             offslice = zip(offsets[:-1],offsets[1:])
             data_tuple = tuple([ data[start:stop] for start, stop in offslice ])

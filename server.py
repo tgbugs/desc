@@ -3,7 +3,7 @@
 import asyncio
 import pickle
 import ssl
-import zlib
+#import zlib
 import os  # for dealing with firewall stuff
 from collections import defaultdict, deque
 from time import sleep
@@ -205,15 +205,14 @@ class dataServerProtocol(asyncio.Protocol):
             rh, bam_data = self.get_bam(request)
             coll_data = b'this is collision data'
             ui_data = b'this is ui data'
+            data_tuple = (bam_data, coll_data, ui_data)
             sleep(1)
-            bam_stream = DataByteStream.makeBamStream(rh, bam_data, cache=False)
-            coll_stream = DataByteStream.makeCollStream(rh, coll_data, cache=False)
-            ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=False)
-            self.transport.write(bam_stream + coll_stream + ui_stream)
+            data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+            self.transport.write(data_stream)
 
         for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
-                self.event_loop.run_in_executor( None, lambda: do_request(request) )
+                self.event_loop.run_in_executor( None, lambda: do_request(request) )  # FIXME error handling live?
                 self.event_loop.run_in_executor( None, lambda: self.request_prediction(request) )
 
     def get_bam(self,request):
@@ -223,7 +222,7 @@ class dataServerProtocol(asyncio.Protocol):
         print(rh)
         bam = self.get_cache(rh)
         if bam is None:
-            bam = zlib.compress(self.make_bam(request))  # LOL wow is there redundancy in these bams O_O zlib to the rescue
+            bam = self.make_bam(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
             self.update_cache(rh, bam)
         return rh, bam
 
@@ -233,10 +232,9 @@ class dataServerProtocol(asyncio.Protocol):
             rh, bam_data = self.get_bam(preq)
             coll_data = b'this is collision data'
             ui_data = b'this is ui data'
-            bam_stream = DataByteStream.makeBamStream(rh, bam_data, cache=True)
-            coll_stream = DataByteStream.makeCollStream(rh, coll_data, cache=True)
-            ui_stream = DataByteStream.makeUIStream(rh, ui_data, cache=True)
-            self.transport.write(bam_stream + coll_stream + ui_stream)
+            data_tuple = (bam_data, coll_data, ui_data)
+            data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+            self.transport.write(data_stream)
             #yield None
         #return
         #yield

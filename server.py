@@ -59,6 +59,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
             #this is NOT secure
             pass
         self.transport = transport
+        self.pprefix = transport.get_extra_info('peername')
         self.ip = transport.get_extra_info('peername')[0]
         #for now we are just going to give clients peer certs and not worry about it
 
@@ -100,7 +101,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
 
     def data_received(self, data):  # data is a bytes object
         done = False
-        print(self.ip,data)
+        print(self.pprefix,data)
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
             token = make_bytes(DataByteStream.TOKEN_LEN)

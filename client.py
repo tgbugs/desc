@@ -57,6 +57,13 @@ def run_for_time(loop,time):
 
 class newConnectionProtocol(asyncio.Protocol):
     """ this is going to be done with fixed byte sizes known small headers """
+    def __new__(cls, *args, **kwargs:'for create_connection'):
+        cls.event_loop = asyncio.get_event_loop()  # FIXME make this work even if running?
+        cls.future_token = asyncio.Future()
+        cls.__new__ = super().__new__
+        coro = cls.event_loop.create_connection(cls, *args, **kwargs)
+        return coro, cls.future_token
+
     def connection_made(self, transport):
         self.transport = transport
         self.transport.write(b'I promis I real client, plz dataz')
@@ -65,10 +72,10 @@ class newConnectionProtocol(asyncio.Protocol):
     def data_received(self, data):
         token_data = b''
         token_start = data.find(DataByteStream.OP_TOKEN)  # FIXME sadly we'll probably need to deal with splits again
-        print('token?',data)
+        #print('token?',data)
         if token_start != -1:
             #token_start += DataByteStream.OPCODE_LEN
-            print('token_start',token_start)
+            print('__',self,'token_start',token_start,'__')
             token_data = data[token_start:token_start+DataByteStream.OPCODE_LEN+DataByteStream.TOKEN_LEN]
         if token_data:
             self.future_token.set_result(token_data)
@@ -79,9 +86,8 @@ class newConnectionProtocol(asyncio.Protocol):
             print("New connection transport closed.")
 
     @asyncio.coroutine
-    def get_data_token(self,future):
-        self.future_token = future
-        yield from future
+    def get_data_token(self):
+        yield from self.future_token
 
 class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
     def __new__(cls, token):
@@ -190,10 +196,10 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             self.event_loop.run_in_executor( None, lambda: self.set_nodes(request_hash, data_tuple) )
             # XXX FIXME panda *should* be ok with this, hopefully this gets around the gil or we have problems
 
-    def update_cache(self, request_hash, data_tuple):
+    def set_nodes(self, request_hash, node_tuple):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
-    def get_cache(self, request_hash):
+    def render_set_send_request(self, send_request:'function'):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
 
@@ -259,7 +265,6 @@ class bamCacheManager:
         geomNode = newNode.decodeFromBamStream(bam)  # apparently the thing I'm encoding is a node for test purposes... may need something
         #newNode.addGeom(geom)
         self.rootNode.attachNewNode(newNode)
-
 
 def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data):  # TODO yes we do need this between dataProtocol and renderManager...
     """ fire and forget """
@@ -342,17 +347,15 @@ class renderManager:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:
                 #self.render(*self.cache[request_hash])
+                print(len(node_tuple))
                 self.render(*node_tuple)
-            print('we get here')
         except KeyError:
             self.cache[request_hash] = node_tuple
 
-    def render(bam, coll, ui):
+    def render(self, bam, coll, ui):
         self.bamNode.attachNewNode(bam)
-        self.collNode.attatchNewNode(coll)
+        self.collNode.attachNewNode(coll)
         self.uiNode.attachNewNode(ui)
-
-
 
 
 def main():
@@ -371,21 +374,32 @@ def main():
     #def myfunc(data):
         #test.append(data)
 
+
     clientLoop = asyncio.get_event_loop()
-    coro_conClient = clientLoop.create_connection(newConnectionProtocol, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
+    #tokenFuture = asyncio.Future()  # we have to pass the future in before init since the token is sent immediately, we might not even have to call run_until_complete??
+    #coro_conClient = clientLoop.create_connection(newConnectionProtocol(tokenFuture), '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
+
+    coro_conClient, tokenFuture = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
 
     conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-    tokenFuture = asyncio.Future()
-    clientLoop.run_until_complete(conProtocol.get_data_token(tokenFuture))
+    clientLoop.run_until_complete(conProtocol.get_data_token())
     print('got token',tokenFuture.result())
         
+    #here we demonstrate how to get a buttload of tokens >_<
+    #futures = [asyncio.Future() for _ in range(10)]
+    #coros = [clientLoop.create_connection(newConnectionProtocol(f), '127.0.0.1',
+                                          #CONNECTION_PORT, ssl=None) for f in futures]
+    #prots = [clientLoop.run_until_complete(c)[0] for c in coros]
+    #coros_ = [p.get_data_token() for f in prot)]  # sadly this blocks on each one :/
+    #embed()
+    #[clientLoop.run_until_complete(z) for z in coros_]
+    #print('LOOK AT THEM WE\'RE RICH!',[f.result() for f in future])
+
     class FakeNode:
         def attachNewNode(self, node):
             print('pretend like this print statement actually causes things to render',node)
 
     rootNode = FakeNode()
-
-    bcm = bamCacheManager(rootNode)
 
     rendMan = renderManager(*[rootNode]*3)  # in theory we can have multiple connections for a single render manager if we have disconnects
     # if fact renderMan might even spin up its own connections! so render before connection is correct
@@ -393,13 +407,13 @@ def main():
     datCli_base = type('dataProtocol',(dataProtocol,),
                   {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
                    'render_set_send_request':rendMan.set_send_request,
-                   'event_loop':clientLoop })
+                   'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
     datCli = datCli_base(tokenFuture.result())  # __new__ magic, we don't use type() since tokens arent shared
-
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
 
+    #datCli = datCli_base(tokenFuture2.result())  # __new__ magic, we don't use type() since tokens arent shared
     #coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     #transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
 

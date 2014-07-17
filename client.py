@@ -55,14 +55,16 @@ def run_for_time(loop,time):
     """ use this to view responses inside embed """
     loop.run_until_complete(asyncio.sleep(time))
 
-class newConnectionProtocol(asyncio.Protocol):
+class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a token getter...
     """ this is going to be done with fixed byte sizes known small headers """
     def __new__(cls, *args, **kwargs:'for create_connection'):
+        """ evil and unpythonic, this no longer behaves like a class """
         cls.event_loop = asyncio.get_event_loop()  # FIXME make this work even if running?
-        cls.future_token = asyncio.Future()
-        cls.__new__ = super().__new__
-        coro = cls.event_loop.create_connection(cls, *args, **kwargs)
-        return coro, cls.future_token
+        future = asyncio.Future()
+        instance = super().__new__(cls)
+        instance.future_token = future
+        coro = cls.event_loop.create_connection(lambda: instance, *args, **kwargs)
+        return coro, future
 
     def connection_made(self, transport):
         self.transport = transport
@@ -88,6 +90,10 @@ class newConnectionProtocol(asyncio.Protocol):
     @asyncio.coroutine
     def get_data_token(self):
         yield from self.future_token
+        #try: yield from self.future_token
+        #except asyncio.futures.InvalidStateError as e:
+            #print(e)
+            #print('ssuming that this is because the future is already finished')
 
 class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
     def __new__(cls, token):
@@ -380,20 +386,25 @@ def main():
     #coro_conClient = clientLoop.create_connection(newConnectionProtocol(tokenFuture), '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
 
     coro_conClient, tokenFuture = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
+    coro_conClient2, tokenFuture2 = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
 
     conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-    clientLoop.run_until_complete(conProtocol.get_data_token())
+    out = clientLoop.run_until_complete(conProtocol.get_data_token())
     print('got token',tokenFuture.result())
+
         
     #here we demonstrate how to get a buttload of tokens >_<
     #futures = [asyncio.Future() for _ in range(10)]
     #coros = [clientLoop.create_connection(newConnectionProtocol(f), '127.0.0.1',
                                           #CONNECTION_PORT, ssl=None) for f in futures]
-    #prots = [clientLoop.run_until_complete(c)[0] for c in coros]
-    #coros_ = [p.get_data_token() for f in prot)]  # sadly this blocks on each one :/
+    cf = [ newConnectionProtocol('127.0.0.1', CONNECTION_PORT) for _ in range(10)]
+    prots = [ clientLoop.run_until_complete(c)[1] for c, _ in cf]
+    coros_ = [clientLoop.run_until_complete(p.get_data_token()) for p in prots]
+    #coros_ = [p.get_data_token() for p in prots]
+    #[clientLoop.run_until_complete(f) for f in coros_]
+    print('LOOK AT THEM WE\'RE RICH!',[f.result() for _, f in cf])
+    embed()
     #embed()
-    #[clientLoop.run_until_complete(z) for z in coros_]
-    #print('LOOK AT THEM WE\'RE RICH!',[f.result() for f in future])
 
     class FakeNode:
         def attachNewNode(self, node):

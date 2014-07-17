@@ -97,18 +97,16 @@ class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a
 
 class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
     def __new__(cls, token):
-        cls.__new__ = super().__new__  # we don't want to invoke this new again
-        cls.token = token
-        return cls
-
-    def __init__(self):
-        self.__block__ = b''
+        instance = super().__new__(cls)
+        instance.token = token
+        return lambda: instance  # this is vile, but it works
 
     def connection_made(self, transport):
         transport.write(b'hello there')
         transport.write(self.token)
         self.transport = transport
         self.render_set_send_request(self.send_request)
+        self.__block__ = b''
 
     def data_received(self, data):
         """ receive bam files that come back on request
@@ -386,25 +384,20 @@ def main():
     #coro_conClient = clientLoop.create_connection(newConnectionProtocol(tokenFuture), '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
 
     coro_conClient, tokenFuture = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
-    coro_conClient2, tokenFuture2 = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
 
     conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-    out = clientLoop.run_until_complete(conProtocol.get_data_token())
+    clientLoop.run_until_complete(conProtocol.get_data_token())
     print('got token',tokenFuture.result())
 
         
     #here we demonstrate how to get a buttload of tokens >_<
-    #futures = [asyncio.Future() for _ in range(10)]
-    #coros = [clientLoop.create_connection(newConnectionProtocol(f), '127.0.0.1',
-                                          #CONNECTION_PORT, ssl=None) for f in futures]
-    cf = [ newConnectionProtocol('127.0.0.1', CONNECTION_PORT) for _ in range(10)]
-    prots = [ clientLoop.run_until_complete(c)[1] for c, _ in cf]
-    coros_ = [clientLoop.run_until_complete(p.get_data_token()) for p in prots]
-    #coros_ = [p.get_data_token() for p in prots]
-    #[clientLoop.run_until_complete(f) for f in coros_]
-    print('LOOK AT THEM WE\'RE RICH!',[f.result() for _, f in cf])
-    embed()
-    #embed()
+    cf = [newConnectionProtocol('127.0.0.1', CONNECTION_PORT) for _ in range(10)]
+    prots = [clientLoop.run_until_complete(c)[1] for c, _ in cf]
+    #coros_ = [clientLoop.run_until_complete(p.get_data_token()) for p in prots]  # this works too
+    coros_ = [p.get_data_token() for p in prots]
+    [clientLoop.run_until_complete(f) for f in coros_]
+    tokens = [f.result() for _, f in cf]
+    print('LOOK AT THEM WE\'RE RICH!',tokens)
 
     class FakeNode:
         def attachNewNode(self, node):
@@ -424,7 +417,8 @@ def main():
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
 
-    #datCli = datCli_base(tokenFuture2.result())  # __new__ magic, we don't use type() since tokens arent shared
+    #the 3 lines that follow completely break everything... why? don't know!
+    #datCli2 = datCli_base(tokens[3])  # __new__ magic, we don't use type() since tokens arent shared
     #coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     #transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
 
@@ -471,10 +465,11 @@ def main():
     rendMan.submit_request(request)
     rendMan.submit_request(request)
     rendMan.submit_request(request)
+    #protocol2.send_request(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()
-    run_for_time(clientLoop,3)
+    run_for_time(clientLoop,1)
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)

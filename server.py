@@ -201,13 +201,13 @@ class dataServerProtocol(asyncio.Protocol):
             yield from DataByteStream.decodePickleStreams(split)
 
     def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
-        print('processing requests')
+        print(self.pprefix,'processing requests')
         def do_request(request):
             rh, bam_data = self.get_bam(request)
             coll_data = b'this is collision data'
             ui_data = b'this is ui data'
             data_tuple = (bam_data, coll_data, ui_data)
-            sleep(1)
+            #sleep(1)
             data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
             self.transport.write(data_stream)
 

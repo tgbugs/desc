@@ -7,6 +7,7 @@ import os  # for dealing with firewall stuff
 from uuid import uuid4
 from collections import defaultdict, deque
 from time import sleep
+from queue import Queue
 
 import numpy as np
 from numpy.random import bytes as make_bytes
@@ -119,6 +120,7 @@ class dataServerProtocol(asyncio.Protocol):
     def __init__(self):
         self.token_received = False
         self.__block__ = b''
+        self.data_queue = Queue()
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -181,8 +183,12 @@ class dataServerProtocol(asyncio.Protocol):
         print(self.pprefix,'processing requests')
         for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
+                # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
+                    # so we need a way to preserve the order of the SEND using a queue or something
                 self.event_loop.run_in_executor( None, lambda: self.send_response(request) )  # FIXME error handling live?
                 self.event_loop.run_in_executor( None, lambda: self.request_prediction(request) )
+                self.transport.write(self.data_queue.get())
+                self.transport.write(self.data_queue.get())
 
     def send_response(self,request):
         """ returns the request hash and a compressed bam stream """
@@ -192,7 +198,8 @@ class dataServerProtocol(asyncio.Protocol):
             data_tuple = self.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
             data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
             self.update_cache(rh, data_stream)
-        self.transport.write(data_stream)
+        self.data_queue.put(data_stream)
+        #self.transport.write(data_stream)
 
     def request_prediction(self, request):
         for preq in self.make_predictions(request):
@@ -228,13 +235,21 @@ class responseMaker:  # TODO we probably move this to its own file?
         # yes, the size of the bam serialization is absolutely massive, easily 3x the size in memory
         # also if we send it already in tree form... so that the child node positions are just nested
         # it might be pretty quick to generate the collision nodes
-        n = 10000
+        n = 9999
         positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
         uuids = np.array(['%s'%uuid4() for _ in range(n)])
         bounds = np.ones(n) * .5
         example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
 
         data_tuple = (example_bam, example_coll, b'this is a UI data I swear')
+
+        #code for testing threading and sending stuff
+        #cnt = 9999999
+        #if request.request_type is 'prediction':
+            #data_tuple = [make_bytes(cnt) for _ in range(2)] + [b'THIS IS THE FIRST ONE']
+        #else:
+            #data_tuple = [make_bytes(cnt) for _ in range(2)] + [b'THIS IS THE SECOND ONE']
+
         return data_tuple
 
     def make_predictions(self, request):

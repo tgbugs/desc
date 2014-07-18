@@ -120,7 +120,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             arent cached
         """
         self.__block__ += data
-        print(id(self),'block length',len(self.__block__))
+        #print(id(self),'block length',len(self.__block__))
         if not self.__block_size__:
             if DataByteStream.OP_DATA not in self.__block__:
                 self.__block__ = b''
@@ -129,6 +129,9 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
                 self.__block_size__, self.__block_tuple__ = DataByteStream.decodeResponseHeader(self.__block__)
 
         if len(self.__block__) >= self.__block_size__:
+            #print('total size expecte', self.__block_size__)
+            #print('post split block',self.__block__[self.__block_size__:])
+            #embed()
             output = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
             print('yes we are trying to render stuff')
             self.event_loop.run_in_executor( None, lambda: self.set_nodes(*output) )
@@ -327,6 +330,7 @@ class renderManager:
         try:
             #bam, coll, ui = self.cache[request_hash]
             self.render(*self.cache[request_hash])
+            # FIXME we need to not attach the thing again...
             print('local cache hit')
         except KeyError:  # ValueError if a future is in there, maybe just use False?
             self.cache[request_hash] = False
@@ -370,6 +374,7 @@ class renderManager:
                 print(len(node_tuple))
                 self.render(*node_tuple)
         except KeyError:
+            print("predicted data view cached")
             self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
@@ -399,6 +404,7 @@ class renderManager:
         coll = pickle.loads(coll_data)
         # FIXME treeMe is SUPER slow... :/
         treeMe(node, *coll)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+        print('coll node successfully made')
         return node
 
     def makeUI(self, ui_data):
@@ -516,7 +522,12 @@ def main():
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()
-    run_for_time(clientLoop,1)
+    run_for_time(clientLoop,10)
+    print("testing prediction caching")
+    request2 = Request('prediction','who knows',(2,3,4),None)
+    rendMan.submit_request(request2)
+    rendMan.submit_request(request2)
+    run_for_time(clientLoop,4)
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)

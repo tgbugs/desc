@@ -42,6 +42,9 @@ class Request:  # testing only since this will need to be in its own module to k
 class DataByteStream:
     """ Named struct for defining fields of serialized byte streams """
 
+    #switch for local vs network behavior
+    LOCAL = False
+
     #opcodes
     STOP = b'..'  #FIXME this doesn't work for opcodes :(
     OP_TOKEN = b'.\x99'
@@ -91,11 +94,17 @@ class DataByteStream:
             cumsum+=len(d)
             offsets+=int.to_bytes(cumsum, cls.LEN_OFFSET, cls.BYTEORDER)
 
-        data = zlib.compress(b''.join(data_tuple))
+        if cls.LOCAL:
+            data = b''.join(data_tuple)
+        else:
+            data = zlib.compress(b''.join(data_tuple))
+
         data_size = int.to_bytes(len(data), cls.LEN_CDATA, cls.BYTEORDER)
         print('length data',len(data))
 
         print("response stream is being made")
+
+        print('compressed data tail',data[-100:])
 
         data_stream = cls.OP_DATA + request_hash + data_size + n_fields + offsets + data
         
@@ -173,8 +182,12 @@ class DataByteStream:
         print('header',bytes_[:-data_size])
 
         offblock = bytes_[-data_size - offLen:-data_size]
-        print('data length', len(bytes_[-data_size:]))
-        data = zlib.decompress(bytes_[-data_size:])  # this is gurantted to end because of the code in data_received XXX
+        print('compressed data length', len(bytes_[-data_size:]))
+        if cls.LOCAL:
+            data = bytes_[-data_size:]  # this is gurantted to end because of the code in data_received XXX
+        else:
+            data = zlib.decompress(bytes_[-data_size:])  # this is gurantted to end because of the code in data_received XXX
+
 
         offsets = [0] + [
             int.from_bytes(offblock[i:i + cls.LEN_OFFSET], cls.BYTEORDER)

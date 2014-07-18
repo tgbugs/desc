@@ -78,9 +78,9 @@ class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a
         token_start = data.find(DataByteStream.OP_TOKEN)  # FIXME sadly we'll probably need to deal with splits again
         #print('token?',data)
         if token_start != -1:
-            #token_start += DataByteStream.OPCODE_LEN
+            #token_start += DataByteStream.LEN_OPCODE
             print('__',self,'token_start',token_start,'__')
-            token_data = data[token_start:token_start+DataByteStream.OPCODE_LEN+DataByteStream.TOKEN_LEN]
+            token_data = data[token_start:token_start+DataByteStream.LEN_OPCODE+DataByteStream.LEN_TOKEN]
         if token_data:
             self.future_token.set_result(token_data)
             self.transport.write_eof()
@@ -120,6 +120,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             arent cached
         """
         self.__block__ += data
+        print(id(self),'block length',len(self.__block__))
         if not self.__block_size__:
             if DataByteStream.OP_DATA not in self.__block__:
                 self.__block__ = b''
@@ -127,14 +128,15 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             else:
                 self.__block_size__, self.__block_tuple__ = DataByteStream.decodeResponseHeader(self.__block__)
 
-        try:
-            DataByteStream.decodeDataStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+        if len(self.__block__) >= self.__block_size__:
+            output = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+            print('yes we are trying to render stuff')
+            self.event_loop.run_in_executor( None, lambda: self.set_nodes(*output) )
             self.__block__ = self.__block__[self.__block_size__:]
             self.__block_size__ = None
             self.__block_tuple__ = None
             self.data_received(b'')  # lots of little messages will bollox this
-        except IndexError:
-            return None
+
 
     def __data_received(self, data): #works with the split version (ie fails)
         self.__block__ += data
@@ -151,12 +153,12 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
         response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
         if response_start != -1:
-            response_start += DataByteStream.OPCODE_LEN
-            hash_start = response_start + DataByteStream.CACHE_LEN
-            bam_start = hash_start + DataByteStream.MD5_HASH_LEN
+            response_start += DataByteStream.LEN_OPCODE
+            hash_start = response_start + DataByteStream.LEN_CACHE
+            bam_start = hash_start + DataByteStream.LEN_MD5_HASH
             bam_stop = bam_start + data[bam_start:].find(DataByteStream.STOP)  # FIXME make sure the bam byte stream doesnt have this in there...
-        cache = int(data[response_start:response_start + DataByteStream.CACHE_LEN])
-        request_hash = data[hash_start:hash_start + DataByteStream.MD5_HASH_LEN]
+        cache = int(data[response_start:response_start + DataByteStream.LEN_CACHE])
+        request_hash = data[hash_start:hash_start + DataByteStream.LEN_MD5_HASH]
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
         #print('')
         #print('bam_data',bam_data)
@@ -222,7 +224,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             self.event_loop.run_in_executor( None, lambda: self.set_nodes(request_hash, data_tuple) )
             # XXX FIXME panda *should* be ok with this, hopefully this gets around the gil or we have problems
 
-    def set_nodes(self, request_hash, node_tuple):
+    def set_nodes(self, request_hash, data_tuple):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
     def render_set_send_request(self, send_request:'function'):
@@ -372,7 +374,8 @@ class renderManager:
 
     def render(self, bam, coll, ui):
         self.bamNode.attachNewNode(bam)
-        self.collNode.attachNewNode(coll)
+        #self.collNode.attachNewNode(coll)
+        coll.reparentTo(self.collNode)
         self.uiNode.attachNewNode(ui)
         print(self.uiNode.getChildren())
 
@@ -388,7 +391,7 @@ class renderManager:
     def makeBam(self, bam_data):
         """ this is for Geoms or GeomNodes """
         node = GeomNode('')  # use attach new node...
-        node.decodeFromBamStream(bam)  # apparently the thing I'm encoding is a node for test purposes... may need something
+        node.decodeFromBamStream(bam_data)  # apparently the thing I'm encoding is a node for test purposes... may need something
         return node
 
     def makeColl(self, coll_data):
@@ -513,7 +516,7 @@ def main():
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()
-    run_for_time(clientLoop,10)
+    run_for_time(clientLoop,1)
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)

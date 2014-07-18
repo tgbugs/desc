@@ -49,10 +49,10 @@ class DataByteStream:
     OP_DATA = b'.\x98'
 
     #shared filed lengths
-    OPCODE_LEN = 2
+    LEN_OPCODE = 2
 
     #token stream
-    TOKEN_LEN = 256
+    LEN_TOKEN = 256
 
     #request stream
     #pickle codes
@@ -62,18 +62,18 @@ class DataByteStream:
 
     #request response data stream
     BYTEORDER = 'little'  # this is NOT readable as a number, need big for that
-    HASH_LEN = 16
-    CDATA_LEN = 4
-    FIELDS_LEN = 1
-    OFFSET_LEN = 4
-    HEADER_FIXED_LEN = OPCODE_LEN + HASH_LEN + CDATA_LEN + FIELDS_LEN
+    LEN_HASH = 16
+    LEN_CDATA = 4
+    LEN_FIELDS = 1
+    LEN_OFFSET = 4
+    LEN_HEADER_FIXED = LEN_OPCODE + LEN_HASH + LEN_CDATA + LEN_FIELDS
     #FIELDS_TYPE = 'B'  # this gives an 8bit unsigned int
     #OFFSET_TYPE = 'I'  # this gives a 32bit unsigned int
 
     @classmethod
     def makeTokenStream(cls, token):
-        if len(token) != cls.TOKEN_LEN:
-            raise ValueError('Wrong token length! You have %s you need %s'%(len(token), cls.TOKEN_LEN))
+        if len(token) != cls.LEN_TOKEN:
+            raise ValueError('Wrong token length! You have %s you need %s'%(len(token), cls.LEN_TOKEN))
         return cls.OP_TOKEN + token  # no stop needed here
 
     @classmethod
@@ -83,30 +83,31 @@ class DataByteStream:
     @classmethod
     def makeResponseStream(cls, request_hash, data_tuple):
         # headers have fixed length so no opcode is needed between the header and the first data block
-        n_fields = int.to_bytes(len(data_tuple) - 1, cls.FIELDS_LEN, cls.BYTEORDER)  # this is actually N offsets.... fix?
+        n_fields = int.to_bytes(len(data_tuple) - 1, cls.LEN_FIELDS, cls.BYTEORDER)  # this is actually N offsets.... fix?
 
         cumsum = 0
         offsets = b''
         for d in data_tuple[:-1]:
             cumsum+=len(d)
-            offsets+=int.to_bytes(cumsum, cls.OFFSET_LEN, cls.BYTEORDER)
+            offsets+=int.to_bytes(cumsum, cls.LEN_OFFSET, cls.BYTEORDER)
 
         data = zlib.compress(b''.join(data_tuple))
-        data_size = int.to_bytes(len(data), cls.CDATA_LEN, cls.BYTEORDER)
+        data_size = int.to_bytes(len(data), cls.LEN_CDATA, cls.BYTEORDER)
+        print('length data',len(data))
 
         print("response stream is being made")
 
         data_stream = cls.OP_DATA + request_hash + data_size + n_fields + offsets + data
         
-        linewidth = 30
-        block = ''.join([hex(c)[2:].ljust(3) for c in data_stream])
+        #linewidth = 30
+        #block = ''.join([hex(c)[2:].ljust(3) for c in data_stream])
         #block = block.replace('0x',' ')
-        lims = zip(range(0,len(block)-linewidth,linewidth),range(linewidth,len(block),linewidth))
-        lines = '\n'.join([block[start:stop] for start,stop in lims])
-        with open('badbam', 'wt') as f:
-            f.write(''.join([str(i).ljust(3) for i in range(10)])+'\n')
-            f.write(lines)
-            f.write('\n\n')
+        #lims = zip(range(0,len(block)-linewidth,linewidth),range(linewidth,len(block),linewidth))
+        #lines = '\n'.join([block[start:stop] for start,stop in lims])
+        #with open('badbam', 'wt') as f:
+            #f.write(''.join([str(i).ljust(3) for i in range(10)])+'\n')
+            #f.write(lines)
+            #f.write('\n\n')
 
         return data_stream
 
@@ -114,9 +115,9 @@ class DataByteStream:
     def decodeToken(cls, stream):
         start = stream.find(cls.OP_TOKEN)
         if start != -1:
-            start += cls.OPCODE_LEN
+            start += cls.LEN_OPCODE
             try:
-                return stream[start:start + cls.TOKEN_LEN]
+                return stream[start:start + cls.LEN_TOKEN]
             except IndexError:
                 raise IndexError('This token is not long enough!')
 
@@ -144,39 +145,40 @@ class DataByteStream:
                 yield None  # we cannot raise here because we won't evaluate the rest of the loop
 
     @classmethod
-    def decodeReponseHeader(cls, bytes_):
+    def decodeResponseHeader(cls, bytes_):
         headerStart = 0
-        if bytes_[headerStart:headerStart + cls.OPCODE_LEN] != cls.OP_DATA:
+        if bytes_[headerStart:headerStart + cls.LEN_OPCODE] != cls.OP_DATA:
             headerStart = bytes_.find(cls.OP_DATA)
 
-        if len(bytes_[headerStart:]) < cls.HEADER_FIXED_LEN:
+        if len(bytes_[headerStart:]) < cls.LEN_HEADER_FIXED:
             return None
 
-        dataSizeStart = headerStart + cls.OPCODE_LEN + cls.HASH_LEN
-        fieldStart = dataSizeStart + cls.CDATA_LEN
+        dataSizeStart = headerStart + cls.LEN_OPCODE + cls.LEN_HASH
+        fieldStart = dataSizeStart + cls.LEN_CDATA
 
-        n_fields = int.from_bytes(bytes_[fieldStart:fieldStart + cls.FIELDS_LEN], cls.BYTEORDER)
-        data_size = int.from_bytes(bytes_[dsStart:dsStart + cls.CDATA_LEN], cls.BYTEORDER)
-        offLen = n_fields * cls.OFFSET_LEN 
+        n_fields = int.from_bytes(bytes_[fieldStart:fieldStart + cls.LEN_FIELDS], cls.BYTEORDER)
+        data_size = int.from_bytes(bytes_[dataSizeStart:dataSizeStart + cls.LEN_CDATA], cls.BYTEORDER)
+        offLen = n_fields * cls.LEN_OFFSET 
 
-        total_size = fieldStart + cls.FIELDS_LEN + offLen + data_size
+        total_size = fieldStart + cls.LEN_FIELDS + offLen + data_size
 
         return total_size, (offLen, data_size)
 
 
     @classmethod
     def decodeResponseStream(cls, bytes_, offLen, data_size):
-        hashStart = -data_size - off_len - cls.HEADER_FIXEX_LEN + cls.OPCODE_LEN
-        request_hash = bytes_[hashStart:hashStart + cls.HASH_LEN]
+        hashStart = -data_size - offLen - cls.LEN_HEADER_FIXED + cls.LEN_OPCODE
+        request_hash = bytes_[hashStart:hashStart + cls.LEN_HASH]
 
         print('header',bytes_[:-data_size])
 
         offblock = bytes_[-data_size - offLen:-data_size]
+        print('data length', len(bytes_[-data_size:]))
         data = zlib.decompress(bytes_[-data_size:])  # this is gurantted to end because of the code in data_received XXX
 
         offsets = [0] + [
-            int.from_bytes(offblock[i:i + cls.OFFSET_LEN], cls.BYTEORDER)
-            for i in range(0, offLen, cls.OFFSET_LEN)] + [None]
+            int.from_bytes(offblock[i:i + cls.LEN_OFFSET], cls.BYTEORDER)
+            for i in range(0, offLen, cls.LEN_OFFSET)] + [None]
 
         offslice = zip(offsets[:-1],offsets[1:])
         data_tuple = tuple([ data[start:stop] for start, stop in offslice ])
@@ -186,24 +188,24 @@ class DataByteStream:
 
 
     @classmethod
-    def decodeResponseStreams(cls, split):
+    def decodeResponseStreams(cls, split):  # XXX deprecated
         for bytes_ in split:
             dataStart = 0
-            if bytes_[dataStart:dataStart + cls.OPCODE_LEN] != cls.OP_DATA:
+            if bytes_[dataStart:dataStart + cls.LEN_OPCODE] != cls.OP_DATA:
                 dataStart = bytes_.find(cls.OP_DATA)
                 if dataStart is -1:
                     yield None, None
             
-            hashStart = dataStart + cls.OPCODE_LEN
-            fieldStart = hashStart + cls.HASH_LEN
-            dsStart = fieldStart + cls.CDATA_LEN
-            offStart = dsStart + cls.FIELDS_LEN
+            hashStart = dataStart + cls.LEN_OPCODE
+            fieldStart = hashStart + cls.LEN_HASH
+            dsStart = fieldStart + cls.LEN_CDATA
+            offStart = dsStart + cls.LEN_FIELDS
 
-            request_hash = bytes_[hashStart:hashStart + cls.HASH_LEN]
-            data_size = bytes_[dsStart:dsStart + cls.CDATA_LEN]
-            n_fields = int.from_bytes(bytes_[fieldStart:fieldStart + cls.FIELDS_LEN], cls.BYTEORDER)
+            request_hash = bytes_[hashStart:hashStart + cls.LEN_HASH]
+            data_size = bytes_[dsStart:dsStart + cls.LEN_CDATA]
+            n_fields = int.from_bytes(bytes_[fieldStart:fieldStart + cls.LEN_FIELDS], cls.BYTEORDER)
 
-            offLen = cls.OFFSET_LEN * n_fields
+            offLen = cls.LEN_OFFSET * n_fields
             compressStart = offStart + offLen
             print('header',bytes_[:compressStart])
 
@@ -211,8 +213,8 @@ class DataByteStream:
             data = zlib.decompress(bytes_[compressStart:])
 
             offsets = [0] + \
-                list(cumsum([int.from_bytes(offblock[cls.OFFSET_LEN * i :
-                                                     cls.OFFSET_LEN * (i + 1)],
+                list(cumsum([int.from_bytes(offblock[cls.LEN_OFFSET * i :
+                                                     cls.LEN_OFFSET * (i + 1)],
                                             cls.BYTEORDER)
                             for i in range(n_fields)])) + [None]
 

@@ -81,7 +81,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
         print(self.pprefix,data)
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
-            token = make_bytes(DataByteStream.TOKEN_LEN)
+            token = make_bytes(DataByteStream.LEN_TOKEN)
             token_stream = DataByteStream.makeTokenStream(token)
             self.update_ip_token_pair(self.ip, token)
             self.open_data_firewall(self.ip)

@@ -5,6 +5,7 @@ import random
 import pickle
 #import zlib
 import ssl
+import os
 from collections import deque
 from time import sleep
 from threading import Lock
@@ -12,10 +13,11 @@ from threading import Lock
 from IPython import embed
 from numpy.random import rand
 
-from panda3d.core import GeomNode
+from panda3d.core import GeomNode, CollisionNode, NodePath, PandaNode
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import Request, DataByteStream
+from dataIO import treeMe
 
 
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
@@ -59,7 +61,7 @@ class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a
     """ this is going to be done with fixed byte sizes known small headers """
     def __new__(cls, *args, **kwargs:'for create_connection'):
         """ evil and unpythonic, this no longer behaves like a class """
-        cls.event_loop = asyncio.get_event_loop()  # FIXME make this work even if running?
+        cls.event_loop = asyncio.get_event_loop()  # FIXME make this work even if running? we probably only need to call this the first time we make a new class, it will persist thereafter
         future = asyncio.Future()
         instance = super().__new__(cls)
         instance.future_token = future
@@ -107,6 +109,8 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         self.transport = transport
         self.render_set_send_request(self.send_request)
         self.__block__ = b''
+        self.__block_size__ = None
+        self.__block_tuple__ = None
 
     def data_received(self, data):
         """ receive bam files that come back on request
@@ -116,9 +120,27 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             arent cached
         """
         self.__block__ += data
+        if not self.__block_size__:
+            if DataByteStream.OP_DATA not in self.__block__:
+                self.__block__ = b''
+                return None
+            else:
+                self.__block_size__, self.__block_tuple__ = DataByteStream.decodeResponseHeader(self.__block__)
+
+        try:
+            DataByteStream.decodeDataStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+            self.__block__ = self.__block__[self.__block_size__:]
+            self.__block_size__ = None
+            self.__block_tuple__ = None
+            self.data_received(b'')  # lots of little messages will bollox this
+        except IndexError:
+            return None
+
+    def __data_received(self, data): #works with the split version (ie fails)
+        self.__block__ += data
         split = self.__block__.split(DataByteStream.STOP)
         if len(split) is 1:  # no stops
-            if OP_DATA not in self.__block__:  # no ops
+            if DataByteStream.OP_DATA not in self.__block__:  # no ops
                 self.__block__ = b''
         else:
             self.__block__ = split.pop()
@@ -270,15 +292,6 @@ class bamCacheManager:
         #newNode.addGeom(geom)
         self.rootNode.attachNewNode(newNode)
 
-def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data):  # TODO yes we do need this between dataProtocol and renderManager...
-    """ fire and forget """
-    bam = makeBam(bam_data)  #needs to return a node
-    coll = makeColl(coll_data)  #needs to return a node
-    ui = makeUI(ui_data)  #needs to return a node (or something)
-    if cache:
-        rcMan.update_cache(request_hash, (bam, coll, ui))
-    else:
-        rcman.render(bam, coll, ui)
 
 class renderManager:
     """ a class to manage, bam, coll, and ui (and more?) incoming data
@@ -344,9 +357,10 @@ class renderManager:
         #except KeyError:
             #pass
 
-    def set_nodes(self, request_hash, node_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
+    def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
         """ this is the callback used by the data protocol """
         print('cache updated')
+        node_tuple = self.make_nodes(request_hash, data_tuple)
         try:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:
@@ -360,7 +374,36 @@ class renderManager:
         self.bamNode.attachNewNode(bam)
         self.collNode.attachNewNode(coll)
         self.uiNode.attachNewNode(ui)
+        print(self.uiNode.getChildren())
 
+    def make_nodes(self, request_hash, data_tuple):
+        """ fire and forget """
+        bam = self.makeBam(data_tuple[0])  #needs to return a node
+        coll = self.makeColl(data_tuple[1])  #needs to return a node
+        ui = self.makeUI(data_tuple[2])  #needs to return a node (or something)
+        node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
+        [n.setName(request_hash) for n in node_tuple]
+        return node_tuple
+
+    def makeBam(self, bam_data):
+        """ this is for Geoms or GeomNodes """
+        node = GeomNode('')  # use attach new node...
+        node.decodeFromBamStream(bam)  # apparently the thing I'm encoding is a node for test purposes... may need something
+        return node
+
+    def makeColl(self, coll_data):
+        node = NodePath(PandaNode(''))  # use reparent to?
+        coll = pickle.loads(coll_data)
+        # FIXME treeMe is SUPER slow... :/
+        treeMe(node, *coll)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+        return node
+
+    def makeUI(self, ui_data):
+        """ we may not need this if we stick all the UI data in geom or coll nodes? """
+        # yeah, because the 'properties' the we select on will be set based on which node
+            # is selected
+        node = NodePath(PandaNode(''))  # use reparent to?
+        return node
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -391,19 +434,20 @@ def main():
 
         
     #here we demonstrate how to get a buttload of tokens >_<
-    cf = [newConnectionProtocol('127.0.0.1', CONNECTION_PORT) for _ in range(10)]
-    prots = [clientLoop.run_until_complete(c)[1] for c, _ in cf]
+    #cf = [newConnectionProtocol('127.0.0.1', CONNECTION_PORT) for _ in range(10)]
+    #prots = [clientLoop.run_until_complete(c)[1] for c, _ in cf]
     #coros_ = [clientLoop.run_until_complete(p.get_data_token()) for p in prots]  # this works too
-    coros_ = [p.get_data_token() for p in prots]
-    [clientLoop.run_until_complete(f) for f in coros_]
-    tokens = [f.result() for _, f in cf]
-    print('LOOK AT THEM WE\'RE RICH!',tokens)
+    #coros_ = [p.get_data_token() for p in prots]
+    #[clientLoop.run_until_complete(f) for f in coros_]
+    #tokens = [f.result() for _, f in cf]
+    #print('LOOK AT THEM WE\'RE RICH!',tokens)
 
     class FakeNode:
         def attachNewNode(self, node):
             print('pretend like this print statement actually causes things to render',node)
 
-    rootNode = FakeNode()
+    #rootNode = FakeNode()
+    rootNode = NodePath(PandaNode('testRoot'))
 
     rendMan = renderManager(*[rootNode]*3)  # in theory we can have multiple connections for a single render manager if we have disconnects
     # if fact renderMan might even spin up its own connections! so render before connection is correct
@@ -469,7 +513,7 @@ def main():
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()
-    run_for_time(clientLoop,1)
+    run_for_time(clientLoop,10)
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)

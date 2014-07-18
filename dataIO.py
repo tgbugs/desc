@@ -20,17 +20,6 @@ from defaults import *
 
 #XXX use CollisionTube for rectangular stuff, its not perfect (corners) but it is better than the alternative
 
-class requestDispatcher(object):
-    """
-        The local half the the request system, manages the connection to the request manager
-    """
-    def __init__(self,port):
-
-    def __get_m
-
-    def dispatch(self,request):
-
-
 def buildRequest(selected_uuids, selected_properties):
     """ Build and dispatch a request and return a future 
         indicating that we expect to receive a compiled set

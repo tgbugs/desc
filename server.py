@@ -3,11 +3,12 @@
 import asyncio
 import pickle
 import ssl
-#import zlib
 import os  # for dealing with firewall stuff
+from uuid import uuid4
 from collections import defaultdict, deque
 from time import sleep
 
+import numpy as np
 from numpy.random import bytes as make_bytes
 from IPython import embed
 
@@ -17,30 +18,6 @@ from request import Request, DataByteStream
 from massive_bam import massive_bam as example_bam
 
 #TODO logging...
-
-class requestManager(object):
-    """ Server side class that listens for requests to render data to bam
-        Should cooperate with another predictive class that generates related
-        requests.
-
-        This is the main code to handle all incomming request for a *single* session
-        it itself can dispatch to multiple workers but there should only be one entry
-        and one exit for a session, every new session gets its own instance of this?
-
-        Yes, yes I know, http handles a lot of this stuff already, but we don't really
-        need all those features.
-    """
-    def __init__(self,port):
-        """ Set up to listen for requests for data from the render client.
-            These requests will then spawn processes that retrieve and
-            render the data and related data the user might want to view.
-        """
-        pass
-    def listenForRequest(self):
-        pass
-    def handleRequest(self):
-        pass
-
 class connectionServerProtocol(asyncio.Protocol):  # this is really the auth server protocol
     """ Define the protocol for handling basic connections
         should spin up client specific connections?
@@ -202,46 +179,27 @@ class dataServerProtocol(asyncio.Protocol):
 
     def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         print(self.pprefix,'processing requests')
-        def do_request(request):
-            rh, bam_data = self.get_bam(request)
-            coll_data = b'this is collision data'
-            ui_data = b'this is ui data'
-            data_tuple = (bam_data, coll_data, ui_data)
-            #sleep(1)
-            data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-            self.transport.write(data_stream)
-
         for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
-                self.event_loop.run_in_executor( None, lambda: do_request(request) )  # FIXME error handling live?
+                self.event_loop.run_in_executor( None, lambda: self.send_response(request) )  # FIXME error handling live?
                 self.event_loop.run_in_executor( None, lambda: self.request_prediction(request) )
 
-    def get_bam(self,request):
+    def send_response(self,request):
         """ returns the request hash and a compressed bam stream """
-        print('th',request.hash_,'rh',hash(request))
         rh =  request.hash_
-        print(rh)
-        bam = self.get_cache(rh)
-        if bam is None:
-            bam = self.make_bam(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
-            self.update_cache(rh, bam)
-        return rh, bam
+        data_stream = self.get_cache(rh)
+        if data_stream is None:  # FIXME if we KNOW we are going to gz stuff we should do it early...
+            data_tuple = self.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
+            data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+            self.update_cache(rh, data_stream)
+        self.transport.write(data_stream)
 
     def request_prediction(self, request):
-        #should compute a set of n related requests, and send their hash + bam to the client and to the local cache
         for preq in self.make_predictions(request):
-            rh, bam_data = self.get_bam(preq)
-            coll_data = b'this is collision data'
-            ui_data = b'this is ui data'
-            data_tuple = (bam_data, coll_data, ui_data)
-            data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-            self.transport.write(data_stream)
-            #yield None
-        #return
-        #yield
+            self.send_response(preq)
 
     #things that go to the database
-    def make_bam(self, request):
+    def make_response(self, request):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
     def make_predictions(self, request):
@@ -251,7 +209,7 @@ class dataServerProtocol(asyncio.Protocol):
     def get_cache(self, request_hash):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
-    def update_cache(self, request_hash, bam_data):
+    def update_cache(self, request_hash, data_stream):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
     def get_tokens_for_ip(self, ip):
@@ -260,17 +218,25 @@ class dataServerProtocol(asyncio.Protocol):
     def remove_token_for_ip(self, ip, token):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
 
-class bamManager:  # TODO we probably move this to its own file?
+class responseMaker:  # TODO we probably move this to its own file?
     def __init__(self):
         #setup at connection to whatever database we are going to use
         pass
-    def make_bam(self, request):
+    def make_response(self, request):
         # TODO so encoding the collision nodes to a bam takes a REALLY LONG TIME
         # it seems like it might be more prudent to serialize to (x,y,z,radius) or maybe a type code?
         # yes, the size of the bam serialization is absolutely massive, easily 3x the size in memory
         # also if we send it already in tree form... so that the child node positions are just nested
         # it might be pretty quick to generate the collision nodes
-        return example_bam
+        n = 10000
+        positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
+        uuids = np.array(['%s'%uuid4() for _ in range(n)])
+        bounds = np.ones(n) * .5
+        example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
+
+        data_tuple = (example_bam, example_coll, b'this is a UI data I swear')
+        return data_tuple
+
     def make_predictions(self, request):
         #TODO this is actually VERY easy, because all we need to do is use
             #the list of connected UI elements that we SEND OUT ANYWAY and
@@ -289,27 +255,23 @@ class requestCacheManager:
         self.cache = {}
         self.cache_age = deque()  # this is a nasty hack, probably need a real tree here at some point
 
-    def check_cache(self, request_hash):  # XXX not used
-        try:
-            self.cach[request_hash]
-            return True
-        except KeyError:
-            return False
-
     def get_cache(self, request_hash):
         try:
-            bam = self.cache[request_hash]
+            data_stream = self.cache[request_hash]
             self.cache_age.remove(request_hash)
             self.cache_age.append(request_hash)  # basically ranks cache by access frequency
-            return bam
+            print('server cache hit')
+            return data_stream
         except KeyError:
+            print('server cache miss')
             return None
 
-    def update_cache(self, request_hash, bam_data):  # TODO only call this if 
-        self.cache[request_hash] = bam_data
+    def update_cache(self, request_hash, data_stream):  # TODO only call this if 
+        self.cache[request_hash] = data_stream
         self.cache_age.append(request_hash)
         while len(self.cache_age) > self.cache_limit:
             self.cache.pop(self.cache_age.popleft())
+        #print('server cache updated with', request_hash, data_stream)
 
 
 class tokenManager:  # TODO this thing could be its own protocol and run as a shared state server using lambda: instance
@@ -344,7 +306,7 @@ def main():
 
     #shared state, in theory this stuff could become its own Protocol
     rcm = requestCacheManager(9999)
-    bm = bamManager()
+    respMaker = responseMaker()
     # FIXME here we cannot remove references to these methods from instances
         # because they are defined at the class level and not passed in at
         # run time. We MAY be able to fix this by using a metaclass that
@@ -355,8 +317,8 @@ def main():
                     'remove_token_for_ip':tm.remove_token_for_ip,
                     'get_cache':rcm.get_cache,
                     'update_cache':rcm.update_cache,
-                    'make_bam':bm.make_bam,
-                    'make_predictions':bm.make_predictions,
+                    'make_response':respMaker.make_response,
+                    'make_predictions':respMaker.make_predictions,
                     'event_loop':serverLoop })
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl

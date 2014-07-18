@@ -390,7 +390,8 @@ class renderManager:
         coll = self.makeColl(data_tuple[1])  #needs to return a node
         ui = self.makeUI(data_tuple[2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
-        [n.setName(request_hash) for n in node_tuple]
+        [n.setName(request_hash) for n in node_tuple]  # FIXME python3 unicde and bytes >_< GARARARARAR
+        embed()
         return node_tuple
 
     def makeBam(self, bam_data):
@@ -411,7 +412,7 @@ class renderManager:
         """ we may not need this if we stick all the UI data in geom or coll nodes? """
         # yeah, because the 'properties' the we select on will be set based on which node
             # is selected
-        node = NodePath(PandaNode(''))  # use reparent to?
+        node = PandaNode('')  # use reparent to?
         return node
 
 def main():

@@ -382,7 +382,7 @@ class renderManager:
         #self.collNode.attachNewNode(coll)
         coll.reparentTo(self.collNode)
         self.uiNode.attachNewNode(ui)
-        print(self.uiNode.getChildren())
+        #print(self.uiNode.getChildren())  # utf-8 errors
 
     def make_nodes(self, request_hash, data_tuple):
         """ fire and forget """
@@ -391,7 +391,6 @@ class renderManager:
         ui = self.makeUI(data_tuple[2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
         [n.setName(request_hash) for n in node_tuple]  # FIXME python3 unicde and bytes >_< GARARARARAR
-        embed()
         return node_tuple
 
     def makeBam(self, bam_data):
@@ -523,12 +522,13 @@ def main():
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()
-    run_for_time(clientLoop,10)
+    run_for_time(clientLoop,4)
     print("testing prediction caching")
     request2 = Request('prediction','who knows',(2,3,4),None)
     rendMan.submit_request(request2)
     rendMan.submit_request(request2)
     run_for_time(clientLoop,4)
+    embed()
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)

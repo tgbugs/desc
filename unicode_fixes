@@ -1,3 +1,19 @@
+# most of these errors are actually thrown by 
+#PyUnicode_DecodeUTF8Stateful in ./Objects/unicodeobject.c
+#not sure if there is any way to use try/catch in the c code to handle this
+#but maybe there is
+
+#recall that the alternative here is to just naievely use bytes and see how it goes
+
+#TODO PyUnicode_Check is our solution!
+
+#./Include/object.h:508:PyAPI_FUNC(void) _PyObject_Dump(PyObject *);
+#./Include/object.h:510:PyAPI_FUNC(PyObject *) PyObject_Repr(PyObject *);
+#./Include/object.h:511:PyAPI_FUNC(PyObject *) PyObject_Str(PyObject *);
+#./Include/object.h:512:PyAPI_FUNC(PyObject *) PyObject_ASCII(PyObject *);
+#./Include/object.h:513:PyAPI_FUNC(PyObject *) PyObject_Bytes(PyObject *);
+
+
 # we have not addressed the other half of the issue which is the ability to put bad data in, sadly can't just return bytes for everything like in past
 # should probably look for #if PY_MAJOR_VERSION >= 3
 # = this usage gets a value FROM python so is not an issue
@@ -114,7 +130,10 @@
 #./panda/src/event/pythonTask.cxx:426:  PythonTask::do_python_task #might be ok? pulls from PyObject_ASCII should be fine
 #./panda/src/event/pythonTask.cxx:518:  PythonTask::do_python_task #might be ok? pulls from PyObject_ASCII should be fine
 #./panda/src/event/pythonTask.cxx:646:  PythonTask::call_owner_method #might be ok? pulls from PyObject_ASCII should be fine
-./panda/src/pgraph/pandaNode_ext.cxx:223:  Extension<PandaNode>::get_tag_keys  #oh yeah this is going to be an issue if I use b'' keys
-./panda/src/pgraph/pandaNode_ext.cxx:248:  Extension<PandaNode>::get_python_tag_keys #oh yeah problems inbound
+
+
+#for these two the Python type rule is ONLY that the key be a hashable type and the panda implementation also requires it be bufferable
+./panda/src/pgraph/pandaNode_ext.cxx:223:  Extension<PandaNode>::get_tag_keys  #BROKEN: pass in b'\x80' as a key to set_tag
+./panda/src/pgraph/pandaNode_ext.cxx:248:  Extension<PandaNode>::get_python_tag_keys #BROKEN: pass in b'\x80' as a key to set_python_tag
 
 gvim ./direct/src/dcparser/dcClass.cxx ./direct/src/dcparser/dcField.cxx ./direct/src/dcparser/dcPacker.cxx ./direct/src/distributed/cConnectionRepository.cxx ./direct/src/plugin/p3dPythonRun.cxx ./dtool/metalibs/dtoolconfig/pydtool.cxx ./dtool/src/dtoolutil/executionEnvironment.cxx ./dtool/src/dtoolutil/filename.cxx ./dtool/src/dtoolutil/globPattern.cxx ./dtool/src/interrogate/interfaceMakerPythonNative.cxx ./dtool/src/interrogate/interfaceMakerPythonObj.cxx ./dtool/src/interrogate/interfaceMakerPythonSimple.cxx ./dtool/src/interrogatedb/py_panda.cxx ./dtool/src/pystub/pystub.cxx ./panda/src/event/pythonTask.cxx ./panda/src/pgraph/pandaNode_ext.cxx 

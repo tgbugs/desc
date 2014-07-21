@@ -195,7 +195,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         self.accept('mouse1',self.gotClick)
         self.accept('shift-mouse1',self.gotClick)
         self.accept('mouse1-up',self.gotRelease)
-        self.accept("escape", sys.exit)
+        #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
 

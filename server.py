@@ -14,9 +14,11 @@ from numpy.random import bytes as make_bytes
 from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import Request, DataByteStream
+from request import Request, DataByteStream, FAKE_PREDICT
 
-from massive_bam import massive_bam as example_bam
+#from massive_bam import massive_bam as example_bam
+from small_bam import small_bam as example_bam
+
 
 #TODO logging...
 class connectionServerProtocol(asyncio.Protocol):  # this is really the auth server protocol
@@ -256,7 +258,7 @@ class responseMaker:  # TODO we probably move this to its own file?
         #TODO this is actually VERY easy, because all we need to do is use
             #the list of connected UI elements that we SEND OUT ANYWAY and
             #just prospectively load those models/views
-        request = Request('prediction','who knows',(2,3,4),None)
+        request = FAKE_PREDICT
         yield request  # XXX NOTE: yielding the request itself causes a second copy to be sent
 
 class requestCacheManager:

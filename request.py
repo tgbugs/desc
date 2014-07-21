@@ -237,6 +237,8 @@ class DataByteStream:
             yield request_hash, data_tuple
 
 
+FAKE_REQUEST = Request('test.','test',(1,2,3),None)
+FAKE_PREDICT = Request('prediction','who knows',(2,3,4),None)
 
 def main():
     from enum import Enum

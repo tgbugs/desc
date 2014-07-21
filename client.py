@@ -14,9 +14,11 @@ from IPython import embed
 from numpy.random import rand
 
 from panda3d.core import GeomNode, CollisionNode, NodePath, PandaNode
+from direct.showbase.DirectObject import DirectObject
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import Request, DataByteStream
+from request import FAKE_REQUEST, FAKE_PREDICT
 from dataIO import treeMe
 
 
@@ -29,7 +31,7 @@ def become_future(function):
     @asyncio.coroutine
     def wrapped(*args, **kwargs):
         future = asyncio.Future()
-        yield future
+        yield from future
         future.set_result(function(*args, **kwargs))
     return wrapped
 
@@ -37,7 +39,7 @@ def become_future(function):
 def run_future(function, *args, **kwargs):
     """ Run a function in a future """
     future = asyncio.Future()
-    yield future
+    yield from future
     future.set_result(function(*args,**kwargs))
 
 
@@ -45,7 +47,7 @@ def run_future(function, *args, **kwargs):
 def run_panda():
     """ make panda work with the event loop? I'm expecting bugs here... """
     future = asyncio.Future()
-    yield future
+    yield from future
     run()
     future.set_result(True)
 
@@ -298,7 +300,7 @@ class bamCacheManager:
         self.rootNode.attachNewNode(newNode)
 
 
-class renderManager:
+class renderManager(DirectObject):
     """ a class to manage, bam, coll, and ui (and more?) incoming data
         all of those streams should be decompressed and reconstructed before
         showing up here so that there are just two or three nodes that can be
@@ -319,8 +321,11 @@ class renderManager:
 
         self.checkLock = Lock()  # TODO see if we need this
 
+        self.accept('r',self.fake_request)
+        self.accept('p',self.fake_predict)
+
     def set_send_request(self, send_request:'function *args = (request,)'):
-        self.send_request = send_request
+        self.__send_request__ = send_request
 
     def submit_request(self, request):  # FIXME 
         """ this should only be called after failing a search for hidden nodes
@@ -335,7 +340,7 @@ class renderManager:
         except KeyError:  # ValueError if a future is in there, maybe just use False?
             self.cache[request_hash] = False
             #self.cache[request_hash] = False
-            self.send_request(request)
+            self.__send_request__(request)
             print('local cache miss')
         except TypeError:  # TypeError will catch incorrect lenght on the input
             print('the request has been sent, if it is still wanted when it gets here we will render it')
@@ -378,11 +383,12 @@ class renderManager:
             self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
-        self.bamNode.attachNewNode(bam)
+        #self.bamNode.attachNewNode(bam)
+        bam.reparentTo(self.bamNode)
         #self.collNode.attachNewNode(coll)
         coll.reparentTo(self.collNode)
         self.uiNode.attachNewNode(ui)
-        #print(self.uiNode.getChildren())  # utf-8 errors
+        print(self.uiNode.getChildren())  # utf-8 errors
 
     def make_nodes(self, request_hash, data_tuple):
         """ fire and forget """
@@ -390,14 +396,15 @@ class renderManager:
         coll = self.makeColl(data_tuple[1])  #needs to return a node
         ui = self.makeUI(data_tuple[2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
-        [n.setName(request_hash) for n in node_tuple]  # FIXME python3 unicde and bytes >_< GARARARARAR
+        [n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
         return node_tuple
 
     def makeBam(self, bam_data):
         """ this is for Geoms or GeomNodes """
-        node = GeomNode('')  # use attach new node...
-        node.decodeFromBamStream(bam_data)  # apparently the thing I'm encoding is a node for test purposes... may need something
-        return node
+        node = NodePath('')  # use attach new node...
+        out = node.decodeFromBamStream(bam_data)  # apparently the thing I'm encoding is a node for test purposes... may need something
+        #node.addGeom(out)
+        return out
 
     def makeColl(self, coll_data):
         node = NodePath(PandaNode(''))  # use reparent to?
@@ -413,6 +420,18 @@ class renderManager:
             # is selected
         node = PandaNode('')  # use reparent to?
         return node
+
+    def fake_request(self):
+        r = FAKE_REQUEST
+        self.submit_request(r)
+
+    def fake_predict(self):
+        r = FAKE_PREDICT
+        self.submit_request(r)
+
+    def __send_request__(self, request):
+        raise NotImplementedError('NEVER CALL THIS DIRECTLY. If you didnt, is'
+                                  ' your dataProtocol up?')
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -509,7 +528,7 @@ def main():
     #finally:
         #clientLoop.close()
     #request = Request('test..','test',(1,2,3),None)  # FIXME this breaks stop detection!
-    request = Request('test.','test',(1,2,3),None)
+    request = FAKE_REQUEST
     print('th',request.hash_,'rh',hash(request))
     rendMan.submit_request(request)
     rendMan.submit_request(request)
@@ -528,10 +547,72 @@ def main():
     rendMan.submit_request(request2)
     rendMan.submit_request(request2)
     run_for_time(clientLoop,4)
-    embed()
+    #embed()
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)
+
+def main():
+    # render setup
+    from direct.showbase.ShowBase import ShowBase
+    from panda3d.core import loadPrcFileData
+    from panda3d.core import PStatClient
+
+    from dragsel import BoxSel
+    from util import Utils, console, exit_cleanup
+    from ui import CameraControl, Axis3d, Grid3d
+
+    from threading import Thread
+
+    PStatClient.connect() #run pstats in console
+    loadPrcFileData('','view-frustum-cull 0')
+    base = ShowBase()
+
+    base.setBackgroundColor(0,0,0)
+    base.disableMouse()
+    ut = Utils()
+    grid = Grid3d()
+    axis = Axis3d()
+    cc = CameraControl()
+    con = console()
+
+    # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
+    geomRoot = render.attachNewNode('geomRoot')
+    collideRoot = render.attachNewNode('collideRoot')
+    uiRoot = render.attachNewNode('uiRoot')
+    textRoot = render.attachNewNode("textRoot")  #FIXME
+    bs = BoxSel(False)
+
+    rendMan = renderManager(geomRoot, collideRoot, uiRoot)
+
+    #asyncio and network setup
+    clientLoop = asyncio.get_event_loop()
+    coro_conClient, tokenFuture = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
+    conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
+    clientLoop.run_until_complete(conProtocol.get_data_token())
+
+    datCli_base = type('dataProtocol',(dataProtocol,),
+                  {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
+                   'render_set_send_request':rendMan.set_send_request,
+                   'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
+
+    datCli = datCli_base(tokenFuture.result())
+    coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)
+    transport, protocol = clientLoop.run_until_complete(coro_dataClient) # can this work with with?
+
+    #make sure we can exit
+    el = exit_cleanup(clientLoop)
+
+    #run it
+    asyncThread = Thread(target=clientLoop.run_forever)
+    asyncThread.start()
+    run()
+    print('out of run()')
+    clientLoop.close()
+    print('closed the client loop')
+    transport.write_eof()
+    print('sent eof')
+
 
 
 if __name__ == "__main__":

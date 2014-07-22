@@ -4,6 +4,8 @@ import sys
 import traceback
 import zlib
 
+from uuid import uuid4
+
 #from numpy import cumsum
 from IPython import embed
 
@@ -239,6 +241,7 @@ class DataByteStream:
 
 FAKE_REQUEST = Request('test.','test',(1,2,3),None)
 FAKE_PREDICT = Request('prediction','who knows',(2,3,4),None)
+RAND_REQUEST = lambda: Request('random','%s'%uuid4(),(0,0,0),None)
 
 def main():
     from enum import Enum

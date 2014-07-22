@@ -18,7 +18,7 @@ from direct.showbase.DirectObject import DirectObject
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import Request, DataByteStream
-from request import FAKE_REQUEST, FAKE_PREDICT
+from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 from dataIO import treeMe
 
 
@@ -323,6 +323,7 @@ class renderManager(DirectObject):
 
         self.accept('r',self.fake_request)
         self.accept('p',self.fake_predict)
+        self.accept('n',self.rand_request)
 
     def set_send_request(self, send_request:'function *args = (request,)'):
         self.__send_request__ = send_request
@@ -383,8 +384,8 @@ class renderManager(DirectObject):
             self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
-        #self.bamNode.attachNewNode(bam)
-        bam.reparentTo(self.bamNode)
+        self.bamNode.attachNewNode(bam)
+        #bam.reparentTo(self.bamNode)
         #self.collNode.attachNewNode(coll)
         coll.reparentTo(self.collNode)
         self.uiNode.attachNewNode(ui)
@@ -401,7 +402,7 @@ class renderManager(DirectObject):
 
     def makeBam(self, bam_data):
         """ this is for Geoms or GeomNodes """
-        node = NodePath('')  # use attach new node...
+        node = GeomNode('')  # use attach new node...
         out = node.decodeFromBamStream(bam_data)  # apparently the thing I'm encoding is a node for test purposes... may need something
         #node.addGeom(out)
         return out
@@ -427,6 +428,10 @@ class renderManager(DirectObject):
 
     def fake_predict(self):
         r = FAKE_PREDICT
+        self.submit_request(r)
+
+    def rand_request(self):
+        r = RAND_REQUEST()
         self.submit_request(r)
 
     def __send_request__(self, request):
@@ -612,7 +617,7 @@ def main():
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
     run()  # this MUST be called last because we use sys.exit() to terminate
-
+    print('yes this runs?')
 
 
 if __name__ == "__main__":

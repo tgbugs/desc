@@ -250,11 +250,10 @@ class responseMaker:  # TODO we probably move this to its own file?
         bounds = np.ones(n) * .5
         example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
         print('making example bam')
-        example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][0]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME for some reason this REALLY does not like being run in an executor
-        print('done making bam',example_bam)
+        example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
+        #print('done making bam',example_bam)  # XXX if you want this use repr() ffs
 
         data_tuple = (example_bam, example_coll, b'this is a UI data I swear')
-        embed()
 
         #code for testing threading and sending stuff
         #cnt = 9999999

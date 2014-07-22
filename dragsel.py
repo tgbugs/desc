@@ -293,7 +293,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
     def gotRelease(self):
         #self.__mouseDown__ = False
         if taskMgr.hasTaskNamed('boxTask'):
-            #self.__baseBox__.hide()
+            self.__baseBox__.hide()
             #if abs(self.__baseBox__.getScale()[0]) > .005:
             if abs(self.__baseBox__.getScale()[0]) > .0001:
                 self.getEnclosedNodes()

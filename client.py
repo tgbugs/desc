@@ -61,14 +61,17 @@ def run_for_time(loop,time):
 
 class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a token getter...
     """ this is going to be done with fixed byte sizes known small headers """
-    def __new__(cls, *args, **kwargs:'for create_connection'):
+    def __new__(cls, *args, event_loop=None, **kwargs:'for create_connection'):
         """ evil and unpythonic, this no longer behaves like a class """
-        cls.event_loop = asyncio.get_event_loop()  # FIXME make this work even if running? we probably only need to call this the first time we make a new class, it will persist thereafter
-        future = asyncio.Future()
+        future = asyncio.Future(loop=event_loop)
         instance = super().__new__(cls)
+        if event_loop:
+            instance.event_loop = event_loop
+        else:
+            instance.event_loop = asyncio.get_event_loop()
         instance.future_token = future
-        coro = cls.event_loop.create_connection(lambda: instance, *args, **kwargs)
-        return coro, future
+        coro = instance.event_loop.create_connection(lambda: instance, *args, **kwargs)
+        return coro
 
     def connection_made(self, transport):
         self.transport = transport
@@ -187,12 +190,17 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         if exc is None:
             print('Data connection lost')
             print('trying to reconnect')
-            t = asyncio.Task(self.reup_con, loop=self.event_loop)  # FIXME replace with self.event_loop.create_task(self.reup_con) 3.4.2
-            print(t)
+            self.event_loop.call_soon_threadsafe(self.event_loop.stop)  # this is a hack
+            sleep(.1)
+            taskMgr.add(self.reup_con,'reupTask')
+            #self.reup_con()
+            #t = asyncio.Task(self.reup_con(), loop=self.event_loop)
+            #t = asyncio.Task(self.reup_con, loop=self.event_loop)  # FIXME replace with self.event_loop.create_task(self.reup_con) 3.4.2
+            #print(t)
 
             # FIXME why does literally terminiating the server cause this to survive?
         else:
-            print('connection lost')
+            print('connection lost error was',exc)
             #probably we want to try to renegotiate a new connection
             #but that could get really nast if we have a partition and
             #we try to reconnect repeatedly
@@ -599,22 +607,121 @@ def main():
 
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
-    coro_conClient, tokenFuture = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
-    conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-    clientLoop.run_until_complete(conProtocol.get_data_token())
 
     datCli_base = type('dataProtocol',(dataProtocol,),
                   {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
                    'render_set_send_request':rendMan.set_send_request,
                    'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
-    datCli = datCli_base(tokenFuture.result())
+    coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
+    conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
+    clientLoop.run_until_complete(conProtocol.get_data_token())
+    token = conProtocol.future_token.result()
+
+    def get_token(future):
+        while 1:
+            print('trying things?')
+            clientLoop.call_soon_threadsafe(clientLoop.stop)  # this is a hack
+            sleep(2)
+            try:
+                coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None, event_loop=clientLoop)
+                conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
+                clientLoop.run_until_complete(conProtocol.get_data_token())
+                future.set_result(conProtocol.future_token.result())  # lol oops
+                break
+            except ConnectionRefusedError:
+                print("Server not found. Retrying.")
+                asyncThread = Thread(target=clientLoop.run_forever)
+                asyncThread.start()
+                yield from asynio.sleep(5, loop=clientLoop)  # tom is an idiot
+        print('got token',conProtocol.future_token.result())
+        #return conProtocol.future_token.result()
+
+
+
+    @asyncio.coroutine
+    def _reup_con(self):
+            #coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
+            f = asyncio.Task(coro_conClient, loop=clientLoop)  # FIXME we need infinte timeout???
+            print('yielding from',f)
+            yield from f
+            conTransport, conProtocol = f.result()
+            print('yielding from get_data_token')
+            yield from asyncio.Task(conProtocol.get_data_token(), loop=clientLoop)
+            self.token = conProtocol.future_token.result()
+            coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
+            f = asyncio.Task(coro_dataClient, loop=clientLoop)
+            print('yielding from',f)
+            yield from f
+
+    @asyncio.coroutine
+    def reup_con(self):
+        f = asyncio.Future(loop=clientLoop)
+        print('done sleeping')
+        yield from get_token(f)
+        yield from f
+        print('got token from another thread',f)
+        self.token = f.result()
+        coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
+        #asyncio.Task(coro_dataClient, loop=clientLoop)
+        transport, protocol = clientLoop.run_until_complete(coro_dataClient)
+        clientLoop.run_forever()
+         
+        
+
+
+
+    def recon_task(self, task):
+        #out = reup_con(self)
+        #embed()
+        asyncio.Task(reup_con(self), loop=clientLoop)
+        print("rup task scheduled!")
+        taskMgr.remove('reupTask')
+        return task.cont
+
+    def recon_task(self, task):
+        try:
+            coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None, event_loop=clientLoop)
+            conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
+            clientLoop.run_until_complete(conProtocol.get_data_token())
+            self.token = conProtocol.future_token.result()
+            coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
+            clientLoop.run_until_complete(coro_dataClient) # can this work with with?
+            asyncThread = Thread(target=clientLoop.run_forever)
+            asyncThread.start()
+            taskMgr.remove('reupTask')
+            return task.cont
+        except ConnectionRefusedError as e:
+            return task.cont
+
+
+    
+
+    def setup_connection(self, task):
+        """ This is the most convoluted thing I have ever encountered in my life
+            And just to get it to run in the main thread!
+        """
+        clientLoop.call_soon_threadsafe(clientLoop.stop)  # this is a hack
+        #sleep(5)  # cst is asnyc we need sleep + dont kick server while down
+        self.token = get_token()
+        coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
+        clientLoop.run_until_complete(coro_dataClient) # can this work with with?
+        asyncThread = Thread(target=clientLoop.run_forever)
+        asyncThread.start()
+        taskMgr.remove('reupTask')
+        return task.cont
+
+    setattr(dataProtocol, 'reup_con', recon_task)
+
+
+    datCli = datCli_base(token)
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)
-    setattr(dataProtocol, 'reup_con', coro_dataClient)
     transport, protocol = clientLoop.run_until_complete(coro_dataClient) # can this work with with?
 
     #make sure we can exit
     el = exit_cleanup(clientLoop)  #use this to call stop() on run_forever
+
+    #taskMgr.add(setup_connection,'reupTask')
 
     #run it
     asyncThread = Thread(target=clientLoop.run_forever)

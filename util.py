@@ -16,25 +16,29 @@ class console(DirectObject):
         embed()  # this works becasue you can access all the things via render :)
 
 class exit_cleanup(DirectObject):
+    """ in order to get everything to exit 'cleanly'
+        we need to close the asyncio loop before we
+        call sys.exit() to terminate run() otherwise
+        the code following run() in the main thread
+        will never execute
+    """
     def __init__(self, asyncio_loop):
         self.loop = asyncio_loop
-        self.accept('escape',self.exit)
+        self.accept("escape",self.exit)
 
     def exit(self):
-        print('trying to close loop...')
         try:
-            print('running?',self.loop.is_running())
-            # the following line stops the loop somehow...
+            # this raises an error in the other thread, killing the loop
+            # totally not how we are supposed to do this
             self.loop.call_soon_threadsafe(self.loop.close)
-            print('running?',self.loop.is_running())
-            self.loop.close()
-            print('running?',self.loop.is_running())
+            #self.loop.stop()  # this does not work :(
         except (ValueError, IndexError) as e:
-            print(e)  # we are picking up the exception in the other thread...
-        sys.exit()
-        print('sys.exit() has been called')
+            raise
+            print(e)
+        finally:
+            sys.exit()
 
-class Utils(DirectObject):
+class ui_text(DirectObject):
     def __init__(self):
         self.pos = genLabelText('hello',1)
         self.pos.reparentTo(base.a2dTopLeft)
@@ -59,7 +63,7 @@ class Utils(DirectObject):
 def main():
     from direct.showbase.ShowBase import ShowBase
     base = ShowBase()
-    asdf = Utils()
+    asdf = ui_text()
     run()
 
 if __name__ == '__main__':

@@ -126,12 +126,12 @@ class DataByteStream:
         if start != -1:
             start += cls.LEN_OPCODE
             try:
-                return stream[start:start + cls.LEN_TOKEN]
+                return stream[start:start + cls.LEN_TOKEN], start+cls.LEN_TOKEN
             except IndexError:
                 raise IndexError('This token is not long enough!')
 
     @classmethod
-    def decodePickleStreams(cls, split):
+    def decodePickleStreams(cls, split):  # FIXME this fails HARD if there is another \x80
         for bytes_ in split:
             pickleStart = 0
             if bytes_[pickleStart] != cls.OP_PICKLE_INT: #apparently indexing into bytes returns ints not bytes
@@ -149,7 +149,7 @@ class DataByteStream:
                 else:
                     yield thing
             except (ValueError, EOFError, pickle.UnpicklingError) as e:  # ValueError is for bad pickle protocol
-                print('What is this garbage?',bytes_)
+                print('What is this garbage?',bytes_[pickleStart:])
                 print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
                 yield None  # we cannot raise here because we won't evaluate the rest of the loop
 

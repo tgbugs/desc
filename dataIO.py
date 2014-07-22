@@ -329,7 +329,7 @@ def main():
     from panda3d.core import PStatClient
 
     from dragsel import BoxSel
-    from util import Utils, console
+    from util import ui_text, console
     from ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
 
@@ -341,7 +341,7 @@ def main():
     level2Root = render.attachNewNode('collideRoot')
 
     base.setBackgroundColor(0,0,0)
-    ut = Utils()
+    ut = ui_text()
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()

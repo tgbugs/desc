@@ -4,6 +4,7 @@ import asyncio
 import pickle
 import ssl
 import os  # for dealing with firewall stuff
+import sys
 from uuid import uuid4
 from collections import defaultdict, deque
 from time import sleep
@@ -15,9 +16,13 @@ from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import Request, DataByteStream, FAKE_PREDICT
+from test_objects import makeSimpleGeom
 
 #from massive_bam import massive_bam as example_bam
 from small_bam import small_bam as example_bam
+
+#fix sys module reference
+sys.modules['core'] = sys.modules['panda3d.core']
 
 
 #TODO logging...
@@ -146,7 +151,7 @@ class dataServerProtocol(asyncio.Protocol):
         if not self.token_received:
             self.__block__ += data
             try:
-                token = DataByteStream.decodeToken(self.__block__)
+                token, token_end = DataByteStream.decodeToken(self.__block__)
                 if token in self.expected_tokens:
                     self.token_received = True  # dont store the token anywhere in memory, ofc if you can find the t_r bit and flip it...
                     self.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
@@ -154,6 +159,7 @@ class dataServerProtocol(asyncio.Protocol):
                     self.expected_tokens = None  # we don't need access to those tokens anymore
                     del self.expected_tokens
                     print(self.pprefix,'token auth successful')
+                    self.__block__ = self.__block__[token_end:]  # nasty \x80 showing up
                     self.process_requests(self.process_data(b''))  # run this in case a request follows the token, this will reset block
                 else:
                     print(self.pprefix,'token auth failed, received token not expected')
@@ -201,6 +207,7 @@ class dataServerProtocol(asyncio.Protocol):
             data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
             self.update_cache(rh, data_stream)
         self.data_queue.put(data_stream)
+        print('data has been put in the queue')
         #self.transport.write(data_stream)
 
     def request_prediction(self, request):
@@ -242,8 +249,12 @@ class responseMaker:  # TODO we probably move this to its own file?
         uuids = np.array(['%s'%uuid4() for _ in range(n)])
         bounds = np.ones(n) * .5
         example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
+        print('making example bam')
+        example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][0]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME for some reason this REALLY does not like being run in an executor
+        print('done making bam',example_bam)
 
         data_tuple = (example_bam, example_coll, b'this is a UI data I swear')
+        embed()
 
         #code for testing threading and sending stuff
         #cnt = 9999999

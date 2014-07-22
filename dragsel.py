@@ -634,10 +634,10 @@ def makePoint(point=[0,0,0]):
 
 
 def main():
-    from util import Utils
+    from util import ui_text
     base = ShowBase()
     base.disableMouse()
-    ut = Utils()
+    ut = ui_text()
     dt = BoxSel()
     embed()
     run()

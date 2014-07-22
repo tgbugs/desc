@@ -460,7 +460,7 @@ class FullTest(DirectObject):
 
 
 def _main():
-    from util import Utils
+    from util import ui_text
     from ui import CameraControl, Axis3d, Grid3d
     #from panda3d.core import ConfigVariableBool
     #ConfigVariableString('view-frustum-cull',False)
@@ -473,7 +473,7 @@ def _main():
     #loadPrcFileData('','threading-model Cull/Draw') #bad for lots of nodes
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
-    ut = Utils()
+    ut = ui_text()
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
@@ -501,7 +501,7 @@ def _main():
     run() #looks like this is the slow case... probably should look into non blocking model loading?
 
 def main():
-    from util import Utils
+    from util import ui_text
     from ui import CameraControl, Axis3d, Grid3d
     from panda3d.core import loadPrcFileData
     from time import time
@@ -513,7 +513,7 @@ def main():
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
-    ut = Utils()
+    ut = ui_text()
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()

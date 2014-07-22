@@ -553,13 +553,17 @@ def main():
     #eventLoop.run_until_complete(run_panda)
 
 def main():
+    #fixing modules references
+    import sys
+    sys.modules['core'] = sys.modules['panda3d.core']  # hack fix for serialization
+
     # render setup
     from direct.showbase.ShowBase import ShowBase
     from panda3d.core import loadPrcFileData
     from panda3d.core import PStatClient
 
     from dragsel import BoxSel
-    from util import Utils, console, exit_cleanup
+    from util import ui_text, console, exit_cleanup
     from ui import CameraControl, Axis3d, Grid3d
 
     from threading import Thread
@@ -570,7 +574,8 @@ def main():
 
     base.setBackgroundColor(0,0,0)
     base.disableMouse()
-    ut = Utils()
+    # TODO init all these into a dict or summat?
+    ut = ui_text()
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
@@ -606,12 +611,7 @@ def main():
     #run it
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
-    run()
-    print('out of run()')
-    clientLoop.close()
-    print('closed the client loop')
-    transport.write_eof()
-    print('sent eof')
+    run()  # this MUST be called last because we use sys.exit() to terminate
 
 
 

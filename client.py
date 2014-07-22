@@ -185,8 +185,11 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
     
     def connection_lost(self, exc):  # somehow this never triggers...
         if exc is None:
-            print('Data connection closed')
-            self.event_loop.close()  # FIXME we use this for now, but tis dangerous
+            print('Data connection lost')
+            print('trying to reconnect')
+            t = asyncio.Task(self.reup_con, loop=self.event_loop)  # FIXME replace with self.event_loop.create_task(self.reup_con) 3.4.2
+            print(t)
+
             # FIXME why does literally terminiating the server cause this to survive?
         else:
             print('connection lost')
@@ -607,6 +610,7 @@ def main():
 
     datCli = datCli_base(tokenFuture.result())
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)
+    setattr(dataProtocol, 'reup_con', coro_dataClient)
     transport, protocol = clientLoop.run_until_complete(coro_dataClient) # can this work with with?
 
     #make sure we can exit
@@ -616,7 +620,7 @@ def main():
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
     run()  # this MUST be called last because we use sys.exit() to terminate
-    print('yes this runs?')
+    assert False, 'Note how this never gets printed due to sys.exit()'
 
 
 if __name__ == "__main__":

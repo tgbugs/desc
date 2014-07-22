@@ -67,3 +67,6 @@ things
 
  15. cache invalidation happens on the server, we might need a special opcode to tell the client, thoughts for another day
  16. need a switch that prevents the server from caching when we run a local session, send it all to the client immediately and bypass cache
+ 17. need to handle timeouts and lost connections
+ 18. if we dont creat the connection immediately, create a coro to retry
+ 19. apparently trying to spawn lots of requests can segfault!?

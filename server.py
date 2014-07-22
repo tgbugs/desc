@@ -9,6 +9,7 @@ from uuid import uuid4
 from collections import defaultdict, deque
 from time import sleep
 from queue import Queue
+from threading import Thread
 
 import numpy as np
 from numpy.random import bytes as make_bytes
@@ -300,7 +301,6 @@ class requestCacheManager:
             self.cache.pop(self.cache_age.popleft())
         #print('server cache updated with', request_hash, data_stream)
 
-
 class tokenManager:  # TODO this thing could be its own protocol and run as a shared state server using lambda: instance
 #FIXME this may be suceptible to race conditions on remove_token!
     """ shared state for tokens O_O (I cannot believe this works
@@ -318,6 +318,7 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
     def remove_token_for_ip(self, ip, token):
         self.tokenDict[ip].remove(token)
         print(self.tokenDict)
+
 
 def main():
     serverLoop = asyncio.get_event_loop()
@@ -352,8 +353,12 @@ def main():
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
     serverCon = serverLoop.run_until_complete(coro_conServer)
     serverData = serverLoop.run_until_complete(coro_dataServer)
+
+    serverThread = Thread(target=serverLoop.run_forever)
+    serverThread.start()
     try:
-        serverLoop.run_forever()
+        embed()
+        serverLoop.call_soon_threadsafe(serverLoop.stop)
     except KeyboardInterrupt:
         print('exiting...')
     finally:

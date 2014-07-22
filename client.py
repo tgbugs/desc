@@ -3,18 +3,23 @@
 import asyncio
 import random
 import pickle
-import zlib
+#import zlib
 import ssl
+import os
+from collections import deque
 from time import sleep
 from threading import Lock
 
 from IPython import embed
 from numpy.random import rand
 
-from panda3d.core import GeomNode
+from panda3d.core import GeomNode, CollisionNode, NodePath, PandaNode
+from direct.showbase.DirectObject import DirectObject
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import Request, DataByteStream
+from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
+from dataIO import treeMe
 
 
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
@@ -26,7 +31,7 @@ def become_future(function):
     @asyncio.coroutine
     def wrapped(*args, **kwargs):
         future = asyncio.Future()
-        yield future
+        yield from future
         future.set_result(function(*args, **kwargs))
     return wrapped
 
@@ -34,7 +39,7 @@ def become_future(function):
 def run_future(function, *args, **kwargs):
     """ Run a function in a future """
     future = asyncio.Future()
-    yield future
+    yield from future
     future.set_result(function(*args,**kwargs))
 
 
@@ -42,7 +47,7 @@ def run_future(function, *args, **kwargs):
 def run_panda():
     """ make panda work with the event loop? I'm expecting bugs here... """
     future = asyncio.Future()
-    yield future
+    yield from future
     run()
     future.set_result(True)
 
@@ -54,8 +59,20 @@ def run_for_time(loop,time):
     """ use this to view responses inside embed """
     loop.run_until_complete(asyncio.sleep(time))
 
-class newConnectionProtocol(asyncio.Protocol):
+class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a token getter...
     """ this is going to be done with fixed byte sizes known small headers """
+    def __new__(cls, *args, event_loop=None, **kwargs:'for create_connection'):
+        """ evil and unpythonic, this no longer behaves like a class """
+        future = asyncio.Future(loop=event_loop)
+        instance = super().__new__(cls)
+        if event_loop:
+            instance.event_loop = event_loop
+        else:
+            instance.event_loop = asyncio.get_event_loop()
+        instance.future_token = future
+        coro = instance.event_loop.create_connection(lambda: instance, *args, **kwargs)
+        return coro
+
     def connection_made(self, transport):
         self.transport = transport
         self.transport.write(b'I promis I real client, plz dataz')
@@ -64,11 +81,11 @@ class newConnectionProtocol(asyncio.Protocol):
     def data_received(self, data):
         token_data = b''
         token_start = data.find(DataByteStream.OP_TOKEN)  # FIXME sadly we'll probably need to deal with splits again
-        print('token?',data)
+        #print('token?',data)
         if token_start != -1:
-            #token_start += DataByteStream.OPCODE_LEN
-            print('token_start',token_start)
-            token_data = data[token_start:token_start+DataByteStream.OPCODE_LEN+DataByteStream.TOKEN_LEN]
+            #token_start += DataByteStream.LEN_OPCODE
+            print('__',self,'token_start',token_start,'__')
+            token_data = data[token_start:token_start+DataByteStream.LEN_OPCODE+DataByteStream.LEN_TOKEN]
         if token_data:
             self.future_token.set_result(token_data)
             self.transport.write_eof()
@@ -78,15 +95,27 @@ class newConnectionProtocol(asyncio.Protocol):
             print("New connection transport closed.")
 
     @asyncio.coroutine
-    def get_data_token(self,future):
-        self.future_token = future
-        yield from future
+    def get_data_token(self):
+        yield from self.future_token
+        #try: yield from self.future_token
+        #except asyncio.futures.InvalidStateError as e:
+            #print(e)
+            #print('ssuming that this is because the future is already finished')
 
-class dataProtocol(asyncio.Protocol):
+class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
+    def __new__(cls, token):
+        instance = super().__new__(cls)
+        instance.token = token
+        return lambda: instance  # this is vile, but it works
+
     def connection_made(self, transport):
         transport.write(b'hello there')
+        transport.write(self.token)
         self.transport = transport
-        self.__block__ = b''  # TODO we almost certainly will need this
+        self.render_set_send_request(self.send_request)
+        self.__block__ = b''
+        self.__block_size__ = None
+        self.__block_tuple__ = None
 
     def data_received(self, data):
         """ receive bam files that come back on request
@@ -95,23 +124,59 @@ class dataProtocol(asyncio.Protocol):
             as soon as the connection has been created if they
             arent cached
         """
+        self.__block__ += data
+        #print(id(self),'block length',len(self.__block__))
+        if not self.__block_size__:
+            if DataByteStream.OP_DATA not in self.__block__:
+                self.__block__ = b''
+                return None
+            else:
+                self.__block_size__, self.__block_tuple__ = DataByteStream.decodeResponseHeader(self.__block__)
+
+        if len(self.__block__) >= self.__block_size__:
+            #print('total size expecte', self.__block_size__)
+            #print('post split block',self.__block__[self.__block_size__:])
+            #embed()
+            output = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+            print('yes we are trying to render stuff')
+            self.event_loop.run_in_executor( None, lambda: self.set_nodes(*output) )
+            self.__block__ = self.__block__[self.__block_size__:]
+            self.__block_size__ = None
+            self.__block_tuple__ = None
+            self.data_received(b'')  # lots of little messages will bollox this
+
+
+    def __data_received(self, data): #works with the split version (ie fails)
+        self.__block__ += data
+        split = self.__block__.split(DataByteStream.STOP)
+        if len(split) is 1:  # no stops
+            if DataByteStream.OP_DATA not in self.__block__:  # no ops
+                self.__block__ = b''
+        else:
+            self.__block__ = split.pop()
+            response_generator = DataByteStream.decodeResponseStreams(split)
+            self.process_responses(response_generator)
+    
+    def _data_received(self, data):  # XXX deprecated
         print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
         response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
         if response_start != -1:
-            response_start += DataByteStream.OPCODE_LEN
-            hash_start = response_start + DataByteStream.CACHE_LEN
-            bam_start = hash_start + DataByteStream.MD5_HASH_LEN
+            response_start += DataByteStream.LEN_OPCODE
+            hash_start = response_start + DataByteStream.LEN_CACHE
+            bam_start = hash_start + DataByteStream.LEN_MD5_HASH
             bam_stop = bam_start + data[bam_start:].find(DataByteStream.STOP)  # FIXME make sure the bam byte stream doesnt have this in there...
-        cache = int(data[response_start:response_start + DataByteStream.CACHE_LEN])
-        request_hash = data[hash_start:hash_start + DataByteStream.MD5_HASH_LEN]
+        cache = int(data[response_start:response_start + DataByteStream.LEN_CACHE])
+        request_hash = data[hash_start:hash_start + DataByteStream.LEN_MD5_HASH]
         bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
         #print('')
         #print('bam_data',bam_data)
+
+        # TODO if the request hash is not in cache.keys() stick it in there and don't render it
         if cache:  # FIXME this needs to be controlled locally based soley on request hash NOT cache bit
             # TODO this is second field in header
             self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
-        else:  # this data was generated in response to a request
-            self.render_bam(request_hash, zlib.decompress(bam_data))
+        #else:  # this data was generated in response to a request
+            #self.render_bam(request_hash, zlib.decompress(bam_data))
 
 
             # hrmmmm how do we get this data out!?
@@ -123,27 +188,29 @@ class dataProtocol(asyncio.Protocol):
     
     def connection_lost(self, exc):  # somehow this never triggers...
         if exc is None:
-            print('Data connection closed')
-            self.event_loop.close()  # FIXME we use this for now, but tis dangerous
+            print('Data connection lost')
+            print('trying to reconnect')
+            self.event_loop.call_soon_threadsafe(self.event_loop.stop)  # this is a hack
+            sleep(.1)
+            taskMgr.add(self.reup_con,'reupTask')
+            #self.reup_con()
+            #t = asyncio.Task(self.reup_con(), loop=self.event_loop)
+            #t = asyncio.Task(self.reup_con, loop=self.event_loop)  # FIXME replace with self.event_loop.create_task(self.reup_con) 3.4.2
+            #print(t)
+
             # FIXME why does literally terminiating the server cause this to survive?
         else:
-            print('connection lost')
+            print('connection lost error was',exc)
             #probably we want to try to renegotiate a new connection
             #but that could get really nast if we have a partition and
             #we try to reconnect repeatedly
             #asyncio.get_event_loop().close()  # FIXME probs don't need this
 
-    def send_token_data(self, token_data):
-        #self.transport.write(b'.\x99'+token)
-        self.transport.write(token_data)
-
     def send_request(self, request):
-        rh = request.hash_
-        if self.add_out_request(rh):  # NOOOOOO race conditions ;_:
-            if not self.check_cache(rh):
-                out = dumps(request)
-                self.transport.write(out)
-                print(out)
+        """ this is called BY renderManager.get_cache !!!!"""
+        out = dumps(request)
+        self.transport.write(out)
+
         # TODO add that hash to a 'waiting' list and then cross it off when we are done
             # could use that to quantify performance
             # XXX need this to prevent sending duplicate requests
@@ -167,20 +234,18 @@ class dataProtocol(asyncio.Protocol):
         self.transport.write(dumps(request))
         yield from future
 
-    def update_cache(self, request_hash, bam_data):
+    def process_responses(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
+        for request_hash, data_tuple in response_generator:
+            print('yes we are trying to render stuff')
+            self.event_loop.run_in_executor( None, lambda: self.set_nodes(request_hash, data_tuple) )
+            # XXX FIXME panda *should* be ok with this, hopefully this gets around the gil or we have problems
+
+    def set_nodes(self, request_hash, data_tuple):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
-    def check_cache(self, request_hash):
+    def render_set_send_request(self, send_request:'function'):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
 
-    def render_bam(self, bam):
-        raise NotImplementedError('patch this function with a function from a DirectObject')
-
-
-class collCacheManager:
-    def __init__(self,rootNode):
-        pass
-    
 
 class bamCacheManager:
     """ shared state bam cache """
@@ -225,7 +290,8 @@ class bamCacheManager:
 
     def check_cache(self, request_hash):
         try:
-            bam = zlib.decompress(self.cache[request_hash])  # FIXME is there some way to make the gzing more transparent?
+            #bam = zlib.decompress(self.cache[request_hash])  # FIXME is there some way to make the gzing more transparent?
+            bam = None
             self.render_bam(bam)
             print('local cache hit')
             return True
@@ -245,19 +311,7 @@ class bamCacheManager:
         self.rootNode.attachNewNode(newNode)
 
 
-def make_nodes(rcMan, request_hash, bam_data, coll_data, ui_data, cache=False):
-    """ fire and forget """
-    bam = makeBam(bam_data)  #needs to return a node
-    coll = makeColl(coll_data)  #needs to return a node
-    ui = makeUI(ui_data)  #needs to return a node (or something)
-    if cache:
-        rcMan.update_cache(request_hash, (bam, coll, ui))
-    else:
-        rcman.render(bam, coll, ui)
-
-
-
-class renderCacheManager:
+class renderManager(DirectObject):
     """ a class to manage, bam, coll, and ui (and more?) incoming data
         all of those streams should be decompressed and reconstructed before
         showing up here so that there are just two or three nodes that can be
@@ -278,26 +332,122 @@ class renderCacheManager:
 
         self.checkLock = Lock()  # TODO see if we need this
 
-    def get_cache(self, request_hash):
+        self.accept('r',self.fake_request)
+        self.accept('p',self.fake_predict)
+        self.accept('n',self.rand_request)
+
+    def set_send_request(self, send_request:'function *args = (request,)'):
+        self.__send_request__ = send_request
+
+    def submit_request(self, request):  # FIXME 
+        """ this should only be called after failing a search for hidden nodes
+            matching a request in the scene graph
+        """
+        request_hash = request.hash_
         try:
-            bam, coll, ui = self.cache[request_hash]
+            #bam, coll, ui = self.cache[request_hash]
+            self.render(*self.cache[request_hash])
+            # FIXME we need to not attach the thing again...
             print('local cache hit')
-            return True
-        except KeyError:
+        except KeyError:  # ValueError if a future is in there, maybe just use False?
+            self.cache[request_hash] = False
+            #self.cache[request_hash] = False
+            self.__send_request__(request)
             print('local cache miss')
-            return False
+        except TypeError:  # TypeError will catch incorrect lenght on the input
+            print('the request has been sent, if it is still wanted when it gets here we will render it')
+            #self.cache[request_hash]
+            # FIXME really we should only render the last thing... so yes we do need a
+                # bit more advanced system so we only render the last requested thing (could change)
+                # TODO this means that each UI element / collisionSolid needs to send a "not active" signal
+                # when a request is no longer wanted
 
-    def update_cache(self, request_hash, node_tuple):
+    def unrender(self, request_hash):  # FIXME what do we need this fellow sending? ie: how generate requests from UI
+        # FIXME this needs to be "unrender" and we can work from there, no canceling, because we pretend like it completed
+        try:
+            self.cache.pop(request_hash)
+        except KeyError:
+            pass
+
+        # use an rx reactive extensions construction with a temporal list or whatever?
+        #try:
+            #self.cache.pop(request_hash)  # so may problems with ordering and state O_O
+            # TODO it is not this simple, there needs to be a temoral list and if the 'current' state includes a cancel render request...
+                # argh this is a mess so think about, need better abstraction
+                # no, this is easy, the render request shall be considered to have been _completed_
+                # when it is submitted, even if it hasnt, so all we need to do is use a future to
+                # synchronize execution? ... or does that... wait...
+        #except KeyError:
+            #pass
+
+    def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
+        """ this is the callback used by the data protocol """
         print('cache updated')
-        self.cache[request_hash] = node_tuple
+        node_tuple = self.make_nodes(request_hash, data_tuple)
+        try:
+            #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
+            if not self.cache[request_hash]:
+                #self.render(*self.cache[request_hash])
+                print(len(node_tuple))
+                self.render(*node_tuple)
+        except KeyError:
+            print("predicted data view cached")
+            self.cache[request_hash] = node_tuple
 
-    def render(bam, coll, ui):
-            self.bamNode.attachNewNode(bam)
-            self.collNode.attatchNewNode(coll)
-            self.uiNode.attachNewNode(ui)
+    def render(self, bam, coll, ui):
+        self.bamNode.attachNewNode(bam)
+        #bam.reparentTo(self.bamNode)
+        #self.collNode.attachNewNode(coll)
+        [c.reparentTo(self.collNode) for c in coll.getChildren()]  # FIXME too slow!
+        #self.uiNode.attachNewNode(ui)
+        print(self.uiNode.getChildren())  # utf-8 errors
 
+    def make_nodes(self, request_hash, data_tuple):
+        """ fire and forget """
+        bam = self.makeBam(data_tuple[0])  #needs to return a node
+        coll = self.makeColl(data_tuple[1])  #needs to return a node
+        ui = self.makeUI(data_tuple[2])  #needs to return a node (or something)
+        node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
+        [n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
+        return node_tuple
 
+    def makeBam(self, bam_data):
+        """ this is for Geoms or GeomNodes """
+        node = GeomNode('')  # use attach new node...
+        out = node.decodeFromBamStream(bam_data)  # apparently the thing I'm encoding is a node for test purposes... may need something
+        #node.addGeom(out)
+        return out
 
+    def makeColl(self, coll_data):
+        node = NodePath(PandaNode(''))  # use reparent to?
+        coll = pickle.loads(coll_data)
+        # FIXME treeMe is SUPER slow... :/
+        treeMe(node, *coll)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+        print('coll node successfully made')
+        return node
+
+    def makeUI(self, ui_data):
+        """ we may not need this if we stick all the UI data in geom or coll nodes? """
+        # yeah, because the 'properties' the we select on will be set based on which node
+            # is selected
+        node = PandaNode('')  # use reparent to?
+        return node
+
+    def fake_request(self):
+        r = FAKE_REQUEST
+        self.submit_request(r)
+
+    def fake_predict(self):
+        r = FAKE_PREDICT
+        self.submit_request(r)
+
+    def rand_request(self):
+        r = RAND_REQUEST()
+        self.submit_request(r)
+
+    def __send_request__(self, request):
+        raise NotImplementedError('NEVER CALL THIS DIRECTLY. If you didnt, is'
+                                  ' your dataProtocol up?')
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -315,42 +465,57 @@ def main():
     #def myfunc(data):
         #test.append(data)
 
+
     clientLoop = asyncio.get_event_loop()
-    coro_conClient = clientLoop.create_connection(newConnectionProtocol, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
+    #tokenFuture = asyncio.Future()  # we have to pass the future in before init since the token is sent immediately, we might not even have to call run_until_complete??
+    #coro_conClient = clientLoop.create_connection(newConnectionProtocol(tokenFuture), '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
+
+    coro_conClient, tokenFuture = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
 
     conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-    tokenFuture = asyncio.Future()
-    clientLoop.run_until_complete(conProtocol.get_data_token(tokenFuture))
+    clientLoop.run_until_complete(conProtocol.get_data_token())
     print('got token',tokenFuture.result())
+
         
+    #here we demonstrate how to get a buttload of tokens >_<
+    #cf = [newConnectionProtocol('127.0.0.1', CONNECTION_PORT) for _ in range(10)]
+    #prots = [clientLoop.run_until_complete(c)[1] for c, _ in cf]
+    #coros_ = [clientLoop.run_until_complete(p.get_data_token()) for p in prots]  # this works too
+    #coros_ = [p.get_data_token() for p in prots]
+    #[clientLoop.run_until_complete(f) for f in coros_]
+    #tokens = [f.result() for _, f in cf]
+    #print('LOOK AT THEM WE\'RE RICH!',tokens)
+
     class FakeNode:
         def attachNewNode(self, node):
-            print('pretend like this print statement actually causes things to render')
+            print('pretend like this print statement actually causes things to render',node)
 
-    rootNode = FakeNode()
+    #rootNode = FakeNode()
+    rootNode = NodePath(PandaNode('testRoot'))
 
-    bcm = bamCacheManager(rootNode)
+    rendMan = renderManager(*[rootNode]*3)  # in theory we can have multiple connections for a single render manager if we have disconnects
+    # if fact renderMan might even spin up its own connections! so render before connection is correct
 
-    datCli = type('dataProtocol',(dataProtocol,),
-                  {'check_cache':bcm.check_cache,
-                   'update_cache':bcm.update_cache,
-                   'render_bam':bcm.render_bam,
-                   'add_out_request':bcm.add_out_request,
-                   'del_out_request':bcm.del_out_request,
-                   'event_loop':clientLoop })
+    datCli_base = type('dataProtocol',(dataProtocol,),
+                  {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
+                   'render_set_send_request':rendMan.set_send_request,
+                   'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
+    datCli = datCli_base(tokenFuture.result())  # __new__ magic, we don't use type() since tokens arent shared
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
     transport, protocol = clientLoop.run_until_complete(coro_dataClient)
 
-    coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
-    transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
+    #the 3 lines that follow completely break everything... why? don't know!
+    #datCli2 = datCli_base(tokens[3])  # __new__ magic, we don't use type() since tokens arent shared
+    #coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
+    #transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
 
     transport.write(b'testing?')
     transport.write(b'testing?')
     transport.write(b'testing?')
 
     #protocol2.send_token_data(tokenFuture.result())  # testing race condition, bet is both can get it
-    protocol.send_token_data(tokenFuture.result())
+    #protocol.send_token_data(tokenFuture.result())
 
 
     #writer.write('does this work?')
@@ -379,22 +544,111 @@ def main():
     #finally:
         #clientLoop.close()
     #request = Request('test..','test',(1,2,3),None)  # FIXME this breaks stop detection!
-    request = Request('test.','test',(1,2,3),None)
+    request = FAKE_REQUEST
     print('th',request.hash_,'rh',hash(request))
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
-    protocol.send_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    rendMan.submit_request(request)
+    #protocol2.send_request(request)
     #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
     # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
     #embed()
-    run_for_time(clientLoop,3)
+    run_for_time(clientLoop,4)
+    print("testing prediction caching")
+    request2 = Request('prediction','who knows',(2,3,4),None)
+    rendMan.submit_request(request2)
+    rendMan.submit_request(request2)
+    run_for_time(clientLoop,4)
+    #embed()
     transport.write_eof()
     clientLoop.close()
     #eventLoop.run_until_complete(run_panda)
+
+def main():
+    #fixing modules references
+    import sys
+    #sys.modules['core'] = sys.modules['panda3d.core']  # hack fix for serialization
+
+    # render setup
+    from direct.showbase.ShowBase import ShowBase
+    from panda3d.core import loadPrcFileData
+    from panda3d.core import PStatClient
+
+    from dragsel import BoxSel
+    from util import ui_text, console, exit_cleanup
+    from ui import CameraControl, Axis3d, Grid3d
+
+    from threading import Thread
+
+    PStatClient.connect() #run pstats in console
+    loadPrcFileData('','view-frustum-cull 0')
+    base = ShowBase()
+
+    base.setBackgroundColor(0,0,0)
+    base.disableMouse()
+    # TODO init all these into a dict or summat?
+    ut = ui_text()
+    grid = Grid3d()
+    axis = Axis3d()
+    cc = CameraControl()
+    con = console()
+
+    # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
+    geomRoot = render.attachNewNode('geomRoot')
+    collideRoot = render.attachNewNode('collideRoot')
+    uiRoot = render.attachNewNode('uiRoot')
+    bs = BoxSel(False)
+
+    rendMan = renderManager(geomRoot, collideRoot, uiRoot)
+
+    #asyncio and network setup
+    clientLoop = asyncio.get_event_loop()
+
+    datCli_base = type('dataProtocol',(dataProtocol,),
+                  {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
+                   'render_set_send_request':rendMan.set_send_request,
+                   'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
+
+    coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
+    conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
+    clientLoop.run_until_complete(conProtocol.get_data_token())
+    token = conProtocol.future_token.result()
+
+    def recon_task(self, task):
+        try:
+            coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
+            conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
+            clientLoop.run_until_complete(conProtocol.get_data_token())
+            self.token = conProtocol.future_token.result()
+            coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
+            clientLoop.run_until_complete(coro_dataClient) # can this work with with?
+            asyncThread = Thread(target=clientLoop.run_forever)
+            asyncThread.start()
+            taskMgr.remove('reupTask')
+            return task.cont
+        except ConnectionRefusedError as e:
+            return task.cont
+
+    setattr(dataProtocol, 'reup_con', recon_task)
+
+    datCli = datCli_base(token)
+    coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)
+    transport, protocol = clientLoop.run_until_complete(coro_dataClient) # can this work with with?
+
+    #make sure we can exit
+    el = exit_cleanup(clientLoop)  #use this to call stop() on run_forever
+
+    #taskMgr.add(setup_connection,'reupTask')
+
+    #run it
+    asyncThread = Thread(target=clientLoop.run_forever)
+    asyncThread.start()
+    run()  # this MUST be called last because we use sys.exit() to terminate
+    assert False, 'Note how this never gets printed due to sys.exit()'
 
 
 if __name__ == "__main__":

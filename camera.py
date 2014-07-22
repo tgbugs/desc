@@ -89,10 +89,10 @@ def makeEquiTri():
 def main():
     from direct.showbase.ShowBase import ShowBase
     from test_objects import Grid3d,Axis3d
-    from util import Utils
+    from util import ui_text
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
-    ut = Utils()
+    ut = ui_text()
     cc = CameraControl()
     grid = Grid3d()
     axis = Axis3d()

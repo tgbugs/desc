@@ -65,3 +65,9 @@ things
  14. SUPER CRITICIAL: we do need to deal with the fact that what the user wants may change between the time they request it and they time
      they receive it, so we need to keep track of what should be rendered locally even if we end up sending all of it. Basically we need
      one additional layer of separation cache=True/False is not sufficient
+
+ 15. cache invalidation happens on the server, we might need a special opcode to tell the client, thoughts for another day
+ 16. need a switch that prevents the server from caching when we run a local session, send it all to the client immediately and bypass cache
+ 17. need to handle timeouts and lost connections
+ 18. if we dont creat the connection immediately, create a coro to retry
+ 19. apparently trying to spawn lots of requests can segfault!?

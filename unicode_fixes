@@ -1,0 +1,139 @@
+# most of these errors are actually thrown by 
+#PyUnicode_DecodeUTF8Stateful in ./Objects/unicodeobject.c
+#not sure if there is any way to use try/catch in the c code to handle this
+#but maybe there is
+
+#recall that the alternative here is to just naievely use bytes and see how it goes
+
+#TODO PyUnicode_Check is our solution!
+
+#./Include/object.h:508:PyAPI_FUNC(void) _PyObject_Dump(PyObject *);
+#./Include/object.h:510:PyAPI_FUNC(PyObject *) PyObject_Repr(PyObject *);
+#./Include/object.h:511:PyAPI_FUNC(PyObject *) PyObject_Str(PyObject *);
+#./Include/object.h:512:PyAPI_FUNC(PyObject *) PyObject_ASCII(PyObject *);
+#./Include/object.h:513:PyAPI_FUNC(PyObject *) PyObject_Bytes(PyObject *);
+
+
+# we have not addressed the other half of the issue which is the ability to put bad data in, sadly can't just return bytes for everything like in past
+# should probably look for #if PY_MAJOR_VERSION >= 3
+# = this usage gets a value FROM python so is not an issue
+./direct/src/dcparser/dcClass.cxx:1001:  DCClass::client_format_generate_CMU
+./direct/src/dcparser/dcClass.cxx:1090:  DCClass::ai_format_generate
+#./direct/src/dcparser/dcField.cxx:589:   DCField::get_pystr
+#./direct/src/dcparser/dcField.cxx:600:   DCField::get_pystr
+#./direct/src/dcparser/dcField.cxx:612:   DCField::get_pystr
+#./direct/src/dcparser/dcPacker.cxx:766:   DCPacker::pack_object
+#./direct/src/dcparser/dcPacker.cxx:769:   DCPacker::pack_object
+#./direct/src/dcparser/dcPacker.cxx:781:   DCPacker::pack_object
+./direct/src/dcparser/dcPacker.cxx:950:   DCPacker::pack_object  #this should be ok if pack_type actually works
+#./direct/src/distributed/cConnectionRepository.cxx:986:   CConnectionRepository::describe_message  #ok
+./direct/src/distributed/cConnectionRepository.cxx:997:   CConnectionRepository::describe_message  #check if result is safe
+#./direct/src/plugin/p3dPythonRun.cxx:1583:    P3DPythonRun::pyobj_to_xml
+#./direct/src/plugin/p3dPythonRun.cxx:1586:    P3DPythonRun::pyobj_to_xml  #seems ok
+./direct/src/plugin/p3dPythonRun.cxx:1602:    P3DPythonRun::pyobj_to_xml  #check no if PY_... here
+#./direct/src/plugin/p3dPythonRun.cxx:1607:    P3DPythonRun::pyobj_to_xml  #seems ok
+#./direct/src/plugin/p3dPythonRun.cxx:1655:    P3DPythonRun::pyobj_to_xml  #ok
+#./direct/src/plugin/p3dPythonRun.cxx:1657:    P3DPythonRun::pyobj_to_xml  #ok
+#./direct/src/plugin/p3dPythonRun.cxx:1764:   P3DPythonRun::xml_to_pyobj  #probably ok
+
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:257:  #pydtool.cxx is all generated code
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:275:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:389:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:407:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:648:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:666:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:698:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:716:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:780:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:812:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:918:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:964:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1099:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1160:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1214:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1232:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1250:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1392:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1410:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1428:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1492:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1524:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1556:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1769:
+#./dtool/metalibs/dtoolconfig/pydtool.cxx:1788:
+
+#./dtool/src/dtoolutil/executionEnvironment.cxx:278: ExecutionEnvironment::ns_get_environment_variable #is fine
+#./dtool/src/dtoolutil/executionEnvironment.cxx:279: ExecutionEnvironment::ns_get_environment_variable #is fine
+#./dtool/src/dtoolutil/executionEnvironment.cxx:282: ExecutionEnvironment::ns_get_environment_variable #is fine
+#./dtool/src/dtoolutil/executionEnvironment.cxx:284: ExecutionEnvironment::ns_get_environment_variable #is fine
+./dtool/src/dtoolutil/filename.cxx:2013:  Filename::scan_directory  #this one is an issue, it even has a comment! :)
+./dtool/src/dtoolutil/globPattern.cxx:139:  GlobPattern::match_files  #this one is an issue, it even has a comment! :)
+
+# I'm guessing a huge portion of the problems are in interfaceMakerPython....
+#:write_module_class
+#the two below are causing the problems with writing bytes as names
+./dtool/src/interrogate/interfaceMakerPythonNative.cxx:1791:  int need_repr = NeedsAReprFunction(obj->_itype); #maybe add PyUnicode_check???
+./dtool/src/interrogate/interfaceMakerPythonNative.cxx:1820:  int need_str = NeedsAStrFunction(obj->_itype); #same issue as above
+
+#InterfaceMakerPythonNative::write_function_instance
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:2802:  #not an issue
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:2804:
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:2819:
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:2821:
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:2838:
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:2840:  #as above
+
+#InterfaceMakerPythonNative::pack_python_value
+./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3294:  #could be an issue is_char_pointer
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3308:  #this is FromWideChar... should check to make sure is NOT an issue
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3314:  #as above, no #if PY_MAJOR_VERSION is used here so prob not an issue
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3324:  #as above
+./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3337:  #could be an issue return_expr does not seem safe is_const_ptr_to_basic_string_char
+./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3350:  #could be an issue return_expr does not seem safe anything else that is_atomic_string
+./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3401:  #could be an issue return_expr does not seem safe is_char_pointer and NOT atomic ***
+#./dtool/src/interrogate/interfaceMakerPythonNative.cxx:3415:  #is from wchar, should be ok
+#./dtool/src/interrogate/interfaceMakerPythonObj.cxx:247: InterfaceMakerPythonObj::write_class_wrapper #just setting name should be ok
+./dtool/src/interrogate/interfaceMakerPythonObj.cxx:579:  InterfaceMakerPythonObj::pack_return_value # could be an issue, no guranttee on return_expr
+./dtool/src/interrogate/interfaceMakerPythonObj.cxx:588:  InterfaceMakerPythonObj::pack_return_value # could be an issue, no guranttee on return_expr
+./dtool/src/interrogate/interfaceMakerPythonObj.cxx:629:  InterfaceMakerPythonObj::pack_return_value # could be an issue, no guranttee on return_expr
+./dtool/src/interrogate/interfaceMakerPythonSimple.cxx:475: InterfaceMakerPythonSimple::pack_return_value #return_expr issues is_char_pointer atomic
+#./dtool/src/interrogate/interfaceMakerPythonSimple.cxx:483:  #ok is wchar
+./dtool/src/interrogate/interfaceMakerPythonSimple.cxx:489: InterfaceMakerPythonSimple::pack_return_value #return_expr issues all other atomic strings
+./dtool/src/interrogate/interfaceMakerPythonSimple.cxx:532: InterfaceMakerPythonSimple::pack_return_value #return_expr issues is_char_pointer -atomic
+
+#./dtool/src/interrogatedb/py_panda.cxx:210:  #safe, pulling straight from python __name__
+#./dtool/src/interrogatedb/py_panda.cxx:222:  #safe, pulling straight from python __name__
+#./dtool/src/interrogatedb/py_panda.cxx:252:  #safe, pulling straight from python __name__
+#./dtool/src/interrogatedb/py_panda.cxx:264:  #safe, pulling straight from python __name__
+
+#./dtool/src/pystub/pystub.cxx:143: #no impact
+#./dtool/src/pystub/pystub.cxx:144:
+#./dtool/src/pystub/pystub.cxx:145:
+#./dtool/src/pystub/pystub.cxx:146:
+#./dtool/src/pystub/pystub.cxx:147:
+#./dtool/src/pystub/pystub.cxx:148:
+#./dtool/src/pystub/pystub.cxx:149:
+#./dtool/src/pystub/pystub.cxx:150: #no impact
+#./dtool/src/pystub/pystub.cxx:307:
+#./dtool/src/pystub/pystub.cxx:308:
+#./dtool/src/pystub/pystub.cxx:309:
+#./dtool/src/pystub/pystub.cxx:310:
+#./dtool/src/pystub/pystub.cxx:311:
+#./dtool/src/pystub/pystub.cxx:312:
+#./dtool/src/pystub/pystub.cxx:313:
+#./dtool/src/pystub/pystub.cxx:314: #no impact for the whole block here
+
+
+#./panda/src/event/pythonTask.cxx:257:  PythonTask::__setattr__ #ok, pulls from __repr__
+./panda/src/event/pythonTask.cxx:276:  PythonTask::__setattr__ #could be causing a problem if v is not a string but is bytes instead
+./panda/src/event/pythonTask.cxx:326:  PythonTask::__getattr__ #could definitely be a problem, calls get_name() which is suspect in my testing
+#./panda/src/event/pythonTask.cxx:426:  PythonTask::do_python_task #might be ok? pulls from PyObject_ASCII should be fine
+#./panda/src/event/pythonTask.cxx:518:  PythonTask::do_python_task #might be ok? pulls from PyObject_ASCII should be fine
+#./panda/src/event/pythonTask.cxx:646:  PythonTask::call_owner_method #might be ok? pulls from PyObject_ASCII should be fine
+
+
+#for these two the Python type rule is ONLY that the key be a hashable type and the panda implementation also requires it be bufferable
+./panda/src/pgraph/pandaNode_ext.cxx:223:  Extension<PandaNode>::get_tag_keys  #BROKEN: pass in b'\x80' as a key to set_tag
+./panda/src/pgraph/pandaNode_ext.cxx:248:  Extension<PandaNode>::get_python_tag_keys #BROKEN: pass in b'\x80' as a key to set_python_tag
+
+gvim ./direct/src/dcparser/dcClass.cxx ./direct/src/dcparser/dcField.cxx ./direct/src/dcparser/dcPacker.cxx ./direct/src/distributed/cConnectionRepository.cxx ./direct/src/plugin/p3dPythonRun.cxx ./dtool/metalibs/dtoolconfig/pydtool.cxx ./dtool/src/dtoolutil/executionEnvironment.cxx ./dtool/src/dtoolutil/filename.cxx ./dtool/src/dtoolutil/globPattern.cxx ./dtool/src/interrogate/interfaceMakerPythonNative.cxx ./dtool/src/interrogate/interfaceMakerPythonObj.cxx ./dtool/src/interrogate/interfaceMakerPythonSimple.cxx ./dtool/src/interrogatedb/py_panda.cxx ./dtool/src/pystub/pystub.cxx ./panda/src/event/pythonTask.cxx ./panda/src/pgraph/pandaNode_ext.cxx 

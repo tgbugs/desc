@@ -20,17 +20,6 @@ from defaults import *
 
 #XXX use CollisionTube for rectangular stuff, its not perfect (corners) but it is better than the alternative
 
-class requestDispatcher(object):
-    """
-        The local half the the request system, manages the connection to the request manager
-    """
-    def __init__(self,port):
-
-    def __get_m
-
-    def dispatch(self,request):
-
-
 def buildRequest(selected_uuids, selected_properties):
     """ Build and dispatch a request and return a future 
         indicating that we expect to receive a compiled set
@@ -340,7 +329,7 @@ def main():
     from panda3d.core import PStatClient
 
     from dragsel import BoxSel
-    from util import Utils, console
+    from util import ui_text, console
     from ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
 
@@ -348,11 +337,11 @@ def main():
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
 
-    textRoot = render.attachNewNode("textRoot")
+    uiRoot = render.attachNewNode("uiRoot")
     level2Root = render.attachNewNode('collideRoot')
 
     base.setBackgroundColor(0,0,0)
-    ut = Utils()
+    ut = ui_text()
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
@@ -382,8 +371,8 @@ def main():
         print(out)
         render.attachNewNode(makeSimpleGeom(positions,np.random.rand(4)))
 
-    #textRoot = render.find('textRoot')
-    #textRoot.detach()
+    #uiRoot = render.find('uiRoot')
+    #uiRoot.detach()
     bs = BoxSel(False)  # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
     #base.camLens.setFov(150)
     run()

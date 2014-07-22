@@ -156,7 +156,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         super(BoxSel, self).__init__()
         self.visualize = visualize
 
-        self.textRoot = render.find('textRoot')
+        self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
         self.selRoot = render.attachNewNode('selRoot')
 
@@ -195,7 +195,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         self.accept('mouse1',self.gotClick)
         self.accept('shift-mouse1',self.gotClick)
         self.accept('mouse1-up',self.gotRelease)
-        self.accept("escape", sys.exit)
+        #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
 
@@ -210,7 +210,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             except IndexError: #FIXME slow?
                 return None
 
-    def processTarget(self,target):
+    def processTarget(self,target):  # FIXME this is wrong, it needs to accomodate more child nodes
         #TODO shouldn't we let nodes set their own "callback" on click? so that there is a type per instead of shoving it all here?
             #well we also need to keep track of the previously selected set of nodes so we can turn them back off
         #note: target is a CollisionEntry
@@ -237,9 +237,9 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             if clear:
                 self.clearSelection()
 
-        textNode = self.textRoot.find("%s_text"%uuid)
+        textNode = self.uiRoot.find("%s_text"%uuid)
         if not textNode:
-            textNode = self.textRoot.attachNewNode(TextNode("%s_text"%uuid))
+            textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
             textNode.setPos(*intoNode.getBounds().getApproxCenter())
             textNode.node().setText("%s"%uuid)
             textNode.node().setEffect(BillboardEffect.makePointEye())
@@ -634,10 +634,10 @@ def makePoint(point=[0,0,0]):
 
 
 def main():
-    from util import Utils
+    from util import ui_text
     base = ShowBase()
     base.disableMouse()
-    ut = Utils()
+    ut = ui_text()
     dt = BoxSel()
     embed()
     run()

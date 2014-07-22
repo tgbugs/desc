@@ -217,7 +217,7 @@ class CameraControl(DirectObject):
         #keybind setup
         self.__ends__=defaultdict(list)
 
-        self.accept("escape", sys.exit)
+        #self.accept("escape", sys.exit)  #no, exit_cleanup will handle this...
 
         for function,key in keybinds['view'].items():
             #self.accept(key,taskMgr.add,(getattr(self,function),function+'Task'))

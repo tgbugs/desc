@@ -105,7 +105,7 @@ rm -r ~/.local/share/panda3d
 python makepanda/makepanda.py --everything --threads 8 --optimize 3 --verbose --no-ode
 python makepanda/installpanda.py --destdir=/home/tgillesp/.local/ --prefix=/
 
-#then you meed to
+#then you need to
 mv ~/.local/usr/lib64/python3.3/site-packages/panda3d ~/.local/lib64/python3.3/site-packages/panda3d 
 
 The right way to do this is as follows:

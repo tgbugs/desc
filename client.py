@@ -610,7 +610,7 @@ def main():
     transport, protocol = clientLoop.run_until_complete(coro_dataClient) # can this work with with?
 
     #make sure we can exit
-    el = exit_cleanup(clientLoop)
+    el = exit_cleanup(clientLoop)  #use this to call stop() on run_forever
 
     #run it
     asyncThread = Thread(target=clientLoop.run_forever)

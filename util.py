@@ -22,21 +22,15 @@ class exit_cleanup(DirectObject):
         the code following run() in the main thread
         will never execute
     """
-    def __init__(self, asyncio_loop):
+    def __init__(self, asyncio_loop=None):
         self.loop = asyncio_loop
         self.accept("escape",self.exit)
 
     def exit(self):
-        try:
-            # this raises an error in the other thread, killing the loop
-            # totally not how we are supposed to do this
-            self.loop.call_soon_threadsafe(self.loop.close)
-            #self.loop.stop()  # this does not work :(
-        except (ValueError, IndexError) as e:
-            raise
-            print(e)
-        finally:
-            sys.exit()
+        #we must call stop before sys.exit() or we can't stop the loop
+        if self.loop:
+            self.loop.call_soon_threadsafe(self.loop.stop)
+        sys.exit()
 
 class ui_text(DirectObject):
     def __init__(self):

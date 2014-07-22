@@ -337,7 +337,7 @@ def main():
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
 
-    textRoot = render.attachNewNode("textRoot")
+    uiRoot = render.attachNewNode("uiRoot")
     level2Root = render.attachNewNode('collideRoot')
 
     base.setBackgroundColor(0,0,0)
@@ -371,8 +371,8 @@ def main():
         print(out)
         render.attachNewNode(makeSimpleGeom(positions,np.random.rand(4)))
 
-    #textRoot = render.find('textRoot')
-    #textRoot.detach()
+    #uiRoot = render.find('uiRoot')
+    #uiRoot.detach()
     bs = BoxSel(False)  # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
     #base.camLens.setFov(150)
     run()

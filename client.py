@@ -387,8 +387,8 @@ class renderManager(DirectObject):
         self.bamNode.attachNewNode(bam)
         #bam.reparentTo(self.bamNode)
         #self.collNode.attachNewNode(coll)
-        coll.reparentTo(self.collNode)
-        self.uiNode.attachNewNode(ui)
+        [c.reparentTo(self.collNode) for c in coll.getChildren()]  # FIXME too slow!
+        #self.uiNode.attachNewNode(ui)
         print(self.uiNode.getChildren())  # utf-8 errors
 
     def make_nodes(self, request_hash, data_tuple):
@@ -560,7 +560,7 @@ def main():
 def main():
     #fixing modules references
     import sys
-    sys.modules['core'] = sys.modules['panda3d.core']  # hack fix for serialization
+    #sys.modules['core'] = sys.modules['panda3d.core']  # hack fix for serialization
 
     # render setup
     from direct.showbase.ShowBase import ShowBase
@@ -590,7 +590,6 @@ def main():
     geomRoot = render.attachNewNode('geomRoot')
     collideRoot = render.attachNewNode('collideRoot')
     uiRoot = render.attachNewNode('uiRoot')
-    textRoot = render.attachNewNode("textRoot")  #FIXME
     bs = BoxSel(False)
 
     rendMan = renderManager(geomRoot, collideRoot, uiRoot)

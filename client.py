@@ -618,70 +618,9 @@ def main():
     clientLoop.run_until_complete(conProtocol.get_data_token())
     token = conProtocol.future_token.result()
 
-    def get_token(future):
-        while 1:
-            print('trying things?')
-            clientLoop.call_soon_threadsafe(clientLoop.stop)  # this is a hack
-            sleep(2)
-            try:
-                coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None, event_loop=clientLoop)
-                conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-                clientLoop.run_until_complete(conProtocol.get_data_token())
-                future.set_result(conProtocol.future_token.result())  # lol oops
-                break
-            except ConnectionRefusedError:
-                print("Server not found. Retrying.")
-                asyncThread = Thread(target=clientLoop.run_forever)
-                asyncThread.start()
-                yield from asynio.sleep(5, loop=clientLoop)  # tom is an idiot
-        print('got token',conProtocol.future_token.result())
-        #return conProtocol.future_token.result()
-
-
-
-    @asyncio.coroutine
-    def _reup_con(self):
-            #coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
-            f = asyncio.Task(coro_conClient, loop=clientLoop)  # FIXME we need infinte timeout???
-            print('yielding from',f)
-            yield from f
-            conTransport, conProtocol = f.result()
-            print('yielding from get_data_token')
-            yield from asyncio.Task(conProtocol.get_data_token(), loop=clientLoop)
-            self.token = conProtocol.future_token.result()
-            coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
-            f = asyncio.Task(coro_dataClient, loop=clientLoop)
-            print('yielding from',f)
-            yield from f
-
-    @asyncio.coroutine
-    def reup_con(self):
-        f = asyncio.Future(loop=clientLoop)
-        print('done sleeping')
-        yield from get_token(f)
-        yield from f
-        print('got token from another thread',f)
-        self.token = f.result()
-        coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
-        #asyncio.Task(coro_dataClient, loop=clientLoop)
-        transport, protocol = clientLoop.run_until_complete(coro_dataClient)
-        clientLoop.run_forever()
-         
-        
-
-
-
-    def recon_task(self, task):
-        #out = reup_con(self)
-        #embed()
-        asyncio.Task(reup_con(self), loop=clientLoop)
-        print("rup task scheduled!")
-        taskMgr.remove('reupTask')
-        return task.cont
-
     def recon_task(self, task):
         try:
-            coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None, event_loop=clientLoop)
+            coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
             conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
             clientLoop.run_until_complete(conProtocol.get_data_token())
             self.token = conProtocol.future_token.result()
@@ -694,25 +633,7 @@ def main():
         except ConnectionRefusedError as e:
             return task.cont
 
-
-    
-
-    def setup_connection(self, task):
-        """ This is the most convoluted thing I have ever encountered in my life
-            And just to get it to run in the main thread!
-        """
-        clientLoop.call_soon_threadsafe(clientLoop.stop)  # this is a hack
-        #sleep(5)  # cst is asnyc we need sleep + dont kick server while down
-        self.token = get_token()
-        coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
-        clientLoop.run_until_complete(coro_dataClient) # can this work with with?
-        asyncThread = Thread(target=clientLoop.run_forever)
-        asyncThread.start()
-        taskMgr.remove('reupTask')
-        return task.cont
-
     setattr(dataProtocol, 'reup_con', recon_task)
-
 
     datCli = datCli_base(token)
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)

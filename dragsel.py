@@ -5,8 +5,8 @@ from direct.gui.DirectButton import DirectButton
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
-#from panda3d.core import PandaNode,NodePath
-from panda3d.core import TextNode, PandaNode, NodePath
+from panda3d.core import PandaNode,NodePath
+from panda3d.core import TextNode
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
 from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
@@ -152,9 +152,12 @@ def makeSelectRect():
 #use render 2d?
 
 class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
-    def __init__(self, visualize = False):
+    def __init__(self, visualize = False, invisRoot = None):
         super(BoxSel, self).__init__()
         self.visualize = visualize
+        self.invisRoot=invisRoot
+        if self.invisRoot is None:
+            self.invisRoot = NodePath(PandaNode('invisRoot'))
 
         self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
@@ -198,7 +201,6 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
-        self.holderNode=NodePath(PandaNode(''))
 
         #taskMgr.add(self.clickTask, 'clickTask')
 
@@ -207,7 +209,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             try:
                 obj = self.curSelShown.pop()
                 #obj.detachNode()
-                obj.reparentTo(self.holderNode)
+                obj.reparentTo(self.invisRoot)
                 #obj.remove()
             except IndexError: #FIXME slow?
                 return None
@@ -239,7 +241,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             if clear:
                 self.clearSelection()
 
-        textNode = self.holderNode.find("%s_text"%uuid)
+        textNode = self.invisRoot.find("%s_text"%uuid)
         if textNode:
             textNode.reparentTo(self.uiRoot)
             self.curSelShown.append(textNode)

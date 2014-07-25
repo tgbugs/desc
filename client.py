@@ -6,6 +6,7 @@ import pickle
 #import zlib
 import ssl
 import os
+import sys
 from collections import deque
 from time import sleep
 from threading import Lock
@@ -14,7 +15,8 @@ from concurrent.futures import ProcessPoolExecutor
 from IPython import embed
 from numpy.random import rand
 
-from panda3d.core import GeomNode, CollisionNode, NodePath, PandaNode
+from panda3d.core import GeomNode, CollisionNode, TextNode, NodePath, PandaNode
+from panda3d.core import BillboardEffect
 from direct.showbase.DirectObject import DirectObject
 
 from defaults import CONNECTION_PORT, DATA_PORT
@@ -22,6 +24,8 @@ from request import Request, DataByteStream
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 from dataIO import treeMe
 
+#fix sys module reference
+sys.modules['core'] = sys.modules['panda3d.core']
 
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
     #that would vastly simplify life...? ehhhhh
@@ -322,10 +326,11 @@ class renderManager(DirectObject):
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
     
-    def __init__(self, bamNode, collNode, uiNode):
-        self.bamNode = bamNode
-        self.collNode = collNode
-        self.uiNode = uiNode
+    def __init__(self, bamRoot, collRoot, uiRoot, invisRoot):
+        self.bamRoot = bamRoot
+        self.collRoot = collRoot
+        self.uiRoot = uiRoot
+        self.invisRoot = invisRoot
 
         self.cache = {}
         self.cache_age = deque()
@@ -395,18 +400,19 @@ class renderManager(DirectObject):
             self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
-        self.bamNode.attachNewNode(bam)
-        #bam.reparentTo(self.bamNode)
-        #self.collNode.attachNewNode(coll)
-        [c.reparentTo(self.collNode) for c in coll.getChildren()]  # FIXME too slow!
-        #self.uiNode.attachNewNode(ui)
-        print(self.uiNode.getChildren())  # utf-8 errors
+        self.bamRoot.attachNewNode(bam)
+        #bam.reparentTo(self.bamRoot)
+        #self.collRoot.attachNewNode(coll)
+        [c.reparentTo(self.collRoot) for c in coll.getChildren()]  # FIXME too slow!
+        #self.uiRoot.attachNewNode(ui)
+        #print(self.uiRoot.getChildren())  # utf-8 errors
 
     def make_nodes(self, request_hash, data_tuple):
         """ fire and forget """
         bam = self.makeBam(data_tuple[0])  #needs to return a node
-        coll = self.makeColl(data_tuple[1])  #needs to return a node
-        ui = self.makeUI(data_tuple[2])  #needs to return a node (or something)
+        coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
+        coll = self.makeColl(coll_tup)  #needs to return a node
+        ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
         [n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
         return node_tuple
@@ -418,19 +424,25 @@ class renderManager(DirectObject):
         #node.addGeom(out)
         return out
 
-    def makeColl(self, coll_data):
-        node = NodePath(PandaNode(''))  # use reparent to?
-        coll = pickle.loads(coll_data)
+    def makeColl(self, coll_tup):
+        node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
         # FIXME treeMe is SUPER slow... :/
-        treeMe(node, *coll)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+        treeMe(node, *coll_tup)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
         print('coll node successfully made')
         return node
 
-    def makeUI(self, ui_data):
+    def makeUI(self, ui):  # FIXME this works inconsistently with other stuff
         """ we may not need this if we stick all the UI data in geom or coll nodes? """
         # yeah, because the 'properties' the we select on will be set based on which node
             # is selected
         node = PandaNode('')  # use reparent to?
+        print(len(ui))
+        for position, uuid in zip(ui[0],ui[1]):  # FIXME weird erros here...
+            t = self.invisRoot.attachNewNode(TextNode('%s_text'%uuid))
+            t.setPos(*position)
+            t.node().setText('%s'%uuid)
+            t.node().setEffect(BillboardEffect.makePointEye())
+        
         return node
 
     def fake_request(self):
@@ -601,12 +613,15 @@ def main():
     geomRoot = render.attachNewNode('geomRoot')
     collideRoot = render.attachNewNode('collideRoot')
     uiRoot = render.attachNewNode('uiRoot')
-    bs = BoxSel(False)
-
-    rendMan = renderManager(geomRoot, collideRoot, uiRoot)
+    invisRoot = NodePath(PandaNode('invisRoot'))
 
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
+
+    bs = BoxSel(False, invisRoot)
+
+    rendMan = renderManager(geomRoot, collideRoot, uiRoot, invisRoot)
+
     #ppe = ProcessPoolExecutor()
     #clientLoop.set_default_executor(ppe)  # FIXME this doesn't work ;_;
 

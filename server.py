@@ -8,8 +8,10 @@ import sys
 from uuid import uuid4
 from collections import defaultdict, deque
 from time import sleep
-from queue import Queue
+#from queue import Queue
 from threading import Thread
+from multiprocessing import Queue
+from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
 from numpy.random import bytes as make_bytes
@@ -194,8 +196,8 @@ class dataServerProtocol(asyncio.Protocol):
             if request is not None:
                 # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
                     # so we need a way to preserve the order of the SEND using a queue or something
-                self.event_loop.run_in_executor( None, lambda: self.send_response(request) )  # FIXME error handling live?
-                self.event_loop.run_in_executor( None, lambda: self.request_prediction(request) )
+                self.event_loop.run_in_executor( None, self.send_response, request)  # FIXME error handling live?
+                self.event_loop.run_in_executor( None, self.request_prediction, request)
                 self.transport.write(self.data_queue.get())
                 self.transport.write(self.data_queue.get())
 
@@ -322,6 +324,7 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
 
 def main():
     serverLoop = asyncio.get_event_loop()
+    serverLoop.set_default_executor(ProcessPoolExecutor())
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)

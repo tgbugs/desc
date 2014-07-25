@@ -238,7 +238,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
     def process_responses(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
         for request_hash, data_tuple in response_generator:
             print('yes we are trying to render stuff')
-            self.event_loop.run_in_executor( self.ppe , lambda: self.set_nodes(request_hash, data_tuple) )  # amazingly this works!
+            self.event_loop.run_in_executor( None , lambda: self.set_nodes(request_hash, data_tuple) )  # amazingly this works!
 
     def set_nodes(self, request_hash, data_tuple):
         raise NotImplementedError('patch this function with the shared stated version in bamCacheManager')
@@ -607,13 +607,13 @@ def main():
 
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
-    ppe = ProcessPoolExecutor()
+    #ppe = ProcessPoolExecutor()
+    #clientLoop.set_default_executor(ppe)  # FIXME this doesn't work ;_;
 
     datCli_base = type('dataProtocol',(dataProtocol,),
                   {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
                    'render_set_send_request':rendMan.set_send_request,
-                   'event_loop':clientLoop,  # FIXME we could move event_loop to __new__? 
-                   'ppe':ppe })
+                   'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
     coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
     conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)

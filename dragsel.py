@@ -6,7 +6,7 @@ from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
 #from panda3d.core import PandaNode,NodePath
-from panda3d.core import TextNode, PandaNode
+from panda3d.core import TextNode, PandaNode, NodePath
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
 from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
@@ -198,6 +198,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
+        self.holderNode=NodePath(PandaNode(''))
 
         #taskMgr.add(self.clickTask, 'clickTask')
 
@@ -205,7 +206,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         while 1:
             try:
                 obj = self.curSelShown.pop()
-                obj.detachNode()
+                #obj.detachNode()
+                obj.reparentTo(self.holderNode)
                 #obj.remove()
             except IndexError: #FIXME slow?
                 return None
@@ -233,17 +235,22 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
         if self.__shift__:  # FIXME OH NO! we need a dict ;_; shift should toggle selection
             pass
-        elif self.curSelShown:
+        elif self.curSelShown:  # FIXME this makes reselection very slow !
             if clear:
                 self.clearSelection()
 
-        textNode = self.uiRoot.find("%s_text"%uuid)
-        if not textNode:
+        textNode = self.holderNode.find("%s_text"%uuid)
+        if textNode:
+            textNode.reparentTo(self.uiRoot)
+            self.curSelShown.append(textNode)
+        else:  # FIXME this is where the majority of the slowdown comes...
+            print('Node %s not found'%uuid)
             textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
             textNode.setPos(*intoNode.getBounds().getApproxCenter())
             textNode.node().setText("%s"%uuid)
             textNode.node().setEffect(BillboardEffect.makePointEye())
             self.curSelShown.append(textNode)
+
 
         #textNode.node().setCardDecal(True)
 

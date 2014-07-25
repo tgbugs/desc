@@ -8,7 +8,7 @@ import ssl
 import os
 from collections import deque
 from time import sleep
-from threading import Lock
+from threading import Lock, Thread
 
 from IPython import embed
 from numpy.random import rand
@@ -322,7 +322,8 @@ class renderManager(DirectObject):
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
     
-    def __init__(self, bamNode, collNode, uiNode):
+    def __init__(self, event_loop, bamNode, collNode, uiNode):
+        self.event_loop = event_loop
         self.bamNode = bamNode
         self.collNode = collNode
         self.uiNode = uiNode
@@ -394,20 +395,21 @@ class renderManager(DirectObject):
             print("predicted data view cached")
             self.cache[request_hash] = node_tuple
 
-    def render(self, bam, coll, ui):
+    def render(self, bam, ui):
         self.bamNode.attachNewNode(bam)
         #bam.reparentTo(self.bamNode)
         #self.collNode.attachNewNode(coll)
-        [c.reparentTo(self.collNode) for c in coll.getChildren()]  # FIXME too slow!
+        #[c.reparentTo(self.collNode) for c in coll.getChildren()]  # FIXME too slow!
         #self.uiNode.attachNewNode(ui)
         print(self.uiNode.getChildren())  # utf-8 errors
 
     def make_nodes(self, request_hash, data_tuple):
         """ fire and forget """
         bam = self.makeBam(data_tuple[0])  #needs to return a node
-        coll = self.makeColl(data_tuple[1])  #needs to return a node
+        #self.makeColl(data_tuple[1], request_hash)  #returns none for async purposes
+        self.event_loop.call_soon(self.makeColl, data_tuple[1], request_hash)  # FIXME this seems slighly better?
         ui = self.makeUI(data_tuple[2])  #needs to return a node (or something)
-        node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
+        node_tuple = (bam, ui)  # FIXME we may want to have geom and collision on the same parent?
         [n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
         return node_tuple
 
@@ -418,13 +420,18 @@ class renderManager(DirectObject):
         #node.addGeom(out)
         return out
 
-    def makeColl(self, coll_data):
-        node = NodePath(PandaNode(''))  # use reparent to?
-        coll = pickle.loads(coll_data)
-        # FIXME treeMe is SUPER slow... :/
-        treeMe(node, *coll)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+    def makeColl(self, coll_data, request_hash):
+        #node = NodePath(PandaNode(''))  # use reparent to?
+        # FIXME treeMe is SUPER slow... :/ how to not block here ;_;
+        #treeMe(node, *coll)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+        positions, uuids, geomCollide = pickle.loads(coll_data)
+        treeMe(self.collNode, positions, uuids, geomCollide, request_hash=request_hash)
+        #def doTree():
+            #treeMe(self.collNode, positions, uuids, geomCollide)
+        #treeThread = Thread(target=treeMe, args=(node, positions, uuids, geomCollide))
+        #treeThread.start()  # FIXME this doesn't help at all :/
         print('coll node successfully made')
-        return node
+        return None
 
     def makeUI(self, ui_data):
         """ we may not need this if we stick all the UI data in geom or coll nodes? """
@@ -603,10 +610,10 @@ def main():
     uiRoot = render.attachNewNode('uiRoot')
     bs = BoxSel(False)
 
-    rendMan = renderManager(geomRoot, collideRoot, uiRoot)
-
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
+
+    rendMan = renderManager(clientLoop, geomRoot, collideRoot, uiRoot)
 
     datCli_base = type('dataProtocol',(dataProtocol,),
                   {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes

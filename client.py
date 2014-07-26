@@ -636,6 +636,8 @@ def main():
     token = conProtocol.future_token.result()
 
     def recon_task(self, task):
+        taskMgr.remove('reupTask')
+        return task.cont
         try:
             coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
             conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)

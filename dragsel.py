@@ -241,7 +241,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             if clear:
                 self.clearSelection()
 
-        textNode = self.invisRoot.find("%s_text"%uuid)
+        textNode = self.invisRoot.find("%s_text"%uuid)  # FIXME garbage-collection-states #f
         if textNode:
             textNode.reparentTo(self.uiRoot)
             self.curSelShown.append(textNode)

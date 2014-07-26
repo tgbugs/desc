@@ -10,7 +10,9 @@ from collections import defaultdict, deque
 from time import sleep
 #from queue import Queue
 from threading import Thread
-from multiprocessing import Queue
+from multiprocessing import Pipe
+#from multiprocessing import Queue as mpq
+#from multiprocessing import Lock as mpl
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
@@ -39,6 +41,11 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
         message so we know which connection we are getting data
         about
     """
+    def __new__(cls, tm):
+        cls.tm = tm
+        cls.__new__ = super().__new__
+        return cls
+
     def connection_made(self, transport):
         cert = transport.get_extra_info('peercert')
         if not cert:
@@ -94,7 +101,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
             self.transport.write(b'ok here dataz')
             token = make_bytes(DataByteStream.LEN_TOKEN)
             token_stream = DataByteStream.makeTokenStream(token)
-            self.update_ip_token_pair(self.ip, token)
+            self.tm.update_ip_token_pair(self.ip, token)
             self.open_data_firewall(self.ip)
             #DO ALL THE THINGS
             #TODO pass that token value paired with the peer cert to the data server...
@@ -119,24 +126,39 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
             #the data server is NOT the same as the connection server
         os.system('echo "firewall is now kittens!"')
     
-    def update_token_data(self, ip, token):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
 
 class dataServerProtocol(asyncio.Protocol):
     """ Data server protocol that holds the code for managing incoming data
         streams. It should be data agnoistic, thus try to keep the code that
         actually manipulates the data in DataByteStream.
     """
+    #def __new__(cls, make_response = None, make_predictions = None,
+                #get_cache = None, get_tokens_for_ip = None,
+                #remove_token_for_ip = None, respMaker = None, rcm = None, tm = None):
+    def __new__(cls, event_loop, respMaker, rcm, tm):
+        cls.event_loop = event_loop
+        #cls.make_response = make_response
+        #cls.make_precitions = make_predictions
+        cls.respMaker = respMaker
+        #cls.get_cache = get_cache
+        cls.rcm = rcm
+        #cls.get_tokens_for_ip = remove_token_for_ip
+        cls.tm = tm
+        cls.__new__ = super().__new__
+        return cls
+        
+
     def __init__(self):
         self.token_received = False
         self.__block__ = b''
-        self.data_queue = Queue()
+        self.__resp_done__ = False
+
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
         print("connection from:",peername)
         try:
-            self.expected_tokens = self.get_tokens_for_ip(peername[0])
+            self.expected_tokens = self.tm.get_tokens_for_ip(peername[0])
             #self.get_tokesn_for_ip = None  # XXX will fail, reference to method persists
             self.transport = transport
             self.pprefix = peername
@@ -157,7 +179,7 @@ class dataServerProtocol(asyncio.Protocol):
                 token, token_end = DataByteStream.decodeToken(self.__block__)
                 if token in self.expected_tokens:
                     self.token_received = True  # dont store the token anywhere in memory, ofc if you can find the t_r bit and flip it...
-                    self.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
+                    self.tm.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
                     #self.remove_token_for_ip = None  # done with it, remove it from this instance XXX will fail
                     self.expected_tokens = None  # we don't need access to those tokens anymore
                     del self.expected_tokens
@@ -192,31 +214,54 @@ class dataServerProtocol(asyncio.Protocol):
 
     def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         print(self.pprefix,'processing requests')
+        pipes = []
         for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
                 # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
                     # so we need a way to preserve the order of the SEND using a queue or something
-                self.event_loop.run_in_executor( None, self.send_response, request)  # FIXME error handling live?
-                self.event_loop.run_in_executor( None, self.request_prediction, request)
-                self.transport.write(self.data_queue.get())
-                self.transport.write(self.data_queue.get())
+                p_send, p_recv = Pipe()
+                pipes.append(p_recv)
+                self.event_loop.run_in_executor( None, self.send_response, p_send, request)  # FIXME error handling live?
+                #self.event_loop.run_in_executor( None, self.request_prediction, p_send, rdLock, request)
+                #self.transport.write(self.data_queue.get())
+                #self.transport.write(self.data_queue.get())
+        while 1:  #this is SUPER irritating :/ self.transport.write was supposed to be asyn, it sends blocks out of order if you dont sync it >_<
+            #XXX actually, that might be a bug to submit...
+            for p_recv in pipes:
+                #self.transport.write(self.p_recv.recv())  #FIXME this still blocks!!!!!!
+                if p_recv.closed:
+                    p_recv.recv_bytes_into(self.transport)  # FIXME this way waits on the slowest!
+            if all([p.closed for p in pipes]):
+                break
 
-    def send_response(self,request):
+    def send_response(self, pipe, request):
         """ returns the request hash and a compressed bam stream """
         rh =  request.hash_
-        data_stream = self.get_cache(rh)
+        data_stream = self.get_cache(self.rcm, rh)
         if data_stream is None:  # FIXME if we KNOW we are going to gz stuff we should do it early...
-            data_tuple = self.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
+            data_tuple = self.respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
             data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-            self.update_cache(rh, data_stream)
-        self.data_queue.put(data_stream)
+            self.rcm.update_cache(rh, data_stream)
+        pipe.send(data_stream)
+        self.request_prediction(pipe, request)
+
+        #data_queue.put(data_stream)
         print('data has been put in the queue')
         #self.transport.write(data_stream)
 
-    def request_prediction(self, request):
-        for preq in self.make_predictions(request):
-            self.send_response(preq)
+    def request_prediction(self, pipe, lock, request):
+        for preq in self.respMaker.make_predictions(request):
+            self.send_response(pipe, preq)
+        pipe.close()
 
+    def resp_done(lock, update = None):  # FIXME this won't work... need a lock per pair
+        with lock:
+            if self.update is None:
+                return self.__resp_done__
+            elif update:
+                self.__resp_done__ = update
+
+    """
     #things that go to the database
     def make_response(self, request):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
@@ -236,6 +281,7 @@ class dataServerProtocol(asyncio.Protocol):
 
     def remove_token_for_ip(self, ip, token):
         raise NotImplemented('This should be set at run time really for message passing to shared state')
+    """
 
 class responseMaker:  # TODO we probably move this to its own file?
     def __init__(self):
@@ -311,7 +357,7 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
     """
     def __init__(self):
         self.tokenDict = defaultdict(set)
-    def update_token_data(self, ip, token):
+    def update_ip_token_pair(self, ip, token):
         self.tokenDict[ip].add(token)
         print(self.tokenDict)
     def get_tokens_for_ip(self, ip):
@@ -332,8 +378,9 @@ def main():
     tm = tokenManager()  # keep the shared state out here! magic if this works
 
     # commence in utero monkey patching
-    conServ = type('connectionServerProtocol', (connectionServerProtocol,),
-                   {'update_ip_token_pair':tm.update_token_data})
+    conServ_ = type('connectionServerProtocol_', (connectionServerProtocol,),
+                   {'update_ip_token_pair':tm.update_ip_token_pair})
+    conServ = connectionServerProtocol(tm)
 
     #shared state, in theory this stuff could become its own Protocol
     rcm = requestCacheManager(9999)
@@ -343,7 +390,7 @@ def main():
         # run time. We MAY be able to fix this by using a metaclass that
         # constructs these so that when a new protocol is started those methods
         # are passed in and thus can successfully be deleted from a class instance
-    datServ = type('dataServerProtocol', (dataServerProtocol,),
+    datServ_ = type('dataServerProtocol_', (dataServerProtocol,),
                    {'get_tokens_for_ip':tm.get_tokens_for_ip,
                     'remove_token_for_ip':tm.remove_token_for_ip,
                     'get_cache':rcm.get_cache,
@@ -351,6 +398,20 @@ def main():
                     'make_response':respMaker.make_response,
                     'make_predictions':respMaker.make_predictions,
                     'event_loop':serverLoop })
+
+    """
+    datServ = dataServerProtocol(
+        make_response=respMaker.make_response,
+        make_predictions=respMaker.make_predictions,
+        get_cache=rcm.get_cache,
+        get_tokens_for_ip=tm.get_tokens_for_ip,
+        remove_token_for_ip=tm.remove_token_for_ip,
+        respMaker=respMaker,
+        rcm=rcm,
+        tm=tm
+    )
+    """
+    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm)
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
@@ -360,9 +421,10 @@ def main():
     serverThread = Thread(target=serverLoop.run_forever)
     serverThread.start()
     try:
-        embed()
-        serverLoop.call_soon_threadsafe(serverLoop.stop)
+        #embed()
+        serverThread.join()
     except KeyboardInterrupt:
+        serverLoop.call_soon_threadsafe(serverLoop.stop)
         print('exiting...')
     finally:
         serverCon.close()

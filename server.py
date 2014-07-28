@@ -133,17 +133,11 @@ class dataServerProtocol(asyncio.Protocol):
         streams. It should be data agnoistic, thus try to keep the code that
         actually manipulates the data in DataByteStream.
     """
-    #def __new__(cls, make_response = None, make_predictions = None,
-                #get_cache = None, get_tokens_for_ip = None,
-                #remove_token_for_ip = None, respMaker = None, rcm = None, tm = None):
+
     def __new__(cls, event_loop, respMaker, rcm, tm, manager):
         cls.event_loop = event_loop
-        #cls.make_response = make_response
-        #cls.make_precitions = make_predictions
         cls.respMaker = respMaker
-        #cls.get_cache = get_cache
         cls.rcm = rcm
-        #cls.get_tokens_for_ip = remove_token_for_ip
         cls.tm = tm
         cls.manager = manager
         cls.__new__ = super().__new__
@@ -155,13 +149,6 @@ class dataServerProtocol(asyncio.Protocol):
         self.__block__ = b''
         self.__resp_done__ = False
         self.data_queue = self.manager.Queue()
-
-    #@classmethod
-    #def __getstate__(cls):
-        #odict = cls.__dict__.copy()
-        #del odict['event_loop']
-        #del odict['data_received']
-        #return odict
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -231,59 +218,35 @@ class dataServerProtocol(asyncio.Protocol):
                     # so we need a way to preserve the order of the SEND using a queue or something
                 p_send, p_recv = Pipe()
                 pipes.append(p_recv)
-                #self.event_loop.run_in_executor( None, self.send_response, p_send, request)  # FIXME error handling live?
-                #self.event_loop.run_in_executor( None, self.request_prediction, p_send, rdLock, request)
-                #embed()
-                print(request)
                 self.event_loop.run_in_executor( None, make_response, p_send, request, self.respMaker, self.rcm)  # FIXME error handling live?
-                #expected += 2
+                expected += 2
+        for p_recv in pipes:  # this blocks hardcore?
+            self.transport.write(p_recv.recv_bytes())
+            self.transport.write(p_recv.recv_bytes())
+            p_recv.close()
+            #self.transport.write(self.data_queue.get())
+            #self.transport.write(self.data_queue.get())
+
         #for i in range(expected):
-            #self.transport.write(self.data_queue.get())
-            #self.transport.write(self.data_queue.get())
+            #self.even_loop.call_soon(p_recv_future, p_recv, future)
+
 
         #embed()
-        while 1:  #this is SUPER irritating :/ self.transport.write was supposed to be asyn, it sends blocks out of order if you dont sync it >_<
+        #while 1:  #this is SUPER irritating :/ self.transport.write was supposed to be asyn, it sends blocks out of order if you dont sync it >_<
             #XXX actually, that might be a bug to submit...
-            for p_recv in pipes:
+            #for p_recv in pipes:
                 #out = p_recv.recv_bytes()
                 #self.transport.write(out)  #FIXME this still blocks!!!!!!
-                self.transport.write(p_recv.recv_bytes())
-                self.transport.write(p_recv.recv_bytes())
-                p_recv.close()
+                #self.transport.write(p_recv.recv_bytes())
+                #self.transport.write(p_recv.recv_bytes())
+                #p_recv.close()
                 #if p_recv.closed:
                 #p_recv.recv_bytes_into(self.transport)  # FIXME this way waits on the slowest!
-            print('data sent')
-            if all([p.closed for p in pipes]):
-                print('all data sent')
-                break
-    def resp_done(lock, update = None):  # FIXME this won't work... need a lock per pair
-        with lock:
-            if self.update is None:
-                return self.__resp_done__
-            elif update:
-                self.__resp_done__ = update
-
-    """
-    #things that go to the database
-    def make_response(self, request):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
-
-    def make_predictions(self, request):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
-
-    # shared state functions
-    def get_cache(self, request_hash):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
-
-    def update_cache(self, request_hash, data_stream):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
-
-    def get_tokens_for_ip(self, ip):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
-
-    def remove_token_for_ip(self, ip, token):
-        raise NotImplemented('This should be set at run time really for message passing to shared state')
-    """
+            #print('data sent')
+            #if all([p.closed for p in pipes]):
+                #print('all data sent')
+                #break
+        #print('we have exited the while loop')
 
 class responseMaker:  # TODO we probably move this to its own file?
     def __init__(self):
@@ -396,6 +359,9 @@ def request_prediction(pipe, request, respMaker):
         send_response(data_queue, preq)
     pipe.close()
 
+def p_recv_future(p_recv, future):
+    future.set_result(p_recv.recv_bytes())
+    
 
 
 def main():

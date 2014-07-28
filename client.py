@@ -387,13 +387,14 @@ class renderManager(DirectObject):
 
     def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
         """ this is the callback used by the data protocol """
-        print('cache updated')
+        #print('cache updated')
+        print('bam length', len(data_tuple[0]))
         node_tuple = self.make_nodes(request_hash, data_tuple)
         try:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:
                 #self.render(*self.cache[request_hash])
-                print(len(node_tuple))
+                #print(len(node_tuple))
                 self.render(*node_tuple)
         except KeyError:
             print("predicted data view cached")

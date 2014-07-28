@@ -1,0 +1,19 @@
+1. install windows sdk 7.1 and vc 2010 c++ update
+    a. if you have .NET 4.1+ you need to uninstall, you also need to uninstall any vc2010 redistributables otherwise the sdk install will fail
+    b. make sure you install rc.exe! which is under c++ tools
+    c. ammintrin.h may be missing in which case, get a newer verions and install using that
+    d. congradulations, you are now a windows developer!
+    e. sp1 http://www.microsoft.com/en-us/download/confirmation.aspx?id=4422
+    f. sdk 7.1 http://www.microsoft.com/en-us/download/details.aspx?id=8279
+2. download whichever panda source version you need
+3. get rdb's win-libs-vc10-x64 
+    a. extract to $PANDA_SOURCE_PATH/thirdpary
+4. if you want to use your own version of python, copy your local install folder over win-python
+    a. you may need to rename the python dll? :(
+    b. sadly, no symlinks or shortcuts work for this which is silly since makepanda just copies from source to build
+5. if you want nvidiagc, turns out its already in rdb's vc2010
+
+bugs: makepanda.bat PROCESSOR_ARCHITECTURE = X86, PROCESSOR_ARCHITEW6432 = AMD64, thus the switch at the start fails, nope, the problem would appear to be using powershell wtf, yeah, its powershell
+    1. you must run compile from cmd, powershell's env has problems
+    2. fix makepandacore.py:1845
+    3. who knows why we're getting that memory access error ;_;

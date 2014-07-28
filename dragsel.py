@@ -5,8 +5,8 @@ from direct.gui.DirectButton import DirectButton
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
-#from panda3d.core import PandaNode,NodePath
-from panda3d.core import TextNode, PandaNode
+from panda3d.core import PandaNode,NodePath
+from panda3d.core import TextNode
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
 from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
@@ -152,9 +152,12 @@ def makeSelectRect():
 #use render 2d?
 
 class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
-    def __init__(self, visualize = False):
+    def __init__(self, visualize = False, invisRoot = None):
         super(BoxSel, self).__init__()
         self.visualize = visualize
+        self.invisRoot=invisRoot
+        if self.invisRoot is None:
+            self.invisRoot = NodePath(PandaNode('invisRoot'))
 
         self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
@@ -205,7 +208,8 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         while 1:
             try:
                 obj = self.curSelShown.pop()
-                obj.detachNode()
+                #obj.detachNode()
+                obj.reparentTo(self.invisRoot)
                 #obj.remove()
             except IndexError: #FIXME slow?
                 return None
@@ -233,17 +237,22 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
         if self.__shift__:  # FIXME OH NO! we need a dict ;_; shift should toggle selection
             pass
-        elif self.curSelShown:
+        elif self.curSelShown:  # FIXME this makes reselection very slow !
             if clear:
                 self.clearSelection()
 
-        textNode = self.uiRoot.find("%s_text"%uuid)
-        if not textNode:
+        textNode = self.invisRoot.find("%s_text"%uuid)  # FIXME garbage-collection-states #f
+        if textNode:
+            textNode.reparentTo(self.uiRoot)
+            self.curSelShown.append(textNode)
+        else:  # FIXME this is where the majority of the slowdown comes...
+            print('Node %s not found'%uuid)
             textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
             textNode.setPos(*intoNode.getBounds().getApproxCenter())
             textNode.node().setText("%s"%uuid)
             textNode.node().setEffect(BillboardEffect.makePointEye())
             self.curSelShown.append(textNode)
+
 
         #textNode.node().setCardDecal(True)
 

@@ -151,16 +151,28 @@ class sceneRender(DirectObject):
 
 
 
+TREE_LOGIC = np.array([
+    [ 1, 1, 1],
+    [ 1, 1,-1],
+    [ 1,-1, 1],
+    [ 1,-1,-1],
+    [-1, 1, 1],
+    [-1, 1,-1],
+    [-1,-1, 1],
+    [-1,-1,-1],
+])
+
+TREE_MAX_POINTS = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
+#TREE_MAX_POINTS = 1024
 
 
-def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, check = 0 ):  # TODO in theory this could be multiprocessed
+def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake'):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
         for some reason this massively improves performance even w/o the code
         for mouse over adding and removing subsets of nodes.
     """
-    max_points = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
-    #max_points = 1024
+
     num_points = len(positions)
 
     if center == None:  # branch predictor should take care of this?
@@ -174,42 +186,28 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     if num_points <= 0:
         return False
 
-    def nextLevel(check=0):
-        #print(side)
-        bitmasks =  [ np.bool_(np.zeros_like(uuids)) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+    def nextLevel():
+        bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
 
         partition = positions > center
-        #centered = positions - center  #this lets us check against 0
         
         #the 8 conbinatorial cases
         for i in range(num_points):
             index = octit(partition[i])
             bitmasks[index][i] = True
-
-        logic = np.array([
-            [ 1, 1, 1],
-            [ 1, 1,-1],
-            [ 1,-1, 1],
-            [ 1,-1,-1],
-            [-1, 1, 1],
-            [-1, 1,-1],
-            [-1,-1, 1],
-            [-1,-1,-1],
-        ])
-
         output = []
         for i in range(8):
             branch = bitmasks[i]  # this is where we can multiprocess
-            new_center = center + logic[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
+            new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
             subSet = positions[branch]
-            zap = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5, check)
+            zap = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5)
             output.append(zap)
 
         return output
 
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
-    if num_points < max_points:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
-        l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
+    if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
+        l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         #l2Node.show()
@@ -222,63 +220,14 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             #childNode.show()
         return True
 
-
-    if 0:
-    #if num_points < max_points:  # turns out performance on this is shit
-        #run again until we find the SMALLEST subunit
-        #if num_points < check:  # We return true here because it gurantees that out will be > 1 and cant have negative num points
-            #return True
-        #elif check and num_points >= check:  # apparently I was eaten by an oder of operations bug? XXX nope! still issue
-            #return True
-        #elif check:
-            #return T
-        if check > 0:
-            return True
-        else:
-            #print("check",check)
-            out = nextLevel(check=num_points)
-            #print(out)
-            #print(np.sum(out))
-
-            #this should have been crashing!
-            if np.sum(out) > 1 or check == -1:  # yeah the check is a waisted iteration but this way we actually shrink the size
-                l2Node = level2Root.attachNewNode(CollisionNode("%s"%center))
-                l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
-                l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
-                #l2Node.show()
-
-                #text parent
-                for p,uuid,geom in zip(positions,uuids,geomCollide):
-                    childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
-                    childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) #FIXME need to calculate this from the geometry? (along w/ uuids etc)
-                    childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
-                    childNode.setPythonTag('uuid',uuid)
-                    #childNode.show()
-
-                    #text nodes FIXME horribly inefficient 
-                    #maybe we can make it faster by getting where the points project onto the 2d space and render the
-                    #text at THAT position instead of in 3d space?
-                    #eh, probably better to only put text on major landmarks/connected and on mouse over/selection?
-                    #textNode = childNode.attachNewNode(TextNode("%s"%uuid))
-                    """
-                    textNode = tnp.attachNewNode(TextNode("%s"%uuid))
-                    textNode.setPos(*p)
-                    #textNode.node().setText("%s"%uuid)
-                    textNode.node().setCardDecal(True)
-                    textNode.node().setEffect(BillboardEffect.makePointEye())
-                    textNode.hide() #turn it on when we click? set it when we click?
-                    childNode.setPythonTag('text',textNode)
-                    """
-                #tnp.flattenStrong() #doesn't seem to help :(
-                return True
-
         if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
             #print("detect a branch with 1")
-            return nextLevel(check=-1)
+            return nextLevel()
 
     return nextLevel()
 
 def octit(position):  # use this not entirely sure why it is better, maybe fewer missed branches?
+    """ take the booleans returned from positions > center and map to cases """
     x, y, z = position
     if x:
         if y:

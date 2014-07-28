@@ -12,6 +12,7 @@ from time import sleep
 from threading import Thread
 from multiprocessing import Pipe
 #from multiprocessing import Queue as mpq
+from multiprocessing import Manager
 #from multiprocessing import Lock as mpl
 from concurrent.futures import ProcessPoolExecutor
 
@@ -135,7 +136,7 @@ class dataServerProtocol(asyncio.Protocol):
     #def __new__(cls, make_response = None, make_predictions = None,
                 #get_cache = None, get_tokens_for_ip = None,
                 #remove_token_for_ip = None, respMaker = None, rcm = None, tm = None):
-    def __new__(cls, event_loop, respMaker, rcm, tm):
+    def __new__(cls, event_loop, respMaker, rcm, tm, manager):
         cls.event_loop = event_loop
         #cls.make_response = make_response
         #cls.make_precitions = make_predictions
@@ -144,6 +145,7 @@ class dataServerProtocol(asyncio.Protocol):
         cls.rcm = rcm
         #cls.get_tokens_for_ip = remove_token_for_ip
         cls.tm = tm
+        cls.manager = manager
         cls.__new__ = super().__new__
         return cls
         
@@ -152,7 +154,14 @@ class dataServerProtocol(asyncio.Protocol):
         self.token_received = False
         self.__block__ = b''
         self.__resp_done__ = False
+        self.data_queue = self.manager.Queue()
 
+    #@classmethod
+    #def __getstate__(cls):
+        #odict = cls.__dict__.copy()
+        #del odict['event_loop']
+        #del odict['data_received']
+        #return odict
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -215,45 +224,38 @@ class dataServerProtocol(asyncio.Protocol):
     def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         print(self.pprefix,'processing requests')
         pipes = []
+        expected = 0
         for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
                 # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
                     # so we need a way to preserve the order of the SEND using a queue or something
                 p_send, p_recv = Pipe()
                 pipes.append(p_recv)
-                self.event_loop.run_in_executor( None, self.send_response, p_send, request)  # FIXME error handling live?
+                #self.event_loop.run_in_executor( None, self.send_response, p_send, request)  # FIXME error handling live?
                 #self.event_loop.run_in_executor( None, self.request_prediction, p_send, rdLock, request)
-                #self.transport.write(self.data_queue.get())
-                #self.transport.write(self.data_queue.get())
+                #embed()
+                print(request)
+                self.event_loop.run_in_executor( None, make_response, p_send, request, self.respMaker, self.rcm)  # FIXME error handling live?
+                #expected += 2
+        #for i in range(expected):
+            #self.transport.write(self.data_queue.get())
+            #self.transport.write(self.data_queue.get())
+
+        #embed()
         while 1:  #this is SUPER irritating :/ self.transport.write was supposed to be asyn, it sends blocks out of order if you dont sync it >_<
             #XXX actually, that might be a bug to submit...
             for p_recv in pipes:
-                #self.transport.write(self.p_recv.recv())  #FIXME this still blocks!!!!!!
-                if p_recv.closed:
-                    p_recv.recv_bytes_into(self.transport)  # FIXME this way waits on the slowest!
+                #out = p_recv.recv_bytes()
+                #self.transport.write(out)  #FIXME this still blocks!!!!!!
+                self.transport.write(p_recv.recv_bytes())
+                self.transport.write(p_recv.recv_bytes())
+                p_recv.close()
+                #if p_recv.closed:
+                #p_recv.recv_bytes_into(self.transport)  # FIXME this way waits on the slowest!
+            print('data sent')
             if all([p.closed for p in pipes]):
+                print('all data sent')
                 break
-
-    def send_response(self, pipe, request):
-        """ returns the request hash and a compressed bam stream """
-        rh =  request.hash_
-        data_stream = self.get_cache(self.rcm, rh)
-        if data_stream is None:  # FIXME if we KNOW we are going to gz stuff we should do it early...
-            data_tuple = self.respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
-            data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-            self.rcm.update_cache(rh, data_stream)
-        pipe.send(data_stream)
-        self.request_prediction(pipe, request)
-
-        #data_queue.put(data_stream)
-        print('data has been put in the queue')
-        #self.transport.write(data_stream)
-
-    def request_prediction(self, pipe, lock, request):
-        for preq in self.respMaker.make_predictions(request):
-            self.send_response(pipe, preq)
-        pipe.close()
-
     def resp_done(lock, update = None):  # FIXME this won't work... need a lock per pair
         with lock:
             if self.update is None:
@@ -368,9 +370,39 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
         print(self.tokenDict)
 
 
+def make_response(pipe, request, respMaker, rcm, pred = True):
+    """ returns the request hash and a compressed bam stream """
+    print('does this work??!')
+    rh =  request.hash_
+    data_stream = rcm.get_cache(rh)
+    if data_stream is None:  # FIXME if we KNOW we are going to gz stuff we should do it early...
+        data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
+        data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+        rcm.update_cache(rh, data_stream)
+    pipe.send_bytes(data_stream)
+    print('data has been shoved down the pipe')
+    #request_prediction(pipe, request, respMaker)  # FIXME
+    if pred:
+        for preq in respMaker.make_predictions(request):
+            make_response(pipe, preq, respMaker, rcm, pred = False)
+        pipe.close()
+        print('pipe closed')
+
+    #data_queue.put(data_stream)
+    #self.transport.write(data_stream)
+
+def request_prediction(pipe, request, respMaker):
+    for preq in respMaker.make_predictions(request):
+        send_response(data_queue, preq)
+    pipe.close()
+
+
+
 def main():
     serverLoop = asyncio.get_event_loop()
-    serverLoop.set_default_executor(ProcessPoolExecutor())
+    ppe = ProcessPoolExecutor()
+    serverLoop.set_default_executor(ppe)
+    manager = Manager()
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
@@ -411,7 +443,7 @@ def main():
         tm=tm
     )
     """
-    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm)
+    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm, manager)
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box

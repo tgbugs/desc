@@ -148,13 +148,13 @@ class dataServerProtocol(asyncio.Protocol):
         self.token_received = False
         self.__block__ = b''
         self.__resp_done__ = False
-        self.respMaker = self.respMaker()  # FIXME if this fixes stuff then wtf
+        #self.respMaker = self.respMaker()  # FIXME if this fixes stuff then wtf
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
         print("connection from:",peername)
         try:
-            self.expected_tokens = self.tm.get_tokens_for_ip(peername[0])
+            self.expected_tokens = self.get_tokens_for_ip(peername[0])
             #self.get_tokesn_for_ip = None  # XXX will fail, reference to method persists
             self.transport = transport
             self.pprefix = peername
@@ -175,7 +175,7 @@ class dataServerProtocol(asyncio.Protocol):
                 token, token_end = DataByteStream.decodeToken(self.__block__)
                 if token in self.expected_tokens:
                     self.token_received = True  # dont store the token anywhere in memory, ofc if you can find the t_r bit and flip it...
-                    self.tm.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
+                    self.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
                     #self.remove_token_for_ip = None  # done with it, remove it from this instance XXX will fail
                     self.expected_tokens = None  # we don't need access to those tokens anymore
                     del self.expected_tokens
@@ -216,8 +216,8 @@ class dataServerProtocol(asyncio.Protocol):
             if request is not None:
                 # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
                     # so we need a way to preserve the order of the SEND using a queue or something
-                data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
-                data_stream = make_response(None, request, self.respMaker)
+                data_stream = self.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
+                #data_stream = make_response(None, request, self.respMaker)
                 if data_stream is None:
                     #p_send, p_recv = Pipe()
                     pipes.append(mpp())
@@ -238,8 +238,8 @@ class dataServerProtocol(asyncio.Protocol):
             pred_stream = recv.recv_bytes()
             self.transport.write(pred_stream)
             recv.close()
-            self.rcm.update_cache(request.hash_, data_stream)
-            self.rcm.update_cache(request.hash_, pred_stream)  # FIXME w/ more than one prediction, this will be trouble
+            self.update_cache(request.hash_, data_stream)
+            self.update_cache(request.hash_, pred_stream)  # FIXME w/ more than one prediction, this will be trouble
             print(self.pprefix,'req tail',data_stream[-10:])
             print(self.pprefix,'pred tail',pred_stream[-10:])
         print(self.pprefix, 'finished processing requests')
@@ -336,7 +336,7 @@ def make_response(pipe, request, respMaker, pred = 0):
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
     data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
     if pipe is None:
-        yield data_stream  #FIXME
+        #yield data_stream  #FIXME
         pass
     else:
         pipe.send_bytes(data_stream)
@@ -346,7 +346,7 @@ def make_response(pipe, request, respMaker, pred = 0):
         pred += 1
         for preq in respMaker.make_predictions(request):
             if pipe is None:
-                yield from make_response(pipe, preq, respMaker, pred)
+                #yield from make_response(pipe, preq, respMaker, pred)
                 pass
             else:
                 make_response(pipe, preq, respMaker, pred)
@@ -382,7 +382,7 @@ def main():
 
     #shared state, in theory this stuff could become its own Protocol
     rcm = requestCacheManager(9999)
-    respMaker = responseMaker
+    respMaker = responseMaker()
     # FIXME here we cannot remove references to these methods from instances
         # because they are defined at the class level and not passed in at
         # run time. We MAY be able to fix this by using a metaclass that
@@ -396,8 +396,9 @@ def main():
                     'remove_token_for_ip':tm.remove_token_for_ip,
                     'get_cache':rcm.get_cache,
                     'update_cache':rcm.update_cache,
-                    'make_response':respMaker.make_response,
-                    'make_predictions':respMaker.make_predictions,
+                    #'make_response':respMaker.make_response,
+                    #'make_predictions':respMaker.make_predictions,
+                    'respMaker':respMaker,
                     'event_loop':serverLoop })
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl

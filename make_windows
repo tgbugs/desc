@@ -1,17 +1,54 @@
-1. install windows sdk 7.1 and vc 2010 c++ update
-    a. if you have .NET 4.1+ you need to uninstall, you also need to uninstall any vc2010 redistributables otherwise the sdk install will fail
-    b. make sure you install rc.exe! which is under c++ tools
-    c. ammintrin.h may be missing in which case, get a newer verions and install using that
-    d. congradulations, you are now a windows developer!
-    e. sp1 http://www.microsoft.com/en-us/download/confirmation.aspx?id=4422
-    f. sdk 7.1 http://www.microsoft.com/en-us/download/details.aspx?id=8279
-2. download whichever panda source version you need
-3. get rdb's win-libs-vc10-x64 
-    a. extract to $PANDA_SOURCE_PATH/thirdpary
-4. if you want to use your own version of python, copy your local install folder over win-python
-    a. you may need to rename the python dll? :(
-    b. sadly, no symlinks or shortcuts work for this which is silly since makepanda just copies from source to build
-5. if you want nvidiagc, turns out its already in rdb's vc2010
+How to compile panda3d on windows using vc2010.
+These steps are known to work on windows 7.
+
+1. Install windows sdk 7.1 and vc 2010 c++ update
+    a. Download windows sdk 7.1 here:
+       http://www.microsoft.com/en-us/download/details.aspx?id=8279
+    b. Download sp1 here:
+       http://www.microsoft.com/en-us/download/confirmation.aspx?id=4422
+    c. If you have .NET 4.1+ you need to uninstall it since those version
+       conflict with .NET 4.0 needed by the SDK. You can reinstall more
+       recent version of .NET afterward.
+    d. You also need to uninstall any vc2010 redistributables. See
+       http://www.mathworks.com/matlabcentral/answers/95039-why-does-the-sdk-7-1-installation-fail-with-an-installation-failed-message-on-my-windows-system
+       for more information.
+    e. When selecting what to install for the SDK sure you install the c++ tools
+       otherwise you will get a cryptic error about missing rc.exe.
+    f. Even after installing sp1 you may still be missing ammintrin.h.
+       If this is the case download a newer version of visual studio sdks
+       (eg vs12) and copy ammintrin.h from
+       C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\include to
+       C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\include
+    g. Congratulations, you are now a windows developer!
+
+2. Download whichever panda source version you need, and extract it somewhere.
+    a. eg: https://www.panda3d.org/download/panda3d-1.8.1/panda3d-1.8.1.tar.gz
+    b. You'll need 7zip for the gz files, you don't need the complete source
+       since you will be downloading rdb's vc10 thirdparty files.
+
+3. Get rdb's win-libs-vc10-x64 
+    a. Thread with downloads can be found here:
+       http://www.panda3d.org/forums/viewtopic.php?t=16346
+    b. extract to $PANDA_SOURCE_PATH/thirdpary
+
+4. If you want to use your own version of python (eg so you can have access
+   to certain additional modules), copy your local install folder over to
+   thridpary/win-python. NOTE: python3 currently (Aug 14) does not compile on windows.
+    a. You may need to rename the python dll and move it to the top folder.
+    b. Symlinks and shortcuts do not seem to work for this which is silly since makepanda just copies from source to built.
+
+5. Compiling
+    a. You MUST compile in command prompt, powershell environment variables
+       are incorrect for makepanda.bat.
+    b. Run cmd.exe and cd to $PANDA_SOURCE_PATH
+    c. Run the following command, without quotes:
+       "makepanda\makepanda.bat --everything --installer"
+    d. There are many additional compile options, to see them run:
+       "makepanda\makepanda.bat"
+
+6. For everything else, check the manual:
+   https://www.panda3d.org/manual/index.php/Main_Page
+
 
 bugs: makepanda.bat PROCESSOR_ARCHITECTURE = X86, PROCESSOR_ARCHITEW6432 = AMD64, thus the switch at the start fails, nope, the problem would appear to be using powershell wtf, yeah, its powershell
     1. you must run compile from cmd, powershell's env has problems

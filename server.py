@@ -13,6 +13,7 @@ from threading import Thread
 from multiprocessing import Pipe
 #from multiprocessing import Queue as mpq
 from multiprocessing import Manager
+from multiprocessing import Process
 from multiprocessing import Lock as mpl
 from concurrent.futures import ProcessPoolExecutor
 
@@ -134,12 +135,12 @@ class dataServerProtocol(asyncio.Protocol):
         actually manipulates the data in DataByteStream.
     """
 
-    def __new__(cls, event_loop, respMaker, rcm, tm, manager):
+    def __new__(cls, event_loop, respMaker, rcm, tm):
         cls.event_loop = event_loop
         cls.respMaker = respMaker
         cls.rcm = rcm
         cls.tm = tm
-        cls.manager = manager
+        #cls.manager = manager
         cls.__new__ = super().__new__
         return cls
         
@@ -148,7 +149,7 @@ class dataServerProtocol(asyncio.Protocol):
         self.token_received = False
         self.__block__ = b''
         self.__resp_done__ = False
-        self.data_queue = self.manager.Queue()
+        #self.data_queue = self.manager.Queue()
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -220,9 +221,15 @@ class dataServerProtocol(asyncio.Protocol):
                 if data_stream is None:
                     #p_send, p_recv = Pipe()
                     pipes.append(Pipe())
-                    self.event_loop.run_in_executor( None, make_response, pipe[0], request, self.respMaker)  # FIXME error handling live?
+                    #self.event_loop.run_in_executor( None, make_response, pipe[0], request, self.respMaker)  # FIXME error handling live?
+                    p = Process(target=make_response, args=(pipes[-1][0], request, self.respMaker))
+                    p.start()
                 else:
+                    print('WHAT WE GOT THAT HERE')
                     self.transport.write(data_stream)
+        print()
+        print(self.pprefix,self.transport,'pipes', pipes)
+        print()
         for _, recv in pipes:  # this blocks hardcore?
             data_stream = recv.recv_bytes()
             self.transport.write(data_stream)
@@ -236,7 +243,7 @@ class dataServerProtocol(asyncio.Protocol):
             #self.transport.write(p_recv.recv_bytes())
             #self.transport.write(self.data_queue.get())
             #self.transport.write(self.data_queue.get())
-        print('finished processing requests')
+        print(self.pprefix, 'finished processing requests')
 
         #for i in range(expected):
             #self.even_loop.call_soon(p_recv_future, p_recv, future)
@@ -263,7 +270,8 @@ class responseMaker:  # TODO we probably move this to its own file?
     def __init__(self):
         #setup at connection to whatever database we are going to use
         pass
-    def make_response(self, request):
+    @staticmethod
+    def make_response(request):
         # TODO so encoding the collision nodes to a bam takes a REALLY LONG TIME
         # it seems like it might be more prudent to serialize to (x,y,z,radius) or maybe a type code?
         # yes, the size of the bam serialization is absolutely massive, easily 3x the size in memory
@@ -289,7 +297,8 @@ class responseMaker:  # TODO we probably move this to its own file?
 
         return data_tuple
 
-    def make_predictions(self, request):
+    @staticmethod  # FIXME won't be static when we get a database conneciton :(
+    def make_predictions(request):
         #TODO this is actually VERY easy, because all we need to do is use
             #the list of connected UI elements that we SEND OUT ANYWAY and
             #just prospectively load those models/views
@@ -375,9 +384,9 @@ def p_recv_future(p_recv, future):
 
 def main():
     serverLoop = asyncio.get_event_loop()
-    ppe = ProcessPoolExecutor()
-    serverLoop.set_default_executor(ppe)
-    manager = Manager()
+    #ppe = ProcessPoolExecutor()
+    #serverLoop.set_default_executor(ppe)
+    #manager = Manager()
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
@@ -391,7 +400,7 @@ def main():
 
     #shared state, in theory this stuff could become its own Protocol
     rcm = requestCacheManager(9999)
-    respMaker = responseMaker()
+    respMaker = responseMaker
     # FIXME here we cannot remove references to these methods from instances
         # because they are defined at the class level and not passed in at
         # run time. We MAY be able to fix this by using a metaclass that
@@ -418,7 +427,7 @@ def main():
         tm=tm
     )
     """
-    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm, manager)
+    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm)
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box

@@ -226,12 +226,13 @@ class dataServerProtocol(asyncio.Protocol):
                     #p.start()
                 else:
                     print('WHAT WE GOT THAT HERE')
+                    print('data stream tail',data_stream[-10:])
                     self.transport.write(data_stream)
                     #for d in data_stream:
                         #self.transport.write(d)
-        print()
-        print(self.pprefix,self.transport,'pipes', pipes)
-        print()
+        #print()
+        #print(self.pprefix,self.transport,'pipes', pipes)
+        #print()
         for _, recv in pipes:  # this blocks hardcore?
             data_stream = recv.recv_bytes()
             self.transport.write(data_stream)
@@ -239,9 +240,9 @@ class dataServerProtocol(asyncio.Protocol):
             self.transport.write(pred_stream)
             recv.close()
             self.rcm.update_cache(request.hash_, data_stream)
-            self.rcm.update_cache(request.hash_, pred_stream)  # FIXME w/ more than one prediction, this will be trouble
-            print(self.pprefix,'req tail',data_stream[-10:])
-            print(self.pprefix,'pred tail',pred_stream[-10:])
+            self.rcm.update_cache('PRED HASH YOU TURKEY', pred_stream)  # FIXME w/ more than one prediction, this will be trouble
+            #print(self.pprefix,'req tail',data_stream[-10:])
+            #print(self.pprefix,'pred tail',pred_stream[-10:])
         print(self.pprefix, 'finished processing requests')
 
 class responseMaker:  # TODO we probably move this to its own file?
@@ -336,24 +337,15 @@ def make_response(pipe, request, respMaker, pred = 0):
     rh =  request.hash_
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
     data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-    if pipe is None:
-        #yield data_stream  #FIXME
-        pass
-    else:
-        pipe.send_bytes(data_stream)
-        print('data has been shoved down', pipe)
+    pipe.send_bytes(data_stream)
+    print('data has been shoved down', pipe)
     #request_prediction(pipe, request, respMaker)  # FIXME
     if pred < 1:  # TODO control prediciton level?
         pred += 1
         for preq in respMaker.make_predictions(request):
-            if pipe is None:
-                #yield from make_response(pipe, preq, respMaker, pred)
-                pass
-            else:
-                make_response(pipe, preq, respMaker, pred)
-        if pipe is not None:
-            pipe.close()
-            assert pipe.closed, 'pipe still open'
+            make_response(pipe, preq, respMaker, pred)  # FIXME this needs to check the cache!
+        pipe.close()
+        assert pipe.closed, 'pipe still open'
 
     #data_queue.put(data_stream)
     #self.transport.write(data_stream)

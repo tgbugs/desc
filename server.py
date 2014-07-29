@@ -208,42 +208,35 @@ class dataServerProtocol(asyncio.Protocol):
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
             yield from DataByteStream.decodePickleStreams(split)
 
-    def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
+    def process_requests(self, requests:iterable, pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         #print(self.pprefix,'processing requests')
         pipes = []
-        for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
-            data_stream = None
+        for_pred = []
+        for request in requests:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
-                # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
-                    # so we need a way to preserve the order of the SEND using a queue or something
                 data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
-                #data_stream = make_response(None, request, self.respMaker)
                 if data_stream is None:
-                    #p_send, p_recv = Pipe()
                     pipes.append(mpp())
-                    self.event_loop.run_in_executor( None, make_response, pipes[-1][0], request, self.respMaker)  # FIXME error handling live?
-                    #p = Process(target=make_response, args=(pipes[-1][0], request, self.respMaker))
-                    #p.start()
+                    self.event_loop.run_in_executor( None, make_response, pipes[-1][0], request, self.respMaker )
+                    for_pred.append(request)
                 else:
-                    print('WHAT WE GOT THAT HERE')
-                    print('data stream tail',data_stream[-10:])
                     self.transport.write(data_stream)
-                    #for d in data_stream:
-                        #self.transport.write(d)
-        #print()
-        #print(self.pprefix,self.transport,'pipes', pipes)
-        #print()
+                    #print('WHAT WE GOT THAT HERE')
+                    #print('data stream tail',data_stream[-10:])
+
         for _, recv in pipes:  # this blocks hardcore?
             data_stream = recv.recv_bytes()
             self.transport.write(data_stream)
-            pred_stream = recv.recv_bytes()
-            self.transport.write(pred_stream)
             recv.close()
             self.rcm.update_cache(request.hash_, data_stream)
-            self.rcm.update_cache('PRED HASH YOU TURKEY', pred_stream)  # FIXME w/ more than one prediction, this will be trouble
             #print(self.pprefix,'req tail',data_stream[-10:])
-            #print(self.pprefix,'pred tail',pred_stream[-10:])
+
         print(self.pprefix, 'finished processing requests')
+        
+        #do prediction
+        if pred < 1:
+            for request in for_pred:
+                self.process_requests(self.respMaker.make_predictions(request), pred + 1)
 
 class responseMaker:  # TODO we probably move this to its own file?
     def __init__(self):
@@ -332,23 +325,13 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
         print(self.tokenDict)
 
 
-def make_response(pipe, request, respMaker, pred = 0):
+def make_response(pipe, request, respMaker):
     """ returns the request hash and a compressed bam stream """
     rh =  request.hash_
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
     data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
     pipe.send_bytes(data_stream)
-    print('data has been shoved down', pipe)
-    #request_prediction(pipe, request, respMaker)  # FIXME
-    if pred < 1:  # TODO control prediciton level?
-        pred += 1
-        for preq in respMaker.make_predictions(request):
-            make_response(pipe, preq, respMaker, pred)  # FIXME this needs to check the cache!
-        pipe.close()
-        assert pipe.closed, 'pipe still open'
-
-    #data_queue.put(data_stream)
-    #self.transport.write(data_stream)
+    pipe.close()
 
 def request_prediction(pipe, request, respMaker):
     for preq in respMaker.make_predictions(request):

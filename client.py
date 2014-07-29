@@ -142,9 +142,11 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             #print('total size expecte', self.__block_size__)
             #print('post split block',self.__block__[self.__block_size__:])
             #embed()
-            output = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
-            print('yes we are trying to render stuff')
-            self.event_loop.run_in_executor( None, lambda: self.set_nodes(*output) )
+            request_hash, data_tuple = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+            #print('yes we are trying to render stuff')
+            #self.event_loop.run_in_executor( None, self.set_nodes, request_hash, data_tuple )
+            self.event_loop.call_soon(self.set_nodes, request_hash, data_tuple)  #still segfaults even if this is threadsafe
+            #self.set_nodes(*output)
             self.__block__ = self.__block__[self.__block_size__:]
             self.__block_size__ = None
             self.__block_tuple__ = None
@@ -163,7 +165,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             self.process_responses(response_generator)
     
     def _data_received(self, data):  # XXX deprecated
-        print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
+        #print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
         response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
         if response_start != -1:
             response_start += DataByteStream.LEN_OPCODE
@@ -241,7 +243,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
 
     def process_responses(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
         for request_hash, data_tuple in response_generator:
-            print('yes we are trying to render stuff')
+            #print('yes we are trying to render stuff')
             self.event_loop.run_in_executor( None , lambda: self.set_nodes(request_hash, data_tuple) )  # amazingly this works!
 
     def set_nodes(self, request_hash, data_tuple):
@@ -351,7 +353,7 @@ class renderManager(DirectObject):
         request_hash = request.hash_
         try:
             #bam, coll, ui = self.cache[request_hash]
-            self.render(*self.cache[request_hash])
+            self.render(*self.cache[request_hash])  # FIXME we need to test if this is already attached
             # FIXME we need to not attach the thing again...
             print('local cache hit')
         except KeyError:  # ValueError if a future is in there, maybe just use False?
@@ -387,20 +389,26 @@ class renderManager(DirectObject):
 
     def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
         """ this is the callback used by the data protocol """
-        print('cache updated')
-        node_tuple = self.make_nodes(request_hash, data_tuple)
+        #print('cache updated')
+        #print('bam length', len(data_tuple[0]))
         try:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:
                 #self.render(*self.cache[request_hash])
-                print(len(node_tuple))
+                #print(len(node_tuple))
+                node_tuple = self.make_nodes(request_hash, data_tuple)
+                self.cache[request_hash] = node_tuple
                 self.render(*node_tuple)
         except KeyError:
             print("predicted data view cached")
+            node_tuple = self.make_nodes(request_hash, data_tuple)
             self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
-        self.bamRoot.attachNewNode(bam)
+        if not bam.getNumParents():
+            self.bamRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
+        else:
+            print('already being rendered', bam)
         #bam.reparentTo(self.bamRoot)
         #self.collRoot.attachNewNode(coll)
         [c.reparentTo(self.collRoot) for c in coll.getChildren()]  # FIXME too slow!
@@ -411,10 +419,17 @@ class renderManager(DirectObject):
         """ fire and forget """
         bam = self.makeBam(data_tuple[0])  #needs to return a node
         coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
+        from panda3d.core import GeomVertexReader
+        data = GeomVertexReader(bam.getGeom(0).getVertexData(), 'vertex')
+        #while not data.isAtEnd():
+            #print(data.getData3f(),end='    ')
+            #pass
+        #print(coll_tup)
         coll = self.makeColl(coll_tup)  #needs to return a node
         ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
         [n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
+        #[print(n) for n in node_tuple]
         return node_tuple
 
     def makeBam(self, bam_data):
@@ -666,6 +681,7 @@ def main():
     #run it
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
+    #embed()
     run()  # this MUST be called last because we use sys.exit() to terminate
     assert False, 'Note how this never gets printed due to sys.exit()'
 

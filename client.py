@@ -142,9 +142,11 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             #print('total size expecte', self.__block_size__)
             #print('post split block',self.__block__[self.__block_size__:])
             #embed()
-            output = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+            request_hash, data_tuple = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
             print('yes we are trying to render stuff')
-            self.event_loop.run_in_executor( None, lambda: self.set_nodes(*output) )
+            #self.event_loop.run_in_executor( None, self.set_nodes, request_hash, data_tuple )
+            self.event_loop.call_soon(self.set_nodes, request_hash, data_tuple)
+            #self.set_nodes(*output)
             self.__block__ = self.__block__[self.__block_size__:]
             self.__block_size__ = None
             self.__block_tuple__ = None
@@ -351,7 +353,7 @@ class renderManager(DirectObject):
         request_hash = request.hash_
         try:
             #bam, coll, ui = self.cache[request_hash]
-            self.render(*self.cache[request_hash])
+            self.render(*self.cache[request_hash])  # FIXME we need to test if this is already attached
             # FIXME we need to not attach the thing again...
             print('local cache hit')
         except KeyError:  # ValueError if a future is in there, maybe just use False?
@@ -389,19 +391,24 @@ class renderManager(DirectObject):
         """ this is the callback used by the data protocol """
         #print('cache updated')
         print('bam length', len(data_tuple[0]))
-        node_tuple = self.make_nodes(request_hash, data_tuple)
         try:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:
                 #self.render(*self.cache[request_hash])
                 #print(len(node_tuple))
+                node_tuple = self.make_nodes(request_hash, data_tuple)
+                self.cache[request_hash] = node_tuple
                 self.render(*node_tuple)
         except KeyError:
             print("predicted data view cached")
+            node_tuple = self.make_nodes(request_hash, data_tuple)
             self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
-        self.bamRoot.attachNewNode(bam)
+        if not bam.getNumParents():
+            self.bamRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
+        else:
+            print('already being rendered', bam)
         #bam.reparentTo(self.bamRoot)
         #self.collRoot.attachNewNode(coll)
         [c.reparentTo(self.collRoot) for c in coll.getChildren()]  # FIXME too slow!
@@ -412,10 +419,12 @@ class renderManager(DirectObject):
         """ fire and forget """
         bam = self.makeBam(data_tuple[0])  #needs to return a node
         coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
+        print(coll_tup)
         coll = self.makeColl(coll_tup)  #needs to return a node
         ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
         [n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
+        [print(n) for n in node_tuple]
         return node_tuple
 
     def makeBam(self, bam_data):
@@ -667,6 +676,7 @@ def main():
     #run it
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
+    #embed()
     run()  # this MUST be called last because we use sys.exit() to terminate
     assert False, 'Note how this never gets printed due to sys.exit()'
 

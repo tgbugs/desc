@@ -211,21 +211,31 @@ class dataServerProtocol(asyncio.Protocol):
     def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         print(self.pprefix,'processing requests')
         pipes = []
-        expected = 0
+        #expected = 0
+        data_stream = None
         for request in request_generator:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
             if request is not None:
                 # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
                     # so we need a way to preserve the order of the SEND using a queue or something
-                p_send, p_recv = Pipe()
-                pipes.append(p_recv)
-                self.event_loop.run_in_executor( None, make_response, p_send, request, self.respMaker, self.rcm)  # FIXME error handling live?
-                expected += 2
-        for p_recv in pipes:  # this blocks hardcore?
-            self.transport.write(p_recv.recv_bytes())
-            self.transport.write(p_recv.recv_bytes())
-            p_recv.close()
-            #self.transport.write(self.data_queue.get())
-            #self.transport.write(self.data_queue.get())
+                data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
+                if data_stream is None:
+                    p_send, p_recv = Pipe()
+                    pipes.append(p_recv)
+                    self.event_loop.run_in_executor( None, make_response, p_send, request, self.respMaker, self.rcm)  # FIXME error handling live?
+                    #expected += 2
+        if data_stream is None:
+            for recv in pipes:  # this blocks hardcore?
+                self.transport.write(recv.recv_bytes())
+                self.transport.write(recv.recv_bytes())
+                #out = p_recv.recv_bytes()
+                #self.transport.write(out)
+                recv.close()
+                #self.transport.write(p_recv.recv_bytes())
+                #self.transport.write(self.data_queue.get())
+                #self.transport.write(self.data_queue.get())
+        else:
+            self.transport.write(data_stream)
+        print('finished processing requests')
 
         #for i in range(expected):
             #self.even_loop.call_soon(p_recv_future, p_recv, future)
@@ -337,11 +347,9 @@ def make_response(pipe, request, respMaker, rcm, pred = True):
     """ returns the request hash and a compressed bam stream """
     print('does this work??!')
     rh =  request.hash_
-    data_stream = rcm.get_cache(rh)
-    if data_stream is None:  # FIXME if we KNOW we are going to gz stuff we should do it early...
-        data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
-        data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-        rcm.update_cache(rh, data_stream)
+    data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
+    data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+    rcm.update_cache(rh, data_stream)
     pipe.send_bytes(data_stream)
     print('data has been shoved down the pipe')
     #request_prediction(pipe, request, respMaker)  # FIXME
@@ -349,6 +357,7 @@ def make_response(pipe, request, respMaker, rcm, pred = True):
         for preq in respMaker.make_predictions(request):
             make_response(pipe, preq, respMaker, rcm, pred = False)
         pipe.close()
+        assert pipe.closed, 'pipe still open'
         print('pipe closed')
 
     #data_queue.put(data_stream)

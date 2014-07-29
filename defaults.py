@@ -16,6 +16,6 @@ UITEXT_UUID = 3
 #Transport stuff, ports for network comm
 
 CONNECTION_PORT = 55555  # GEROOF MAH PORT
-CONNECTION_PORT = 55557  # wat
+#CONNECTION_PORT = 55557  # wat
 DATA_PORT = 55556
 

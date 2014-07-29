@@ -208,7 +208,7 @@ class dataServerProtocol(asyncio.Protocol):
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
             yield from DataByteStream.decodePickleStreams(split)
 
-    def process_requests(self, requests:iterable, pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
+    def process_requests(self, requests:'iterable', pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         #print(self.pprefix,'processing requests')
         pipes = []
         for_pred = []

@@ -214,16 +214,20 @@ class dataServerProtocol(asyncio.Protocol):
 
         #"""
         pipes = []
+        procs = []
         for request in request_generator:
             if request is not None:
                 pipes.append(Pipe())
-                p = Process(target=make_response_pipe, args=(pipes[-1][0],request))
-                p.start()
+                procs.append(Process(target=make_response_pipe, args=(pipes[-1][0],request)))
+                procs[-1].start()
 
         for _, recv in pipes:
             data_stream = recv.recv_bytes()
             self.transport.write(data_stream)
             recv.close()
+
+        for p in procs:
+            p.terminate()
         #"""
 
         """
@@ -381,6 +385,7 @@ def make_response(args):
 
 def make_response_pipe(pipe, request):
     """ returns the request hash and a compressed bam stream """
+    np.random.seed()  # looky here!
     rh =  request.hash_
 
     n = 9999
@@ -465,7 +470,7 @@ def main():
         serverThread.join()
     except KeyboardInterrupt:
         serverLoop.call_soon_threadsafe(serverLoop.stop)
-        print('exiting...')
+        print('\nexiting...')
     finally:
         serverCon.close()
         serverData.close()

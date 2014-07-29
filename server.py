@@ -135,7 +135,7 @@ class dataServerProtocol(asyncio.Protocol):
         actually manipulates the data in DataByteStream.
     """
 
-    def __new__(cls, event_loop, respMaker, rcm, tm):
+    def ___new__(cls, event_loop, respMaker, rcm, tm):
         cls.event_loop = event_loop
         cls.respMaker = respMaker
         cls.rcm = rcm
@@ -217,7 +217,7 @@ class dataServerProtocol(asyncio.Protocol):
                 # XXX FIXME massive problem here: streams can interleave blocks on the client!!!!
                     # so we need a way to preserve the order of the SEND using a queue or something
                 data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
-                #data_stream = make_response(None, request, self.respMaker)
+                data_stream = make_response(None, request, self.respMaker)
                 if data_stream is None:
                     #p_send, p_recv = Pipe()
                     pipes.append(mpp())
@@ -226,9 +226,9 @@ class dataServerProtocol(asyncio.Protocol):
                     p.start()
                 else:
                     print('WHAT WE GOT THAT HERE')
-                    self.transport.write(data_stream)
-                    #for d in data_stream:
-                        #self.transport.write(d)
+                    #self.transport.write(data_stream)
+                    for d in data_stream:
+                        self.transport.write(d)
         print()
         print(self.pprefix,self.transport,'pipes', pipes)
         print()
@@ -336,7 +336,7 @@ def make_response(pipe, request, respMaker, pred = 0):
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
     data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
     if pipe is None:
-        #yield data_stream  #FIXME
+        yield data_stream  #FIXME
         pass
     else:
         pipe.send_bytes(data_stream)
@@ -346,7 +346,7 @@ def make_response(pipe, request, respMaker, pred = 0):
         pred += 1
         for preq in respMaker.make_predictions(request):
             if pipe is None:
-                #yield from make_response(pipe, preq, respMaker, pred)
+                yield from make_response(pipe, preq, respMaker, pred)
                 pass
             else:
                 make_response(pipe, preq, respMaker, pred)
@@ -389,7 +389,16 @@ def main():
         # constructs these so that when a new protocol is started those methods
         # are passed in and thus can successfully be deleted from a class instance
 
-    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm)
+    #datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm)
+
+    datServ = type('dataServerProtocol', (dataServerProtocol,),
+                   {'get_tokens_for_ip':tm.get_tokens_for_ip,
+                    'remove_token_for_ip':tm.remove_token_for_ip,
+                    'get_cache':rcm.get_cache,
+                    'update_cache':rcm.update_cache,
+                    'make_response':respMaker.make_response,
+                    'make_predictions':respMaker.make_predictions,
+                    'event_loop':serverLoop })
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box

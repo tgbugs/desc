@@ -419,6 +419,11 @@ class renderManager(DirectObject):
         """ fire and forget """
         bam = self.makeBam(data_tuple[0])  #needs to return a node
         coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
+        from panda3d.core import GeomVertexReader
+        data = GeomVertexReader(bam.getGeom(0).getVertexData(), 'vertex')
+        while not data.isAtEnd():
+            #print(data.getData3f(),end='    ')
+            pass
         print(coll_tup)
         coll = self.makeColl(coll_tup)  #needs to return a node
         ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)

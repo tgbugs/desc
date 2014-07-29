@@ -221,14 +221,14 @@ class dataServerProtocol(asyncio.Protocol):
                 if data_stream is None:
                     #p_send, p_recv = Pipe()
                     pipes.append(mpp())
-                    #self.event_loop.run_in_executor( None, make_response, pipe[0], request, self.respMaker)  # FIXME error handling live?
-                    p = Process(target=make_response, args=(pipes[-1][0], request, self.respMaker))
-                    p.start()
+                    self.event_loop.run_in_executor( None, make_response, pipes[-1][0], request, self.respMaker)  # FIXME error handling live?
+                    #p = Process(target=make_response, args=(pipes[-1][0], request, self.respMaker))
+                    #p.start()
                 else:
                     print('WHAT WE GOT THAT HERE')
-                    #self.transport.write(data_stream)
-                    for d in data_stream:
-                        self.transport.write(d)
+                    self.transport.write(data_stream)
+                    #for d in data_stream:
+                        #self.transport.write(d)
         print()
         print(self.pprefix,self.transport,'pipes', pipes)
         print()
@@ -238,8 +238,8 @@ class dataServerProtocol(asyncio.Protocol):
             pred_stream = recv.recv_bytes()
             self.transport.write(pred_stream)
             recv.close()
-            #self.rcm.update_cache(request.hash_, data_stream)
-            #self.rcm.update_cache(request.hash_, pred_stream)  # FIXME w/ more than one prediction, this will be trouble
+            self.rcm.update_cache(request.hash_, data_stream)
+            self.rcm.update_cache(request.hash_, pred_stream)  # FIXME w/ more than one prediction, this will be trouble
             print(self.pprefix,'req tail',data_stream[-10:])
             print(self.pprefix,'pred tail',pred_stream[-10:])
         print(self.pprefix, 'finished processing requests')
@@ -256,6 +256,7 @@ class responseMaker:  # TODO we probably move this to its own file?
         # also if we send it already in tree form... so that the child node positions are just nested
         # it might be pretty quick to generate the collision nodes
         n = 9999
+        np.random.seed()  # XXX MUST do this otherwise the same numbers pop out over and over, good case for cache invalidation though...
         positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
         uuids = np.array(['%s'%uuid4() for _ in range(n)])
         bounds = np.ones(n) * .5
@@ -369,6 +370,7 @@ def p_recv_future(p_recv, future):
 
 def main():
     serverLoop = asyncio.get_event_loop()
+    serverLoop.set_default_executor(ProcessPoolExecutor())
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)

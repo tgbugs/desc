@@ -451,8 +451,11 @@ class renderManager(DirectObject):
         # yeah, because the 'properties' the we select on will be set based on which node
             # is selected
         node = PandaNode('')  # use reparent to?
+        return node
         print(len(ui))
         for position, uuid in zip(ui[0],ui[1]):  # FIXME weird erros here...
+            # this is super slow and causes garbage-collection-states failure
+            # this also causes MASSIVE slowdowns becasue invisRoot is FLAT FIXME
             t = self.invisRoot.attachNewNode(TextNode('%s_text'%uuid))
             t.setPos(*position)
             t.node().setText('%s'%uuid)
@@ -469,8 +472,9 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        r = RAND_REQUEST()
-        self.submit_request(r)
+        for _ in range(10):
+            r = RAND_REQUEST()
+            self.submit_request(r)
 
     def __send_request__(self, request):
         raise NotImplementedError('NEVER CALL THIS DIRECTLY. If you didnt, is'

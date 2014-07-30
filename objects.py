@@ -111,6 +111,22 @@ class CommutativeDiagram:
 #   Simple data objects
 ###
 
+def universalType:
+    representation_types = [
+        'unicode',  # followed by exhaustive symbolic systems and their input/output methods
+        'bytes',  # for any other things...
+        'other symbols that *can* be represented by bytes',
+    ]
+
+    def __init__(self, uuid):
+        self.uuid = uuid
+
+def uiDataObject:
+    def __init__(self, uuid, type_, 
+        self.uuid = uuid
+        self.type_ = type_  # this gives access to the 'universal' by which all related types can be found
+        self.relations = relations
+
 def dataTokenObject(object):  # tokens themselves are also types that need to be selectable and searchable for filtering and interacting
     """ data tokens delegate all their major relations to their parent type
         except for stuff like links to experiment metadata and nitty gritty

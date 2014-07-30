@@ -32,11 +32,18 @@ class Request:  # testing only since this will need to be in its own module to k
         md5 = hashlib.md5()
         md5.update((request_type+type_+pbytes).encode())
         self.hash_ = md5.digest()
+
         def __eq__(self, other):
             if type(self) != type(other):
                 return False
             elif self.hash_ == other.hash_:  # TODO cache inval? goes here or elsewhere
                 return True
+
+        def __ne__(self, other):
+            if type(self) != type(other):
+                return True
+            elif self.hash_ == other.hash_:  # TODO cache inval? goes here or elsewhere
+                return False
                 
         #def __hash__(self):
             #return self.hash_

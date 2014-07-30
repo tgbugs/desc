@@ -122,7 +122,7 @@ def universalType:
         self.uuid = uuid
 
 def uiDataObject:
-    def __init__(self, uuid, type_, 
+    def __init__(self, uuid, type_, None )
         self.uuid = uuid
         self.type_ = type_  # this gives access to the 'universal' by which all related types can be found
         self.relations = relations
@@ -131,6 +131,7 @@ def dataTokenObject(object):  # tokens themselves are also types that need to be
     """ data tokens delegate all their major relations to their parent type
         except for stuff like links to experiment metadata and nitty gritty
     """
+    # this is really just a row in a table
     def __init__(self, uuid):
         pass
 
@@ -157,3 +158,16 @@ def dataObject(object):
         )
 
         return tokenClass
+
+
+
+class dataObject:
+    properties = dProperties()
+    
+
+
+class dProperties:
+    measured = {}
+    computed = {}
+
+

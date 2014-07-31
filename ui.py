@@ -503,9 +503,9 @@ class GuiFrame(DirectObject):
                  width = .25,
                  height = .25,
                  #scale = .05,  # there is some black magic here :/
-                 bdr_thickness = 1,
+                 bdr_thickness = 2,
                  bdr_color = (.1, .1, .1, 1),
-                 bg_color = (.5, .5, .5, .5),
+                 bg_color = (.7, .7, .7, .5),
                  text_color = (0, 0, 0, 1),
                  text_font = TextNode.getDefaultFont(),
                  text_height_mm = 3,
@@ -522,10 +522,10 @@ class GuiFrame(DirectObject):
         self.bg_color = bg_color
         self.text_color = text_color
         self.text_font = text_font
-        text_h = .1
-        self.text_h = self.fix_h(text_h)
-        self.text_sy = text_h * 2
-        self.text_sx = self.text_sy
+        text_h = .25
+        self.text_h = text_h
+        self.text_s = text_h * 1.6666667
+        #self.text_sx = self.text_sy
 
         #self.BT = buttonThrower if buttonThrower else base.buttonThrowers[0].node()
         self.BT = base.buttonThrowers[0].node()
@@ -536,7 +536,7 @@ class GuiFrame(DirectObject):
         self.ppmm = getMaxPixelsPerMM()  # FIXME this does not need to be called every time...
 
         # get the root for all frames in the scene
-        frameRoot = render2d.find('frameRoot')
+        frameRoot = aspect2d.find('frameRoot')
         if not frameRoot:
             frameRoot = aspect2d.attachNewNode('frameRoot')
 
@@ -557,14 +557,14 @@ class GuiFrame(DirectObject):
 
         # setup for items
         self.itemsParent = self.frame_bg.attachNewNode('frame items')
-        self.num_items = -1
+        self.num_items = 0
 
         # title
-        self.__add_item__(title, None, None)
+        self.title_button = self.__add_item__(title, self.title_toggle_vis)
         
         # add any items that we got
-        for text, command, args in items:
-            self.__add_item__(text, command, args)
+        for item in items:
+            self.__add_item__(*item)
 
         # dragging
         self.frame_bg.bind(DGG.B1PRESS, self.__startDrag)
@@ -575,7 +575,7 @@ class GuiFrame(DirectObject):
             self.accept(shortcut, self.toggle_vis)
 
     def do_xywh(self, x, y, w, h):
-        """ makes negative widths and heights work
+        """ makes negative wneg xidths and heights work
             as well as negative x and y (bottom right is 0)
         """
         if x < 0:
@@ -597,6 +597,7 @@ class GuiFrame(DirectObject):
         self.__winx__ = base.win.getXSize()
         self.__winy__ = base.win.getYSize()
         self.frame_adjust()
+
     def frame_adjust(self):
         #we are using aspect2d...
         pass
@@ -623,29 +624,30 @@ class GuiFrame(DirectObject):
     def fix_h(n):
         return -n * 2
 
-    def __add_item__(self, text, command, args): 
+    def __add_item__(self, text, command = None, args = (None,)): 
         self.num_items += 1
         b = DirectButton(
             parent=self.itemsParent,
-            frameColor=(1,1,1,1),
+            frameColor=(1,1,1,.5),
+            frameSize=(0, self.width, 0, self.text_h),
             text=text,
             text_font=self.text_font,
             text_fg=self.text_color,
-            text_scale=(self.text_sx, self.text_sy),
-            text_pos=(0, 0),
+            text_scale=self.text_s, #, self.text_s),
+            text_pos=(0, self.text_h - .8 * self.text_s),
             #text_pos=(0, -self.text_sy*self.num_items),
             #pos=(self.x, 0, self.y),
-            #frameSize=(0, self.width, 0, self.text_h),
             command=command,
             extraArgs=args,
             relief=DGG.FLAT,
-            text_align=TextNode.ABoxedLeft,
+            #text_align=TextNode.ABoxedLeft,
+            text_align=TextNode.ALeft,
         )
-        fr = b.node().getFrame()
-        height = fr[2]-fr[3]  # this is bottom - top so the value is already flipped
-        width = fr[1]-fr[0]  # right - left always positive
-        #b.setPos(self.x, 0, self.y)# + height)
-        #b.setScale(height)
+        #fr = b.node().getFrame()
+        #height = fr[2]-fr[3]  # this is bottom - top so the value is already flipped
+        #width = fr[1]-fr[0]  # right - left always positive
+        b.setPos(0, 0, -self.text_h * self.num_items)
+        return b
 
     def __del_item__(self):
         """ I have no idea how this is going to work """
@@ -668,10 +670,20 @@ class GuiFrame(DirectObject):
             parent.attachNewNode(Border.create())
 
     def toggle_vis(self):
-        if self.frame.isHidden():
-            self.frame.show()
+        if self.frame_bg.isHidden():
+            self.frame_bg.show()
         else:
-            self.frame.hide()
+            self.frame_bg.hide()
+
+
+    def title_toggle_vis(self, wat = None):
+        self.toggle_vis()
+        if self.frame_bg.isHidden():
+            self.title_button.wrtReparentTo(self.frame)
+            self.title_button.show()
+        else:
+            self.title_button.wrtReparentTo(self.frame_bg)
+
 
 
     def __startDrag(self,crap):
@@ -745,12 +757,20 @@ def main():
     cc = CameraControl()
     ax = Axis3d()
     gd = Grid3d()
-    test_frame1 = GuiFrame('testing', x=0, y=0, height=.25, width=.25)
-    test_frame2 = GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25)
-    test_frame3 = GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25)
-    test_frame3 = GuiFrame('text', x=.5, y=.5, height=.25, width=-.25)
-    test_frame3 = GuiFrame('text', x=.5, y=.5, height=-.25, width=-.25)
-    test_frame3 = GuiFrame('text', x=.5, y=.25, height=.25, width=.25)
+
+    items = [('testing',) for _ in range(10)]
+    frames = [
+        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25),
+        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25),
+        #GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
+        #GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
+        #GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),
+        #GuiFrame('text', x=.5, y=.5, height=.25, width=-.25, items = items),
+        #GuiFrame('text', x=.5, y=.5, height=-.25, width=-.25, items = items),
+        #GuiFrame('text', x=.5, y=.25, height=.25, width=.25, items = items),
+    ]
+    # FIXME calling __add_item__ after this causes weird behvaior
+
     run()
 
 if __name__ == '__main__':

@@ -9,6 +9,8 @@ from panda3d.core import GeomTristrips, GeomLinestrips
 
 from IPython import embed
 
+from monitor import getMaxPixelsPerMM
+
 keybinds = {
     'view': {
         #'':'mouse1',
@@ -496,45 +498,47 @@ class GuiFrame(DirectObject):
     #there should be a -list- tree of frames
     def __init__(self, title,
                  shortcut = None,
-                 x = .5,
+                 x = 0,
                  y = .5,
                  width = .25,
                  height = .25,
-                 scale = 1,  # there is some black magic here :/
+                 #scale = .05,  # there is some black magic here :/
                  bdr_thickness = 1,
                  bdr_color = (.1, .1, .1, 1),
                  bg_color = (.5, .5, .5, .5),
                  text_color = (0, 0, 0, 1),
                  text_font = TextNode.getDefaultFont(),
+                 text_height_mm = 3,
                  items = ((None,None,(None,)),),
                 ):
     #item_w_pad = 1
     #item_h_pad = 1
 
         self.title = title
-        self.x = self.fix_x(x)  # for top left
-        self.y = self.fix_y(y)  # for top left
-        self.width = self.fix_w(width)
-        self.height = self.fix_h(height)
-        self.scale = scale
+        self.do_xywh(x, y, width, height)
+        #self.scale = scale
         self.bdr_thickness = bdr_thickness  # FIXME ??
         self.bdr_color = bdr_color
         self.bg_color = bg_color
         self.text_color = text_color
         self.text_font = text_font
-        self.text_h = self.fix_h(.1)
-        self.text_w = self.fix_w(.1)
+        text_h = .1
+        self.text_h = self.fix_h(text_h)
+        self.text_sy = text_h * 2
+        self.text_sx = self.text_sy
+
+        # get our aspect ratio, and pixels per mm
+        self.getWindowData()
+        self.accept('window-event', self.getWindowData)
+        self.ppmm = getMaxPixelsPerMM()  # FIXME this does not need to be called every time...
 
         # get the root for all frames in the scene
         frameRoot = render2d.find('frameRoot')
         if not frameRoot:
-            frameRoot = render2d.attachNewNode('frameRoot')
+            frameRoot = aspect2d.attachNewNode('frameRoot')
 
         # create the parent node for this frame
         self.frame = frameRoot.attachNewNode('frame-%s-%s'%(title, id(self)))
-
-        # frame items parent
-        self.itemsParent = self.frame.attachNewNode('frame items')
 
         # background
         l,r,b,t = 0, self.width, 0, self.height
@@ -544,8 +548,13 @@ class GuiFrame(DirectObject):
                                     frameSize=(l,r,b,t),
                                     state=DGG.NORMAL,  # FIXME framesize is >_<
                                     suppressMouse=1)
+
         # border
         self.__make_border__(self.frame_bg, self.bdr_thickness, self.bdr_color, l, r, b, t)
+
+        # setup for items
+        self.itemsParent = self.frame.attachNewNode('frame items')
+        self.num_items = -1
 
         # title
         self.__add_item__(title, None, None)
@@ -558,9 +567,39 @@ class GuiFrame(DirectObject):
         if shortcut:
             self.accept(shortcut, self.toggle_vis)
 
-    def getWindowSize(self,wat=None):  # TODO see if we really need this
+    def do_xywh(self, x, y, w, h):
+        """ makes negative widths and heights work
+            as well as negative x and y (bottom right is 0)
+        """
+        if x < 0:
+            x = 1 + x
+        if y < 0:
+            y = 1 + y
+        if w < 0:
+            x, w = x + w, -w
+        if h < 0:
+            y, h = y + h, -h
+
+        self.x = self.fix_x(x)  # for top left
+        self.y = self.fix_y(y)  # for top left
+        self.width = self.fix_w(w)
+        self.height = self.fix_h(h)
+
+    def getWindowData(self, event=None):
+        self.__ar__ = base.camLens.getAspectRatio()  # this gives the width / height ratio
         self.__winx__ = base.win.getXSize()
         self.__winy__ = base.win.getYSize()
+        self.frame_adjust()
+    def frame_adjust(self):
+        #we are using aspect2d...
+        pass
+        
+    def getWindowSize(self, event=None):  # TODO see if we really need this
+        self.__winx__ = base.win.getXSize()
+        self.__winy__ = base.win.getYSize()
+        m = max(self.__winx__, self.__winy__)
+        self.__xscale__ = self.__winx__ / m
+        self.__yscale__ = self.__winy__ / m
 
 
     # put origin in top left and positive down and right
@@ -577,42 +616,29 @@ class GuiFrame(DirectObject):
     def fix_h(n):
         return -n * 2
 
-    """
-    @property
-    def x(self): return self._x
-    @x.setter
-    def x(self, value): self._x = (value + 1) * .5
-
-    @property
-    def y(self): return self._y
-    @y.setter
-    def y(self, value): self._y = (value - 1) * -.5
-
-    @property
-    def height(self): return self._height
-    @height.setter
-    def height(self, value): return self._height
-    @property
-    def width(self): return self._width
-    @width.setter
-    def width(self, value): return self._width
-    #"""
     def __add_item__(self, text, command, args): 
-        DirectButton(
+        self.num_items += 1
+        b = DirectButton(
             parent=self.itemsParent,
             text=text,
             text_font=self.text_font,
             text_fg=self.text_color,
+            text_scale=(self.text_sx, self.text_sy),
+            text_pos=(0, -self.text_sy*self.num_items),
             pos=(self.x, 0, self.y),
-            frameSize=(0, self.width, 0, self.text_h),
+            #frameSize=(0, self.width, 0, self.text_h),
             command=command,
             extraArgs=args,
             relief=DGG.FLAT,
             text_align=TextNode.ALeft,
         )
+        fr = b.node().getFrame()
+        height = fr[2]-fr[3]  # this is bottom - top so the value is already flipped
+        width = fr[1]-fr[0]  # right - left always positive
 
     def __del_item__(self):
         """ I have no idea how this is going to work """
+        self.num_items -= 1
 
     @staticmethod
     def __make_border__(parent, thickness, color, l, r , b, t):
@@ -669,16 +695,19 @@ class SelectProperties(GuiFrame):
 
 def main():
     from direct.showbase.ShowBase import ShowBase
-    from util import exit_cleanup, ui_text
+    from util import exit_cleanup, ui_text, console
     base = ShowBase()
     base.disableMouse()
     base.setBackgroundColor(0,0,0)
     ec = exit_cleanup()
     uit = ui_text()
+    con = console()
     cc = CameraControl()
     ax = Axis3d()
     gd = Grid3d()
-    test_frame = GuiFrame('testing')
+    test_frame1 = GuiFrame('testing', x=0, y=0, height=.25, width=.25)
+    test_frame2 = GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25)
+    test_frame3 = GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25)
     run()
 
 if __name__ == '__main__':

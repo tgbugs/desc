@@ -1,7 +1,7 @@
 import sys
 from direct.showbase.DirectObject import DirectObject
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import TextNode
+from panda3d.core import TextNode, Point3
 from IPython import embed
 
 def genLabelText(text, i): #FIXME
@@ -51,7 +51,8 @@ class ui_text(DirectObject):
     def posTask(self, task):
         if base.mouseWatcherNode.hasMouse():
             x,y = base.mouseWatcherNode.getMouse()
-            self.pos.setText('%1.3f, %1.3f'%(x,y))
+            ap2 = aspect2d.getRelativePoint(render2d, Point3(x, y, 0))
+            self.pos.setText('%1.3f, %1.3f'%(ap2.x,ap2.y))
         return task.cont
 
 def main():

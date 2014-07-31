@@ -7,6 +7,8 @@ from panda3d.core import NodePath, GeomNode
 from panda3d.core import Geom, GeomVertexWriter, GeomVertexFormat, GeomVertexData
 from panda3d.core import GeomTristrips, GeomLinestrips
 
+from IPython import embed
+
 keybinds = {
     'view': {
         #'':'mouse1',
@@ -219,14 +221,14 @@ class CameraControl(DirectObject):
 
         #self.accept("escape", sys.exit)  #no, exit_cleanup will handle this...
 
-        for function,key in keybinds['view'].items():
+        for function_name, key in keybinds['view'].items():
             #self.accept(key,taskMgr.add,(getattr(self,function),function+'Task'))
-            self.accept(key, self.makeTask, [function])
+            self.accept(key, self.makeTask, [function_name])  # TODO split out functions that don't require tasks
             keytest=key.split('-')[-1]
             #print(keytest)
             if keytest in {'mouse1','mouse2','mouse3'}:
-                self.addEndTask(keytest,function)
-                self.accept(keytest+'-up', self.endTask, [keytest,function])
+                self.addEndTask(keytest,function_name)
+                self.accept(keytest+'-up', self.endTask, [keytest,function_name])
 
         #gains #TODO tweak me!
         self.XGAIN = .01
@@ -276,15 +278,18 @@ class CameraControl(DirectObject):
         self.__winy__ = base.win.getYSize()
         #print(self.__winx__,self.__winy__)
 
-    def makeTask(self, function):
+    def makeTask(self, function_name):
         """ ye old task spawner """
-        if base.mouseWatcherNode.hasMouse():
-            x,y = base.mouseWatcherNode.getMouse()
-            setattr(self, '__%sTask_s__'%function, (x,y)) #this should be faster
-            taskMgr.add(getattr(self,function), function+'Task')
+        if hasattr(self, function_name):
+            if base.mouseWatcherNode.hasMouse():
+                x,y = base.mouseWatcherNode.getMouse()
+                setattr(self, '__%sTask_s__'%function_name, (x,y)) #this should be faster
+                taskMgr.add(getattr(self,function_name), function_name+'Task')
+        else:
+            raise KeyError('Check your keybinds, there is no function by that name here!')
 
-    def addEndTask(self,key,function):
-        self.__ends__[key].append(function)
+    def addEndTask(self,key,function_name):
+        self.__ends__[key].append(function_name)
 
     def endTask(self, key, function):
         for func in self.__ends__[key]:
@@ -421,6 +426,7 @@ class CameraControl(DirectObject):
 ###
 
 from direct.gui.DirectGui import DirectButton, DirectFrame, DGG, OnscreenText
+from panda3d.core import TextNode, LineSegs
 
 class GuiType(DirectObject):
     #DEFAULTS
@@ -488,70 +494,125 @@ class GuiFrame(DirectObject):
     #position where you want
     #parent to other frames
     #there should be a -list- tree of frames
-    def __init__(self, title
-                    shortcut = None
-                    x = 0,
-                    y = 0,
-                    width = 1,
-                    height = 1,
-                    bdr_thickness = 1,
-                    bdr_color = (.9, .9, .9, 1),
-                    bg_color = (.5, .5, .5, 1),
-                    text_color = (1, 1, 1, 1),
-                    text_font = TextNode.getDefaultFont()
-                )
+    def __init__(self, title,
+                 shortcut = None,
+                 x = .5,
+                 y = .5,
+                 width = .25,
+                 height = .25,
+                 scale = 1,  # there is some black magic here :/
+                 bdr_thickness = 1,
+                 bdr_color = (.1, .1, .1, 1),
+                 bg_color = (.5, .5, .5, .5),
+                 text_color = (0, 0, 0, 1),
+                 text_font = TextNode.getDefaultFont(),
+                 items = ((None,None,(None,)),),
+                ):
     #item_w_pad = 1
     #item_h_pad = 1
 
-    #def __init__(self, title, shortcut = None, x = None, y = None, width = None,
-                 #height = None, bdr_thickness = None, bdr_color = None,
-                 #bg_color = None, text_color = None, text_font = None):
         self.title = title
-        self.x = x  # for top left
-        self.y = y  # for top left
-        self.width = width
-        self.height = height
-        self.bdr_thickness = bdr_thickness
+        self.x = self.fix_x(x)  # for top left
+        self.y = self.fix_y(y)  # for top left
+        self.width = self.fix_w(width)
+        self.height = self.fix_h(height)
+        self.scale = scale
+        self.bdr_thickness = bdr_thickness  # FIXME ??
         self.bdr_color = bdr_color
         self.bg_color = bg_color
         self.text_color = text_color
         self.text_font = text_font
+        self.text_h = self.fix_h(.1)
+        self.text_w = self.fix_w(.1)
 
+        # get the root for all frames in the scene
         frameRoot = render2d.find('frameRoot')
         if not frameRoot:
             frameRoot = render2d.attachNewNode('frameRoot')
 
+        # create the parent node for this frame
         self.frame = frameRoot.attachNewNode('frame-%s-%s'%(title, id(self)))
 
-        #frame items parent
+        # frame items parent
         self.itemsParent = self.frame.attachNewNode('frame items')
 
-        #background
-        l,r,b,t = self.x, self.x + self.width, self.y + self.height, self.y
-        self.frame_bg = DirectFrame(parent=self.frame, frameColor=self.bg_color,
-                                    frameSize=(l,r,b,t), state=DGG.NORMAL,
+        # background
+        l,r,b,t = 0, self.width, 0, self.height
+        self.frame_bg = DirectFrame(parent=self.frame,
+                                    frameColor=self.bg_color,
+                                    pos=(self.x, 0, self.y),
+                                    frameSize=(l,r,b,t),
+                                    state=DGG.NORMAL,  # FIXME framesize is >_<
                                     suppressMouse=1)
-        #border
+        # border
         self.__make_border__(self.frame_bg, self.bdr_thickness, self.bdr_color, l, r, b, t)
 
-        #title
-        self.__make_item__(title, None, None)
+        # title
+        self.__add_item__(title, None, None)
+        
+        # add any items that we got
+        for text, command, args in items:
+            self.__add_item__(text, command, args)
 
-
-        #toggle vis
+        # toggle vis
         if shortcut:
             self.accept(shortcut, self.toggle_vis)
 
+    def getWindowSize(self,wat=None):  # TODO see if we really need this
+        self.__winx__ = base.win.getXSize()
+        self.__winy__ = base.win.getYSize()
+
+
+    # put origin in top left and positive down and right
+    @staticmethod
+    def fix_x(x):
+        return (x - .5) * 2
+    @staticmethod
+    def fix_y(y):
+        return (y - .5) * -2
+    @staticmethod
+    def fix_w(n):
+        return n * 2
+    @staticmethod
+    def fix_h(n):
+        return -n * 2
+
+    """
+    @property
+    def x(self): return self._x
+    @x.setter
+    def x(self, value): self._x = (value + 1) * .5
+
+    @property
+    def y(self): return self._y
+    @y.setter
+    def y(self, value): self._y = (value - 1) * -.5
+
+    @property
+    def height(self): return self._height
+    @height.setter
+    def height(self, value): return self._height
+    @property
+    def width(self): return self._width
+    @width.setter
+    def width(self, value): return self._width
+    #"""
     def __add_item__(self, text, command, args): 
         DirectButton(
             parent=self.itemsParent,
             text=text,
             text_font=self.text_font,
             text_fg=self.text_color,
-            pos=(2, 0, 2),  # TODO
+            pos=(self.x, 0, self.y),
+            frameSize=(0, self.width, 0, self.text_h),
             command=command,
-            extraArgs=args
+            extraArgs=args,
+            relief=DGG.FLAT,
+            text_align=TextNode.ALeft,
         )
+
+    def __del_item__(self):
+        """ I have no idea how this is going to work """
 
     @staticmethod
     def __make_border__(parent, thickness, color, l, r , b, t):
@@ -562,25 +623,18 @@ class GuiFrame(DirectObject):
            ((l,0,t), (r,0,t)),
         )
         for moveto, drawto in moveto_drawto:
-            Border = lineSegs()
+            Border = LineSegs()
             Border.setThickness(thickness)
             Border.setColor(*color)
             Border.moveTo(*moveto)
             Border.drawTo(*drawto)
             parent.attachNewNode(Border.create())
 
-
-
-
     def toggle_vis(self):
         if self.frame.isHidden():
             self.frame.show()
         else:
             self.frame.hide()
-
-    def add_button(self, button):
-        #self.buttons.append(button)
-        pass
 
     def __enter__(self):
         #load the position
@@ -615,12 +669,16 @@ class SelectProperties(GuiFrame):
 
 def main():
     from direct.showbase.ShowBase import ShowBase
+    from util import exit_cleanup, ui_text
     base = ShowBase()
     base.disableMouse()
     base.setBackgroundColor(0,0,0)
+    ec = exit_cleanup()
+    uit = ui_text()
     cc = CameraControl()
     ax = Axis3d()
     gd = Grid3d()
+    test_frame = GuiFrame('testing')
     run()
 
 if __name__ == '__main__':

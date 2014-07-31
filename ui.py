@@ -415,6 +415,200 @@ class CameraControl(DirectObject):
         self.cameraTarget.setR(self.__cr__ - cross * 10 )
         return task.cont
 
+
+###
+#   Menus and frames
+###
+
+from direct.gui.DirectGui import DirectButton, DirectFrame, DGG, OnscreenText
+
+class GuiType(DirectObject):
+    #DEFAULTS
+    POSITION = (0, 0)
+    color = (.5, .5, .5, 1)
+    color_hover = (.5, .5, .5, 1)
+    color_press = (.5, .5, .5, 1)
+    def __init__(self, parent = None, position = None, color = None):
+        if parent is None:
+            self.parent = self
+        else:
+            self.parent = parent
+
+        if position is None:
+            self.position = self.POSITION
+        else:
+            self.position = position
+
+        if color is None:
+            self.color = self.parent.color
+        else:
+            self.color = color
+
+
+class GuiLineType(GuiType):
+    #DEFAULTS
+    THICKNESS = 1
+    def __init__(self, parent = None, position = None, color = None, thickness = None):
+        super().__init__(parent, position, color)
+        if thickness is None:
+            self.thickness = THICKNESS
+        else:
+            self.thickness = thickness
+
+
+class GuiLine(GuiLineType):
+    #DEFAULTS
+    LENGTH = 1
+    def __init__(self, parent = None, position = None, color = None, thickness = None, length = None,):
+        super().__init__(parent, position, color, thickness)
+        self.length = length
+
+
+class GuiAreaType(GuiType):
+    #DEFAULTS
+    WIDTH = 1
+    HEIGHT = 1
+    def __init__(parent = None, position = None, color = None, width = None, height = None):
+        super().__init__(self, parent, position, color)
+        self.width = width
+        self.height = height
+
+
+class GuiBorder(GuiLineType, GuiAreaType):
+    def __init__(self, parent = None, position = None, color = None, thickness = None, width = None, height = None):
+        super(GuiLineType, self).__init__(parent, position, color, thickness)
+        super(GuiAreaType, self).__init__(parent, position, color, width, height)
+
+
+
+
+
+class GuiFrame(DirectObject):
+    #should be able to show/hide, do conditional show hide
+    #position where you want
+    #parent to other frames
+    #there should be a -list- tree of frames
+    def __init__(self, title
+                    shortcut = None
+                    x = 0,
+                    y = 0,
+                    width = 1,
+                    height = 1,
+                    bdr_thickness = 1,
+                    bdr_color = (.9, .9, .9, 1),
+                    bg_color = (.5, .5, .5, 1),
+                    text_color = (1, 1, 1, 1),
+                    text_font = TextNode.getDefaultFont()
+                )
+    #item_w_pad = 1
+    #item_h_pad = 1
+
+    #def __init__(self, title, shortcut = None, x = None, y = None, width = None,
+                 #height = None, bdr_thickness = None, bdr_color = None,
+                 #bg_color = None, text_color = None, text_font = None):
+        self.title = title
+        self.x = x  # for top left
+        self.y = y  # for top left
+        self.width = width
+        self.height = height
+        self.bdr_thickness = bdr_thickness
+        self.bdr_color = bdr_color
+        self.bg_color = bg_color
+        self.text_color = text_color
+        self.text_font = text_font
+
+        frameRoot = render2d.find('frameRoot')
+        if not frameRoot:
+            frameRoot = render2d.attachNewNode('frameRoot')
+
+        self.frame = frameRoot.attachNewNode('frame-%s-%s'%(title, id(self)))
+
+        #frame items parent
+        self.itemsParent = self.frame.attachNewNode('frame items')
+
+        #background
+        l,r,b,t = self.x, self.x + self.width, self.y + self.height, self.y
+        self.frame_bg = DirectFrame(parent=self.frame, frameColor=self.bg_color,
+                                    frameSize=(l,r,b,t), state=DGG.NORMAL,
+                                    suppressMouse=1)
+        #border
+        self.__make_border__(self.frame_bg, self.bdr_thickness, self.bdr_color, l, r, b, t)
+
+        #title
+        self.__make_item__(title, None, None)
+
+
+        #toggle vis
+        if shortcut:
+            self.accept(shortcut, self.toggle_vis)
+
+    def __add_item__(self, text, command, args): 
+        DirectButton(
+            parent=self.itemsParent,
+            text=text,
+            text_font=self.text_font,
+            text_fg=self.text_color,
+            pos=(2, 0, 2),  # TODO
+            command=command,
+            extraArgs=args
+        )
+
+    @staticmethod
+    def __make_border__(parent, thickness, color, l, r , b, t):
+        moveto_drawto = (
+           ((l,0,t), (l,0,b)),
+           ((r,0,t), (r,0,b)),
+           ((l,0,b), (r,0,b)),
+           ((l,0,t), (r,0,t)),
+        )
+        for moveto, drawto in moveto_drawto:
+            Border = lineSegs()
+            Border.setThickness(thickness)
+            Border.setColor(*color)
+            Border.moveTo(*moveto)
+            Border.drawTo(*drawto)
+            parent.attachNewNode(Border.create())
+
+
+
+
+    def toggle_vis(self):
+        if self.frame.isHidden():
+            self.frame.show()
+        else:
+            self.frame.hide()
+
+    def add_button(self, button):
+        #self.buttons.append(button)
+        pass
+
+    def __enter__(self):
+        #load the position
+        #load other saved state
+        pass
+
+    def __exit__(self):
+        #save the position!
+        #save other state
+        pass
+
+
+
+# lits of frames
+# selected objects
+# selected object properties
+# selected object types
+# selected object relations
+
+# relation types to view
+# filters
+
+
+class SelectProperties(GuiFrame):
+    pass
+
+
+
 ###
 #   Tests
 ###

@@ -496,6 +496,7 @@ class GuiFrame(DirectObject):
     #position where you want
     #parent to other frames
     #there should be a -list- tree of frames
+    TEXT_MAGIC_NUMBER = .833333333334  #5/6 ?!?
     def __init__(self, title,
                  shortcut = None,
                  x = 0,
@@ -508,8 +509,9 @@ class GuiFrame(DirectObject):
                  bg_color = (.7, .7, .7, .5),
                  text_color = (0, 0, 0, 1),
                  text_font = TextNode.getDefaultFont(),
-                 text_height_mm = 3,
-                 items = ((None,None,(None,)),),
+                 text_h = .05,
+                 text_height_mm = 3,  # TODO
+                 items = tuple(),
                 ):
     #item_w_pad = 1
     #item_h_pad = 1
@@ -522,10 +524,8 @@ class GuiFrame(DirectObject):
         self.bg_color = bg_color
         self.text_color = text_color
         self.text_font = text_font
-        text_h = .25
         self.text_h = text_h
-        self.text_s = text_h * 1.6666667
-        #self.text_sx = self.text_sy
+        self.text_s = text_h * self.TEXT_MAGIC_NUMBER
 
         #self.BT = buttonThrower if buttonThrower else base.buttonThrowers[0].node()
         self.BT = base.buttonThrowers[0].node()
@@ -628,25 +628,22 @@ class GuiFrame(DirectObject):
         self.num_items += 1
         b = DirectButton(
             parent=self.itemsParent,
-            frameColor=(1,1,1,.5),
+            frameColor=(1,1,1,.2),
             frameSize=(0, self.width, 0, self.text_h),
             text=text,
             text_font=self.text_font,
             text_fg=self.text_color,
-            text_scale=self.text_s, #, self.text_s),
+            text_scale=self.text_s,
             text_pos=(0, self.text_h - .8 * self.text_s),
-            #text_pos=(0, -self.text_sy*self.num_items),
-            #pos=(self.x, 0, self.y),
             command=command,
             extraArgs=args,
             relief=DGG.FLAT,
-            #text_align=TextNode.ABoxedLeft,
             text_align=TextNode.ALeft,
         )
         #fr = b.node().getFrame()
         #height = fr[2]-fr[3]  # this is bottom - top so the value is already flipped
         #width = fr[1]-fr[0]  # right - left always positive
-        b.setPos(0, 0, -self.text_h * self.num_items)
+        b.setPos(0, 0, -.05 -self.text_h * self.num_items)
         return b
 
     def __del_item__(self):
@@ -760,8 +757,12 @@ def main():
 
     items = [('testing',) for _ in range(10)]
     frames = [
-        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25),
-        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25),
+        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25, text_h=.2),
+        GuiFrame('MegaTyj', x=-.3, y=-.3, height=.25, width=-.25, text_h=.2),
+        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.1),
+        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.05),
+        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.025),
+        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.025),
         #GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
         #GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
         #GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),

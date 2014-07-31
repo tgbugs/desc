@@ -9,7 +9,6 @@ from panda3d.core import GeomTristrips, GeomLinestrips
 
 from IPython import embed
 
-from monitor import getMaxPixelsPerMM
 
 keybinds = {
     'view': {
@@ -428,68 +427,7 @@ class CameraControl(DirectObject):
 ###
 
 from direct.gui.DirectGui import DirectButton, DirectFrame, DGG, OnscreenText
-from panda3d.core import TextNode, LineSegs, Point3, Point2
-
-class GuiType(DirectObject):
-    #DEFAULTS
-    POSITION = (0, 0)
-    color = (.5, .5, .5, 1)
-    color_hover = (.5, .5, .5, 1)
-    color_press = (.5, .5, .5, 1)
-    def __init__(self, parent = None, position = None, color = None):
-        if parent is None:
-            self.parent = self
-        else:
-            self.parent = parent
-
-        if position is None:
-            self.position = self.POSITION
-        else:
-            self.position = position
-
-        if color is None:
-            self.color = self.parent.color
-        else:
-            self.color = color
-
-
-class GuiLineType(GuiType):
-    #DEFAULTS
-    THICKNESS = 1
-    def __init__(self, parent = None, position = None, color = None, thickness = None):
-        super().__init__(parent, position, color)
-        if thickness is None:
-            self.thickness = THICKNESS
-        else:
-            self.thickness = thickness
-
-
-class GuiLine(GuiLineType):
-    #DEFAULTS
-    LENGTH = 1
-    def __init__(self, parent = None, position = None, color = None, thickness = None, length = None,):
-        super().__init__(parent, position, color, thickness)
-        self.length = length
-
-
-class GuiAreaType(GuiType):
-    #DEFAULTS
-    WIDTH = 1
-    HEIGHT = 1
-    def __init__(parent = None, position = None, color = None, width = None, height = None):
-        super().__init__(self, parent, position, color)
-        self.width = width
-        self.height = height
-
-
-class GuiBorder(GuiLineType, GuiAreaType):
-    def __init__(self, parent = None, position = None, color = None, thickness = None, width = None, height = None):
-        super(GuiLineType, self).__init__(parent, position, color, thickness)
-        super(GuiAreaType, self).__init__(parent, position, color, width, height)
-
-
-
-
+from panda3d.core import TextNode, LineSegs, Point3, Point2, LVecBase4f
 
 class GuiFrame(DirectObject):
     #should be able to show/hide, do conditional show hide
@@ -510,7 +448,7 @@ class GuiFrame(DirectObject):
                  text_color = (0, 0, 0, 1),
                  text_font = TextNode.getDefaultFont(),
                  text_h = .05,
-                 text_height_mm = 3,  # TODO
+                 text_height_mm = 4,  # TODO
                  items = tuple(),
                 ):
     #item_w_pad = 1
@@ -524,16 +462,22 @@ class GuiFrame(DirectObject):
         self.bg_color = bg_color
         self.text_color = text_color
         self.text_font = text_font
+        self.text_height_mm = text_height_mm
         self.text_h = text_h
-        self.text_s = text_h * self.TEXT_MAGIC_NUMBER
+
+        #set up variables
+        self.__winx__ = 0
+        self.__winy__ = 0
+        self.__ar__ = base.camLens.getAspectRatio()
+        self.items = []  # apparently it is much eaiser to manipulate these if you keep the reference
 
         #self.BT = buttonThrower if buttonThrower else base.buttonThrowers[0].node()
         self.BT = base.buttonThrowers[0].node()
 
         # get our aspect ratio, and pixels per mm
+        self.pixels_per_mm = render.getPythonTag('system_data')['max_ppmm']
         self.getWindowData()
         self.accept('window-event', self.getWindowData)
-        self.ppmm = getMaxPixelsPerMM()  # FIXME this does not need to be called every time...
 
         # get the root for all frames in the scene
         frameRoot = aspect2d.find('frameRoot')
@@ -557,7 +501,6 @@ class GuiFrame(DirectObject):
 
         # setup for items
         self.itemsParent = self.frame_bg.attachNewNode('frame items')
-        self.num_items = 0
 
         # title
         self.title_button = self.__add_item__(title, self.title_toggle_vis)
@@ -573,6 +516,10 @@ class GuiFrame(DirectObject):
         # toggle vis
         if shortcut:
             self.accept(shortcut, self.toggle_vis)
+
+    @property
+    def text_s(self):
+        return self.text_h * self.TEXT_MAGIC_NUMBER
 
     def do_xywh(self, x, y, w, h):
         """ makes negative wneg xidths and heights work
@@ -592,15 +539,32 @@ class GuiFrame(DirectObject):
         self.width = self.fix_w(w)
         self.height = self.fix_h(h)
 
-    def getWindowData(self, event=None):
-        self.__ar__ = base.camLens.getAspectRatio()  # this gives the width / height ratio
-        self.__winx__ = base.win.getXSize()
-        self.__winy__ = base.win.getYSize()
-        self.frame_adjust()
+    def getWindowData(self, window=None):
+        x = base.win.getXSize() 
+        y = base.win.getYSize()
+        if x != self.__winx__ or y != self.__winy__:
+            self.__ar__ = base.camLens.getAspectRatio()  # w/h
+            self.__winx__ = x
+            self.__winy__ = y
+            self.frame_adjust()
 
     def frame_adjust(self):
         #we are using aspect2d...
-        pass
+        h_units = 2 * base.a2dTop
+        #print(base.a2dTop)
+        units_per_pixel = h_units / self.__winy__  # a2d runs [-1,1] in y?
+        text_h = self.text_height_mm * self.pixels_per_mm * units_per_pixel
+        self.text_h = text_h
+        title = 1
+        for b in self.items:
+            if title <= 2:
+                b.setPos(0, 0, -self.text_h - self.text_h * title)
+                title += 1
+            else:
+                b.setPos(0, 0, -self.text_h)
+            b['frameSize'] = 0, self.width, 0, self.text_h
+            b['text_scale'] = self.text_s, self.text_s
+            b['text_pos'] = 0, self.text_h - .8 * self.text_s
         
     def getWindowSize(self, event=None):  # TODO see if we really need this
         self.__winx__ = base.win.getXSize()
@@ -608,7 +572,6 @@ class GuiFrame(DirectObject):
         m = max(self.__winx__, self.__winy__)
         self.__xscale__ = self.__winx__ / m
         self.__yscale__ = self.__winy__ / m
-
 
     # put origin in top left and positive down and right
     @staticmethod
@@ -625,9 +588,14 @@ class GuiFrame(DirectObject):
         return -n * 2
 
     def __add_item__(self, text, command = None, args = (None,)): 
-        self.num_items += 1
+        #self.num_items += 1
+        if len(self.items) <= 1:
+            parent = self.itemsParent  #everyone else parents off 2nd text
+        else:
+            parent = self.items[-1]
+
         b = DirectButton(
-            parent=self.itemsParent,
+            parent=parent,
             frameColor=(1,1,1,.2),
             frameSize=(0, self.width, 0, self.text_h),
             text=text,
@@ -640,10 +608,11 @@ class GuiFrame(DirectObject):
             relief=DGG.FLAT,
             text_align=TextNode.ALeft,
         )
-        #fr = b.node().getFrame()
-        #height = fr[2]-fr[3]  # this is bottom - top so the value is already flipped
-        #width = fr[1]-fr[0]  # right - left always positive
-        b.setPos(0, 0, -.05 -self.text_h * self.num_items)
+        if len(self.items) <= 1:  # for the title
+            b.setPos(0, 0, -self.text_h + -self.text_h * (len(self.items) + 1))
+        else:
+            b.setPos(0, 0, -self.text_h)
+        self.items.append(b)
         return b
 
     def __del_item__(self):
@@ -737,6 +706,67 @@ class SelectProperties(GuiFrame):
     pass
 
 
+class GuiType(DirectObject):
+    #DEFAULTS
+    POSITION = (0, 0)
+    color = (.5, .5, .5, 1)
+    color_hover = (.5, .5, .5, 1)
+    color_press = (.5, .5, .5, 1)
+    def __init__(self, parent = None, position = None, color = None):
+        if parent is None:
+            self.parent = self
+        else:
+            self.parent = parent
+
+        if position is None:
+            self.position = self.POSITION
+        else:
+            self.position = position
+
+        if color is None:
+            self.color = self.parent.color
+        else:
+            self.color = color
+
+
+class GuiLineType(GuiType):
+    #DEFAULTS
+    THICKNESS = 1
+    def __init__(self, parent = None, position = None, color = None, thickness = None):
+        super().__init__(parent, position, color)
+        if thickness is None:
+            self.thickness = THICKNESS
+        else:
+            self.thickness = thickness
+
+
+class GuiLine(GuiLineType):
+    #DEFAULTS
+    LENGTH = 1
+    def __init__(self, parent = None, position = None, color = None, thickness = None, length = None,):
+        super().__init__(parent, position, color, thickness)
+        self.length = length
+
+
+class GuiAreaType(GuiType):
+    #DEFAULTS
+    WIDTH = 1
+    HEIGHT = 1
+    def __init__(parent = None, position = None, color = None, width = None, height = None):
+        super().__init__(self, parent, position, color)
+        self.width = width
+        self.height = height
+
+
+class GuiBorder(GuiLineType, GuiAreaType):
+    def __init__(self, parent = None, position = None, color = None, thickness = None, width = None, height = None):
+        super(GuiLineType, self).__init__(parent, position, color, thickness)
+        super(GuiAreaType, self).__init__(parent, position, color, width, height)
+
+
+
+
+
 
 ###
 #   Tests
@@ -744,10 +774,12 @@ class SelectProperties(GuiFrame):
 
 def main():
     from direct.showbase.ShowBase import ShowBase
-    from util import exit_cleanup, ui_text, console
+    from util import startup_data, exit_cleanup, ui_text, console, frame_rate
     base = ShowBase()
     base.disableMouse()
     base.setBackgroundColor(0,0,0)
+    startup_data()
+    frame_rate()
     ec = exit_cleanup()
     uit = ui_text()
     con = console()
@@ -758,15 +790,14 @@ def main():
     items = [('testing',) for _ in range(10)]
     frames = [
         GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25, text_h=.2),
-        GuiFrame('MegaTyj', x=-.3, y=-.3, height=.25, width=-.25, text_h=.2),
-        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.1),
-        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.05),
-        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.025),
-        GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.025),
+        #GuiFrame('MegaTyj', x=-.3, y=-.3, height=.25, width=-.25, text_h=.2),
+        #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.1),
+        #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.05),
+        #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.025),
         #GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
         #GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
         #GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),
-        #GuiFrame('text', x=.5, y=.5, height=.25, width=-.25, items = items),
+        GuiFrame('text', x=.5, y=.5, height=.25, width=-.25, items = items),
         #GuiFrame('text', x=.5, y=.5, height=-.25, width=-.25, items = items),
         #GuiFrame('text', x=.5, y=.25, height=.25, width=.25, items = items),
     ]

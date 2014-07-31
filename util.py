@@ -4,6 +4,8 @@ from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode, Point3
 from IPython import embed
 
+from monitor import getMaxPixelsPerMM
+
 def genLabelText(text, i): #FIXME
   #return OnscreenText(text = text, pos = (-1.3, .95-.05*i), fg=(1,1,1,1),
   return OnscreenText(text = text, pos = (.025, -.05*i), fg=(1,1,1,1),
@@ -54,6 +56,22 @@ class ui_text(DirectObject):
             ap2 = aspect2d.getRelativePoint(render2d, Point3(x, y, 0))
             self.pos.setText('%1.3f, %1.3f'%(ap2.x,ap2.y))
         return task.cont
+
+def startup_data():
+    """ run this to get starup data """
+    #di = base.getDisplayInformation() #??
+    render.setPythonTag("system_data", {
+        'max_ppmm':getMaxPixelsPerMM(),
+        }
+    )
+
+def frame_rate():
+    base.setFrameRateMeter(True)
+    fr = aspect2d.attachNewNode(base.frameRateMeter)
+    base.setFrameRateMeter(False)
+    fr.wrtReparentTo(base.a2dTopRight)
+    fr.setX(-1)
+
 
 def main():
     from direct.showbase.ShowBase import ShowBase

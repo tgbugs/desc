@@ -428,7 +428,7 @@ class CameraControl(DirectObject):
 ###
 
 from direct.gui.DirectGui import DirectButton, DirectFrame, DGG, OnscreenText
-from panda3d.core import TextNode, LineSegs
+from panda3d.core import TextNode, LineSegs, Point3, Point2
 
 class GuiType(DirectObject):
     #DEFAULTS
@@ -527,6 +527,9 @@ class GuiFrame(DirectObject):
         self.text_sy = text_h * 2
         self.text_sx = self.text_sy
 
+        #self.BT = buttonThrower if buttonThrower else base.buttonThrowers[0].node()
+        self.BT = base.buttonThrowers[0].node()
+
         # get our aspect ratio, and pixels per mm
         self.getWindowData()
         self.accept('window-event', self.getWindowData)
@@ -553,7 +556,7 @@ class GuiFrame(DirectObject):
         self.__make_border__(self.frame_bg, self.bdr_thickness, self.bdr_color, l, r, b, t)
 
         # setup for items
-        self.itemsParent = self.frame.attachNewNode('frame items')
+        self.itemsParent = self.frame_bg.attachNewNode('frame items')
         self.num_items = -1
 
         # title
@@ -562,6 +565,10 @@ class GuiFrame(DirectObject):
         # add any items that we got
         for text, command, args in items:
             self.__add_item__(text, command, args)
+
+        # dragging
+        self.frame_bg.bind(DGG.B1PRESS, self.__startDrag)
+        self.frame_bg.bind(DGG.B1RELEASE, self.__stopDrag)
 
         # toggle vis
         if shortcut:
@@ -620,21 +627,25 @@ class GuiFrame(DirectObject):
         self.num_items += 1
         b = DirectButton(
             parent=self.itemsParent,
+            frameColor=(1,1,1,1),
             text=text,
             text_font=self.text_font,
             text_fg=self.text_color,
             text_scale=(self.text_sx, self.text_sy),
-            text_pos=(0, -self.text_sy*self.num_items),
-            pos=(self.x, 0, self.y),
+            text_pos=(0, 0),
+            #text_pos=(0, -self.text_sy*self.num_items),
+            #pos=(self.x, 0, self.y),
             #frameSize=(0, self.width, 0, self.text_h),
             command=command,
             extraArgs=args,
             relief=DGG.FLAT,
-            text_align=TextNode.ALeft,
+            text_align=TextNode.ABoxedLeft,
         )
         fr = b.node().getFrame()
         height = fr[2]-fr[3]  # this is bottom - top so the value is already flipped
         width = fr[1]-fr[0]  # right - left always positive
+        #b.setPos(self.x, 0, self.y)# + height)
+        #b.setScale(height)
 
     def __del_item__(self):
         """ I have no idea how this is going to work """
@@ -661,6 +672,35 @@ class GuiFrame(DirectObject):
             self.frame.show()
         else:
             self.frame.hide()
+
+
+    def __startDrag(self,crap):
+        self._ox, self._oy = base.mouseWatcherNode.getMouse()
+        taskMgr.add(self.__drag,'dragging %s'%self.title)
+        self.origBTprefix=self.BT.getPrefix()
+        self.BT.setPrefix('dragging frame')
+
+    def __drag(self, task):
+        if base.mouseWatcherNode.hasMouse():
+            x, y = base.mouseWatcherNode.getMouse()
+            if x != self._ox or y != self._oy:
+                m_old = aspect2d.getRelativePoint(render2d, Point3(self._ox, self._oy, 0))
+                m_new = aspect2d.getRelativePoint(render2d, Point3(x, y, 0))
+                dx, dy, _ = m_new - m_old
+                self.setPos(self.x + dx, self.y + dy)
+                self._ox = x
+                self._oy = y
+        return task.cont
+
+    def __stopDrag(self,crap):
+        taskMgr.remove('dragging %s'%self.title)
+        self.BT.setPrefix(self.origBTprefix)
+
+    def setPos(self, x, y):
+        self.x = x
+        self.y = y
+        self.frame_bg.setPos(x, 0, y)
+
 
     def __enter__(self):
         #load the position
@@ -708,6 +748,9 @@ def main():
     test_frame1 = GuiFrame('testing', x=0, y=0, height=.25, width=.25)
     test_frame2 = GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25)
     test_frame3 = GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25)
+    test_frame3 = GuiFrame('text', x=.5, y=.5, height=.25, width=-.25)
+    test_frame3 = GuiFrame('text', x=.5, y=.5, height=-.25, width=-.25)
+    test_frame3 = GuiFrame('text', x=.5, y=.25, height=.25, width=.25)
     run()
 
 if __name__ == '__main__':

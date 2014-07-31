@@ -283,7 +283,7 @@ class DropDownMenu(DirectObject):
 
   def __startDrag(self,crap):
       taskMgr.add(self.__drag,'dragging menu bar',
-        extraArgs=[Point2(base.mouseWatcherNode.getMouse())])
+                  extraArgs=[Point2(base.mouseWatcherNode.getMouse())])
       self.__removePopupMenu()
       self.origBTprefix=self.BT.getPrefix()
       self.BT.setPrefix('dragging menu bar')

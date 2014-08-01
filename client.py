@@ -1,21 +1,13 @@
 #!/usr/bin/env python3.4
 
 import asyncio
-import random
 import pickle
-#import zlib
 import ssl
-import os
 import sys
-from collections import deque
 from time import sleep
-from threading import Lock
 from concurrent.futures import ProcessPoolExecutor
 
 from IPython import embed
-from numpy.random import rand
-
-from panda3d.core import GeomNode, CollisionNode, TextNode, NodePath, PandaNode
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import Request, DataByteStream
@@ -27,40 +19,6 @@ sys.modules['core'] = sys.modules['panda3d.core']
 
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
     #that would vastly simplify life...? ehhhhh
-
-
-def become_future(function):
-    """ Decorator function to make a normal function run in a future """
-    @asyncio.coroutine
-    def wrapped(*args, **kwargs):
-        future = asyncio.Future()
-        yield from future
-        future.set_result(function(*args, **kwargs))
-    return wrapped
-
-@asyncio.coroutine
-def run_future(function, *args, **kwargs):
-    """ Run a function in a future """
-    future = asyncio.Future()
-    yield from future
-    future.set_result(function(*args,**kwargs))
-
-
-@asyncio.coroutine
-def run_panda():
-    """ make panda work with the event loop? I'm expecting bugs here... """
-    future = asyncio.Future()
-    yield from future
-    run()
-    future.set_result(True)
-
-def dumps(object):
-    """ Special dumps that adds a double stop to make deserializing easier """
-    return pickle.dumps(object)+b'.'
-
-def run_for_time(loop,time):
-    """ use this to view responses inside embed """
-    loop.run_until_complete(asyncio.sleep(time))
 
 class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a token getter...
     """ this is going to be done with fixed byte sizes known small headers """
@@ -249,186 +207,6 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
 
     def render_set_send_request(self, send_request:'function'):
         raise NotImplementedError('patch this function with the shared stated version in renderManager')
-
-class bamCacheManager:
-    """ shared state bam cache """
-    def __init__(self,rootNode):
-        self.cache = {}
-        # XXX FIXME a better way to do this is to use make it a future aware cache and just put a future at the index
-            # until the result arrives
-            # this way we can just maintain a list of all future stuff and add 'unexpected' data too
-            # the one question is what to do about gzing stuff... maybe use other cycles to go ahead and prep the nodes?
-            # in which case we degz and convert to a node asap and stick the node in the cache?
-            # that seems like a better idea...
-        self.rootNode = rootNode
-
-        self.reqLock = Lock()  # this works, the issue is that I havent written the deserializer for the client yet!
-        self.__future_hashes__ = set()  # the set of all future (or current) hashes should be similar to cache_age
-
-    def add_out_request(self, request_hash):
-        with self.reqLock:
-            if request_hash in self.__future_hashes__:
-                print('the request is already outstanding')
-                return False
-            else:
-                self.__future_hashes__.add(request_hash)
-                return True
-
-    def del_out_request(self, request_hash):
-        """ This method should be called when the data for a hash has
-            a) been removed from the render tree
-            b) has passed out of the cache_age queue
-        """
-        with self.reqLock:
-            print('')
-            print(self.__future_hashes__)
-            print(request_hash)
-            try:
-                self.__future_hashes__.remove(request_hash)
-            except KeyError as e:
-                pass
-                #print('somehow we received a hash for a request response that we did not request')
-                #print('error was ',e)
-                # FIXME actually we definitely want to receive all of these requests
-
-    def check_cache(self, request_hash):
-        try:
-            #bam = zlib.decompress(self.cache[request_hash])  # FIXME is there some way to make the gzing more transparent?
-            bam = None
-            self.render_bam(bam)
-            print('local cache hit')
-            return True
-        except KeyError:
-            print('local cache miss')
-            return False
-
-    def update_cache(self, request_hash, bam_data):
-        print('cache updated')
-        self.cache[request_hash] = bam_data
-
-    def render_bam(self, render_hash, bam):
-        """ render the GEOM only, will hang with nasty error if fed a collision node """
-        newNode = GeomNode(render_hash)
-        geomNode = newNode.decodeFromBamStream(bam)  # apparently the thing I'm encoding is a node for test purposes... may need something
-        #newNode.addGeom(geom)
-        self.rootNode.attachNewNode(newNode)
-
-def main():
-
-    #embed()
-    #transport, protocol = yield from clientLoop.create_connection(newConnectionProtocol, '127.0.0.1', 55555, ssl=None)  # TODO ssl
-    #reader, writer = yield from asyncio.open_connection('127.0.0.1', 55555, loop=clientLoop, ssl=None)
-
-    #transport, protocol = clientLoop.run_until_complete(coro_conClient)
-
-    #TODO ONE way to make this synchronous so to add a coroutine that only completes when it gets a response
-        #and then call run_until_complete on it :)
-    #test = []
-    #def myfunc(data):
-        #test.append(data)
-
-
-    clientLoop = asyncio.get_event_loop()
-    #tokenFuture = asyncio.Future()  # we have to pass the future in before init since the token is sent immediately, we might not even have to call run_until_complete??
-    #coro_conClient = clientLoop.create_connection(newConnectionProtocol(tokenFuture), '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
-
-    coro_conClient, tokenFuture = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
-
-    conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-    clientLoop.run_until_complete(conProtocol.get_data_token())
-    print('got token',tokenFuture.result())
-
-        
-    #here we demonstrate how to get a buttload of tokens >_<
-    #cf = [newConnectionProtocol('127.0.0.1', CONNECTION_PORT) for _ in range(10)]
-    #prots = [clientLoop.run_until_complete(c)[1] for c, _ in cf]
-    #coros_ = [clientLoop.run_until_complete(p.get_data_token()) for p in prots]  # this works too
-    #coros_ = [p.get_data_token() for p in prots]
-    #[clientLoop.run_until_complete(f) for f in coros_]
-    #tokens = [f.result() for _, f in cf]
-    #print('LOOK AT THEM WE\'RE RICH!',tokens)
-
-    class FakeNode:
-        def attachNewNode(self, node):
-            print('pretend like this print statement actually causes things to render',node)
-
-    #rootNode = FakeNode()
-    rootNode = NodePath(PandaNode('testRoot'))
-
-    rendMan = renderManager(*[rootNode]*3)  # in theory we can have multiple connections for a single render manager if we have disconnects
-    # if fact renderMan might even spin up its own connections! so render before connection is correct
-
-    datCli_base = type('dataProtocol',(dataProtocol,),
-                  {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
-                   'render_set_send_request':rendMan.set_send_request,
-                   'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
-
-    datCli = datCli_base(tokenFuture.result())  # __new__ magic, we don't use type() since tokens arent shared
-    coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
-    transport, protocol = clientLoop.run_until_complete(coro_dataClient)
-
-    #the 3 lines that follow completely break everything... why? don't know!
-    #datCli2 = datCli_base(tokens[3])  # __new__ magic, we don't use type() since tokens arent shared
-    #coro_dataClient2 = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl
-    #transport2, protocol2 = clientLoop.run_until_complete(coro_dataClient2)
-
-    transport.write(b'testing?')
-    transport.write(b'testing?')
-    transport.write(b'testing?')
-
-    #protocol2.send_token_data(tokenFuture.result())  # testing race condition, bet is both can get it
-    #protocol.send_token_data(tokenFuture.result())
-
-
-    #writer.write('does this work?')
-    for i in range(10):
-        sleep(1E-4)  # FIXME around 1E-4 we switch from a single data stream to multiple streams...
-        # clearly we should expect any data sent to act as a single stream (obviously given the doccumentation
-        transport.write("testing post {} ?".format(i).encode())
-
-    transport.write(dumps([random.random() for _ in range(100)]))
-    #a = yield from transport  # WHAT having this in here at all causes main to be skipped?!?!
-    #print('it works!',a)
-    transport.write(dumps([random.random() for _ in range(100)]))
-    transport.write(dumps([random.random() for _ in range(100)]))
-    transport.write(dumps([random.random() for _ in range(100)]))
-    transport.write(dumps('numpy?!'))
-    transport.write(dumps(rand(100)))
-    transport.write(dumps(rand(100)))
-    #TODO we can make scheduling things nice by using run_until_complete on futures associated with each write IF we care
-
-    #embed()  # if this is anything like calling run() .... this will work nicely
-    #try:
-        # TODO how to send in new writes??? yield or something?
-        #clientLoop.run_forever()
-    #except KeyboardInterrupt:
-        #print('exiting...')
-    #finally:
-        #clientLoop.close()
-    #request = Request('test..','test',(1,2,3),None)  # FIXME this breaks stop detection!
-    request = FAKE_REQUEST
-    print('th',request.hash_,'rh',hash(request))
-    rendMan.submit_request(request)
-    rendMan.submit_request(request)
-    rendMan.submit_request(request)
-    rendMan.submit_request(request)
-    rendMan.submit_request(request)
-    rendMan.submit_request(request)
-    rendMan.submit_request(request)
-    #protocol2.send_request(request)
-    #TODO likely to need a few tricks to get run() and loop.run_forever() working in the same file...
-    # for simple stuff might be better to set up a run_until_complete but we don't need that complexity
-    #embed()
-    run_for_time(clientLoop,4)
-    print("testing prediction caching")
-    request2 = Request('prediction','who knows',(2,3,4),None)
-    rendMan.submit_request(request2)
-    rendMan.submit_request(request2)
-    run_for_time(clientLoop,4)
-    #embed()
-    transport.write_eof()
-    clientLoop.close()
-    #eventLoop.run_until_complete(run_panda)
 
 def main():
     from threading import Thread

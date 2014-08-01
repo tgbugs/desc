@@ -622,8 +622,8 @@ class GuiFrame(DirectObject):
         else:
             b['extraArgs'] = [self, id(b)]+args
             b.node().setPythonTag('id', id(b))
-            if len(self.items) == 1:  # the first item that is not the title
-                b.setPos(0, 0, -self.text_h - self.text_h)
+            if len(self.items) is 1:  # the first item that is not the title
+                b.setPos(0, 0, -(self.text_h * 2))
                 self.__first_item__ = id(b)
 
             self.items[id(b)] = b
@@ -637,13 +637,13 @@ class GuiFrame(DirectObject):
         if out.getNumChildren():  # avoid the printing of the AssertionError :/
             c = out.getChild(0)
             c.reparentTo(p)
-            if index is self.__first_item__:
+            if index == self.__first_item__:  # XXX is fails, ints from id !=
                 c.setPos(out.getPos())
                 id_ = c.getPythonTag('id')
                 self.__first_item__ = id_
             else:
                 self.items.pop(index)
-            out.removeNode()
+            out.removeNode()  # FIXME for some reason using 'hide' causes bug
         else:  # we are removing the last button
             self.items.pop(index).removeNode()
 
@@ -703,9 +703,12 @@ class GuiFrame(DirectObject):
         self.BT.setPrefix(self.origBTprefix)
 
     def setPos(self, x, y):
+        """ actually sets the title button position
+            since it is really the parent node
+        """
         self.x = x
         self.y = y
-        self.title_button.setPos(x, 0, y)
+        self.title_button.setPos(x, 0, y - self.text_h)  # FIXME is hard :/
 
 
     def __enter__(self):
@@ -817,12 +820,12 @@ def main():
 
     items = [('testing%s'%i, lambda self, index: self.__del_item__(index) ) for i in range(10)]
     frames = [
-        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25, text_h=.2),
+        #GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25, text_h=.2),
         #GuiFrame('MegaTyj', x=-.3, y=-.3, height=.25, width=-.25, text_h=.2),
         #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.1),
         #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.05),
         #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.025),
-        #GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
+        GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
         #GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
         #GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),
         GuiFrame('text', x=.5, y=.5, height=.25, width=-.25, items = items),

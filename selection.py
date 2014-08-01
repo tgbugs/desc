@@ -33,7 +33,7 @@ from util import genLabelText
 from test_objects import makeSimpleGeom
 
 
-RADIANS_PER_DEGREE = 0.017453292519943295
+RADIANS_PER_DEGREE = pi/180
 
 def fixAsp(point):  # FIXME broken
     return render2d.getRelativePoint(aspect2d,point)
@@ -193,7 +193,7 @@ class BoxSel(HasSelectables,DirectObject):
         self.curSelPoints = []
 
     def toggle_vis(self):
-        self.visualize = not self.visualize
+        self.visualize = (self.visualize + 1) % 3  # rotate through the 3 levels
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
         taskMgr.remove('show_task')
@@ -295,6 +295,8 @@ class BoxSel(HasSelectables,DirectObject):
         cfz = base.camLens.getAspectRatio()
         cx,cy,cz = self.__baseBox__.getPos()
         sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
+        self.selRoot.removeChildren()
+        self.projRoot.removeChildren()
 
         x2 = cx + sx
         if cx > x2:
@@ -318,18 +320,15 @@ class BoxSel(HasSelectables,DirectObject):
         def calcRC(major, minor):
             if not minor:
                 return 0, [0]
-            ratio = abs(major / minor)
+            ratio = int(abs(major // minor))
             if ratio > 5:  # prevent combinatorial nightmares TODO tune me!
                 ratio = 5
-            else:
-                ratio = int(ratio)
             split = major / ratio
             radius = ((split * .5)**2 + (minor * .5)**2)**.5
             majCents = [(split * .5) + i*(split) for i in range(ratio)]
             return radius, majCents
 
-        asx, asz = abs(sx), abs(sz)
-        if asx > asz:
+        if abs(sx) > abs(sz):
             boxRadius, majCents = calcRC(sx, sz)
             centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
         else:
@@ -388,7 +387,7 @@ class BoxSel(HasSelectables,DirectObject):
             #rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2.126,pi/16)]
             #rads = [point2projection+fixAsp(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius)) for theta in arange(0,pi*2.126,pi/32)]
             #self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1],GeomLinestrips))
-            if self.visualize:
+            if self.visualize > 1:
                 radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                 self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
 
@@ -407,31 +406,32 @@ class BoxSel(HasSelectables,DirectObject):
                 z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
                 rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
 
-                if self.visualize:
+                if self.visualize > 1:
                     #radU = [boxCenter+(Point3(cos(theta)*distance, 0, sin(theta)*distance)) for theta in arange(0,pi*2.126,pi/32)]
                     #self.projRoot.attachNewNode(makeSimpleGeom(radU,[1,1,1,1],GeomLinestrips))
 
                     #radRads = [ point2projection + (Point3( cos(theta)*rescaled, 0.0, sin(theta)*rescaled )) for theta in arange(0,pi*2.126,pi/32) ]
                     #rr = self.projRoot.attachNewNode(makeSimpleGeom(radRads,[1,1,0,1],GeomLinestrips))
 
-                    asdf = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
-                    asdf.setRenderModeThickness(4)
+                    circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
+                    circleIntersect.setRenderModeThickness(4)
 
                     boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
                     self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
                     line = [point2projection, boxCenter]
 
                 if distance < boxRadius + rescaled:
-                    l2points.append(point3d)
                     for c in node.getChildren():
                         projectNode(c)
                     if self.visualize:
-                        self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+                        l2points.append(point3d)
+                        if self.visualize > 1:
+                            self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
                     #for j in range(node.getNumChildren()):
                         #projectNode(node.getChild(j))
                     return None  # return as soon as any one of the centers gets a hit
 
-                elif self.visualize:
+                elif self.visualize > 1:
                     self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
         # actually do the projection
@@ -447,16 +447,16 @@ class BoxSel(HasSelectables,DirectObject):
         if self.visualize:
 
             l2s = makeSimpleGeom(l2points,[1,0,0,1])
-            self.selRoot.removeChildren()
             l2n = self.selRoot.attachNewNode(l2s)
             l2n.setRenderModeThickness(8)
 
             pts3 = makeSimpleGeom(points3, [1,1,1,1])
-            self.selRoot.attachNewNode(pts3)
+            p3n = self.selRoot.attachNewNode(pts3)
+            p3n.setRenderModeThickness(3)  # render order >_<
 
-            pts = makeSimpleGeom(points,[1,1,1,1])
-            self.projRoot.removeChildren()
-            self.projRoot.attachNewNode(pts)
+            #pts = makeSimpleGeom(points,[1,1,1,1])
+            #self.projRoot.attachNewNode(pts)
+
             #self.projRoot.flattenStrong()  # this makes the colors go away ;_;
 
         # set up the task to add entries to the data frame TODO own function?

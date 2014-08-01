@@ -1,6 +1,6 @@
 import sys
 
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import NodePath, GeomNode
@@ -469,7 +469,8 @@ class GuiFrame(DirectObject):
         self.__winx__ = 0
         self.__winy__ = 0
         self.__ar__ = base.camLens.getAspectRatio()
-        self.items = []  # apparently it is much eaiser to manipulate these if you keep the reference
+        self.__was_dragging__ = False
+        self.items = OrderedDict()  # ordered dict to allow sequential addition
 
         #self.BT = buttonThrower if buttonThrower else base.buttonThrowers[0].node()
         self.BT = base.buttonThrowers[0].node()
@@ -510,8 +511,11 @@ class GuiFrame(DirectObject):
             self.__add_item__(*item)
 
         # dragging
-        self.frame_bg.bind(DGG.B1PRESS, self.__startDrag)
-        self.frame_bg.bind(DGG.B1RELEASE, self.__stopDrag)
+        self.title_button.bind(DGG.B1PRESS, self.__startDrag)
+        self.title_button.bind(DGG.B1RELEASE, self.__stopDrag)
+        #self.frame_bg.bind(DGG.B1PRESS, self.__startDrag)  # this can cause problems w/ was dragging
+        #self.frame_bg.bind(DGG.B1RELEASE, self.__stopDrag)
+
 
         # toggle vis
         if shortcut:
@@ -555,11 +559,9 @@ class GuiFrame(DirectObject):
         units_per_pixel = h_units / self.__winy__  # a2d runs [-1,1] in y?
         text_h = self.text_height_mm * self.pixels_per_mm * units_per_pixel
         self.text_h = text_h
-        title = 1
-        for b in self.items:
-            if title <= 2:
-                b.setPos(0, 0, -self.text_h - self.text_h * title)
-                title += 1
+        for k,b in self.items.items():
+            if k is 'first':
+                b.setPos(0, 0, -self.text_h - self.text_h)
             else:
                 b.setPos(0, 0, -self.text_h)
             b['frameSize'] = 0, self.width, 0, self.text_h
@@ -587,12 +589,15 @@ class GuiFrame(DirectObject):
     def fix_h(n):
         return -n * 2
 
-    def __add_item__(self, text, command = None, args = (None,)): 
-        #self.num_items += 1
+    def __add_item__(self, text, command = None, args = tuple()): 
+        args = list(args)
+
+        #if not len(self.items):
+            #parent = self.frame
         if len(self.items) <= 1:
             parent = self.itemsParent  #everyone else parents off 2nd text
         else:
-            parent = self.items[-1]
+            parent = list(self.items.values())[-1]
 
         b = DirectButton(
             parent=parent,
@@ -604,20 +609,44 @@ class GuiFrame(DirectObject):
             text_scale=self.text_s,
             text_pos=(0, self.text_h - .8 * self.text_s),
             command=command,
-            extraArgs=args,
             relief=DGG.FLAT,
             text_align=TextNode.ALeft,
         )
-        if len(self.items) <= 1:  # for the title
-            b.setPos(0, 0, -self.text_h + -self.text_h * (len(self.items) + 1))
+
+        b.setPos(0, 0, -self.text_h)
+        if not len(self.items):
+            self.items['title'] = b
+            b.wrtReparentTo(self.frame)
+            self.frame_bg.wrtReparentTo(b)
+            self.frame_bg.setBin('fixed',b.getBinDrawOrder()-1)
         else:
-            b.setPos(0, 0, -self.text_h)
-        self.items.append(b)
+            b['extraArgs'] = [self, id(b)]+args
+            b.node().setPythonTag('id', id(b))
+            if len(self.items) == 1:  # the first item that is not the title
+                b.setPos(0, 0, -self.text_h - self.text_h)
+                self.__first_item__ = id(b)
+
+            self.items[id(b)] = b
+
         return b
 
-    def __del_item__(self):
+    def __del_item__(self, index):
         """ I have no idea how this is going to work """
-        self.num_items -= 1
+        out = self.items[index]
+        p = out.getParent()
+        if out.getNumChildren():  # avoid the printing of the AssertionError :/
+            c = out.getChild(0)
+            c.reparentTo(p)
+            if index is self.__first_item__:
+                c.setPos(out.getPos())
+                id_ = c.getPythonTag('id')
+                self.__first_item__ = id_
+            else:
+                self.items.pop(index)
+            out.removeNode()
+        else:  # we are removing the last button
+            self.items.pop(index).removeNode()
+
 
     @staticmethod
     def __make_border__(parent, thickness, color, l, r , b, t):
@@ -642,17 +671,15 @@ class GuiFrame(DirectObject):
             self.frame_bg.hide()
 
 
-    def title_toggle_vis(self, wat = None):
-        self.toggle_vis()
-        if self.frame_bg.isHidden():
-            self.title_button.wrtReparentTo(self.frame)
-            self.title_button.show()
+    def title_toggle_vis(self):
+        if not self.__was_dragging__:
+            self.toggle_vis()
         else:
-            self.title_button.wrtReparentTo(self.frame_bg)
+            self.__was_dragging__ = False
 
 
 
-    def __startDrag(self,crap):
+    def __startDrag(self, crap):
         self._ox, self._oy = base.mouseWatcherNode.getMouse()
         taskMgr.add(self.__drag,'dragging %s'%self.title)
         self.origBTprefix=self.BT.getPrefix()
@@ -668,6 +695,7 @@ class GuiFrame(DirectObject):
                 self.setPos(self.x + dx, self.y + dy)
                 self._ox = x
                 self._oy = y
+                self.__was_dragging__ = True
         return task.cont
 
     def __stopDrag(self,crap):
@@ -677,7 +705,7 @@ class GuiFrame(DirectObject):
     def setPos(self, x, y):
         self.x = x
         self.y = y
-        self.frame_bg.setPos(x, 0, y)
+        self.title_button.setPos(x, 0, y)
 
 
     def __enter__(self):
@@ -787,7 +815,7 @@ def main():
     ax = Axis3d()
     gd = Grid3d()
 
-    items = [('testing',) for _ in range(10)]
+    items = [('testing%s'%i, lambda self, index: self.__del_item__(index) ) for i in range(10)]
     frames = [
         GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25, text_h=.2),
         #GuiFrame('MegaTyj', x=-.3, y=-.3, height=.25, width=-.25, text_h=.2),

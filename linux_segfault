@@ -1,0 +1,44 @@
+(gdb) backtrace
+#0  0x00007fffec65c82e in PandaNode::PandaNode(std::string const&) () from /home/tom/.local/lib64/panda3d/libpanda.so.1.9
+#1  0x00007fffec996ac3 in CollisionNode::CollisionNode(std::string const&) () from /home/tom/.local/lib64/panda3d/libpanda.so.1.9
+#2  0x00007fffec9dc689 in Dtool_Init_CollisionNode(_object*, _object*, _object*) () from /home/tom/.local/lib64/panda3d/libpanda.so.1.9
+
+#3  0x00007ffff7a14e33 in ?? () from /usr/lib64/libpython3.4.so.1.0
+#4  0x00007ffff79c1eaa in PyObject_Call () from /usr/lib64/libpython3.4.so.1.0
+#5  0x00007ffff7a6df31 in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#6  0x00007ffff7a72e6c in PyEval_EvalCodeEx () from /usr/lib64/libpython3.4.so.1.0
+#7  0x00007ffff7a70b7e in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#8  0x00007ffff7a72e6c in PyEval_EvalCodeEx () from /usr/lib64/libpython3.4.so.1.0
+#9  0x00007ffff7a70b7e in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#10 0x00007ffff7a72e6c in PyEval_EvalCodeEx () from /usr/lib64/libpython3.4.so.1.0
+#11 0x00007ffff79e96e7 in ?? () from /usr/lib64/libpython3.4.so.1.0
+#12 0x00007ffff79c1eaa in PyObject_Call () from /usr/lib64/libpython3.4.so.1.0
+#13 0x00007ffff7a6e83b in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#14 0x00007ffff7a71df4 in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#15 0x00007ffff7a72e6c in PyEval_EvalCodeEx () from /usr/lib64/libpython3.4.so.1.0
+#16 0x00007ffff7a70b7e in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#17 0x00007ffff7a72e6c in PyEval_EvalCodeEx () from /usr/lib64/libpython3.4.so.1.0
+#18 0x00007ffff79e96e7 in ?? () from /usr/lib64/libpython3.4.so.1.0
+#19 0x00007ffff79c1eaa in PyObject_Call () from /usr/lib64/libpython3.4.so.1.0
+#20 0x00007ffff7a6e83b in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#21 0x00007ffff7a71df4 in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#22 0x00007ffff7a71df4 in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#23 0x00007ffff7a72e6c in PyEval_EvalCodeEx () from /usr/lib64/libpython3.4.so.1.0
+#24 0x00007ffff79e9805 in ?? () from /usr/lib64/libpython3.4.so.1.0
+#25 0x00007ffff79c1eaa in PyObject_Call () from /usr/lib64/libpython3.4.so.1.0
+#26 0x00007ffff7a6e83b in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#27 0x00007ffff7a71df4 in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#28 0x00007ffff7a71df4 in PyEval_EvalFrameEx () from /usr/lib64/libpython3.4.so.1.0
+#29 0x00007ffff7a72e6c in PyEval_EvalCodeEx () from /usr/lib64/libpython3.4.so.1.0
+#30 0x00007ffff79e96e7 in ?? () from /usr/lib64/libpython3.4.so.1.0
+#31 0x00007ffff79c1eaa in PyObject_Call () from /usr/lib64/libpython3.4.so.1.0
+#32 0x00007ffff79d62d5 in ?? () from /usr/lib64/libpython3.4.so.1.0
+#33 0x00007ffff79c1eaa in PyObject_Call () from /usr/lib64/libpython3.4.so.1.0
+#34 0x00007ffff7a6ad27 in PyEval_CallObjectWithKeywords () from /usr/lib64/libpython3.4.so.1.0
+#35 0x00007ffff7aa8802 in ?? () from /usr/lib64/libpython3.4.so.1.0
+#36 0x00007ffff7748f3a in start_thread () from /lib64/libpthread.so.0
+#37 0x00007ffff748390d in clone () from /lib64/libc.so.6
+
+Program received signal SIGSEGV, Segmentation fault.
+[Switching to Thread 0x7fffdec5c700 (LWP 4057)]
+0x00007fffec65c82e in PandaNode::PandaNode(std::string const&) () from /home/tom/.local/lib64/panda3d/libpanda.so.1.9

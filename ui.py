@@ -1,11 +1,14 @@
 import sys
-
 from collections import defaultdict, OrderedDict
 
 from direct.showbase.DirectObject import DirectObject
+from direct.gui.DirectGui import DirectButton, DirectFrame, DGG, OnscreenText
+
 from panda3d.core import NodePath, GeomNode
 from panda3d.core import Geom, GeomVertexWriter, GeomVertexFormat, GeomVertexData
 from panda3d.core import GeomTristrips, GeomLinestrips
+from panda3d.core import TextNode, LineSegs, Point3, Point2
+
 
 from IPython import embed
 
@@ -426,9 +429,6 @@ class CameraControl(DirectObject):
 #   Menus and frames
 ###
 
-from direct.gui.DirectGui import DirectButton, DirectFrame, DGG, OnscreenText
-from panda3d.core import TextNode, LineSegs, Point3, Point2, LVecBase4f
-
 class GuiFrame(DirectObject):
     #should be able to show/hide, do conditional show hide
     #position where you want
@@ -456,7 +456,6 @@ class GuiFrame(DirectObject):
 
         self.title = title
         self.do_xywh(x, y, width, height)
-        #self.scale = scale
         self.bdr_thickness = bdr_thickness  # FIXME ??
         self.bdr_color = bdr_color
         self.bg_color = bg_color
@@ -552,16 +551,16 @@ class GuiFrame(DirectObject):
             self.__winy__ = y
             self.frame_adjust()
 
-    def frame_adjust(self):
-        #we are using aspect2d...
+    def frame_adjust(self):  # FIXME sometimes this fails to call...
         h_units = 2 * base.a2dTop
-        #print(base.a2dTop)
-        units_per_pixel = h_units / self.__winy__  # a2d runs [-1,1] in y?
+        units_per_pixel = h_units / self.__winy__
         text_h = self.text_height_mm * self.pixels_per_mm * units_per_pixel
         self.text_h = text_h
         for k,b in self.items.items():
-            if k is 'first':
-                b.setPos(0, 0, -self.text_h - self.text_h)
+            if k == 'title':
+                self.frame_bg.setPos(0, 0, self.text_h)
+            elif k == self.__first_item__:
+                b.setPos(0, 0, -(self.text_h * 2))
             else:
                 b.setPos(0, 0, -self.text_h)
             b['frameSize'] = 0, self.width, 0, self.text_h
@@ -619,6 +618,7 @@ class GuiFrame(DirectObject):
             b.wrtReparentTo(self.frame)
             self.frame_bg.wrtReparentTo(b)
             self.frame_bg.setBin('fixed',b.getBinDrawOrder()-1)
+            self.x, _, self.y = b.getPos()
         else:
             b['extraArgs'] = [self, id(b)]+args
             b.node().setPythonTag('id', id(b))
@@ -662,7 +662,8 @@ class GuiFrame(DirectObject):
             Border.setColor(*color)
             Border.moveTo(*moveto)
             Border.drawTo(*drawto)
-            parent.attachNewNode(Border.create())
+            b = parent.attachNewNode(Border.create())
+            b.setBin('fixed', parent.getBinDrawOrder() + 2)
 
     def toggle_vis(self):
         if self.frame_bg.isHidden():
@@ -707,8 +708,8 @@ class GuiFrame(DirectObject):
             since it is really the parent node
         """
         self.x = x
-        self.y = y
-        self.title_button.setPos(x, 0, y - self.text_h)  # FIXME is hard :/
+        self.y = y #- self.text_h  # FIXME is hard :/
+        self.title_button.setPos(x, 0, y)
 
 
     def __enter__(self):

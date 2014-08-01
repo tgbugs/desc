@@ -165,6 +165,16 @@ class BoxSel(HasSelectables,DirectObject):
         self.selRoot = render.attachNewNode('selRoot')
 
         self.frames = frames
+        if self.frames is None:
+            self.frames = {}
+            class f:
+                def del_all(self):
+                    pass
+                def add_item(self, *args, **kwargs):
+                    pass
+                def getMaxItems(self):
+                    pass
+            self.frames['data'] = f()
 
         self.collRoot = render.find('collideRoot')
         print(self.collRoot)
@@ -512,12 +522,27 @@ def makePoint(point=[0,0,0]):
 
 
 def main():
-    from util import ui_text
+    import pickle
+    from util import ui_text, console, exit_cleanup, frame_rate, startup_data
+    from client import renderManager
+    from ui import CameraControl, Axis3d, Grid3d
+    with open('edge_case_data_tuple.pickle','rb') as f:
+        data_tuple = pickle.load(f)
     base = ShowBase()
+    base.setBackgroundColor(0,0,0)
     base.disableMouse()
+    startup_data()
+    console()
+    exit_cleanup()
+    frame_rate()
+    CameraControl()
+    Axis3d()
+    Grid3d()
+    r = renderManager()
+    r.cache['edgecase'] = False
+    r.set_nodes('edgecase',data_tuple)
     ut = ui_text()
     dt = BoxSel()
-    embed()
     run()
 
 if __name__ == '__main__':

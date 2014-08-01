@@ -328,11 +328,22 @@ class renderManager(DirectObject):
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
     
-    def __init__(self, bamRoot, collRoot, uiRoot, invisRoot):
-        self.bamRoot = bamRoot
-        self.collRoot = collRoot
+    def __init__(self):
+        geomRoot = render.find('geomRoot')
+        if not geomRoot:
+            geomRoot = render.attachNewNode('geomRoot')
+
+        collideRoot = render.find('collideRoot')
+        if not collideRoot:
+            collideRoot = render.attachNewNode('collideRoot')
+
+        uiRoot = render.find('uiRoot')
+        if not uiRoot:
+            uiRoot = render.attachNewNode('uiRoot')
+
+        self.geomRoot = geomRoot
+        self.collRoot = collideRoot
         self.uiRoot = uiRoot
-        self.invisRoot = invisRoot
 
         self.cache = {}
         self.cache_age = deque()
@@ -391,6 +402,7 @@ class renderManager(DirectObject):
         """ this is the callback used by the data protocol """
         #print('cache updated')
         #print('bam length', len(data_tuple[0]))
+        #capture_datatuple(data_tuple)  # XXX for debugging selection
         try:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:
@@ -406,10 +418,10 @@ class renderManager(DirectObject):
 
     def render(self, bam, coll, ui):
         if not bam.getNumParents():
-            self.bamRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
+            self.geomRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
         else:
             print('already being rendered', bam)
-        #bam.reparentTo(self.bamRoot)
+        #bam.reparentTo(self.geomRoot)
         #self.collRoot.attachNewNode(coll)
         [c.reparentTo(self.collRoot) for c in coll.getChildren()]  # FIXME too slow!
         #self.uiRoot.attachNewNode(ui)
@@ -453,17 +465,6 @@ class renderManager(DirectObject):
         node = PandaNode('')  # use reparent to?
         return node
 
-        print(len(ui))
-        for position, uuid in zip(ui[0],ui[1]):  # FIXME weird erros here...
-            # this is super slow and causes garbage-collection-states failure
-            # this also causes MASSIVE slowdowns becasue invisRoot is FLAT FIXME
-            t = self.invisRoot.attachNewNode(TextNode('%s_text'%uuid))
-            t.setPos(*position)
-            t.node().setText('%s'%uuid)
-            t.node().setEffect(BillboardEffect.makePointEye())
-        
-        return node
-
     def fake_request(self):
         r = FAKE_REQUEST
         self.submit_request(r)
@@ -480,6 +481,10 @@ class renderManager(DirectObject):
     def __send_request__(self, request):
         raise NotImplementedError('NEVER CALL THIS DIRECTLY. If you didnt, is'
                                   ' your dataProtocol up?')
+
+def capture_datatuple(data_tuple):
+    with open('edge_case_data_tuple.pickle','wb') as f:
+        pickle.dump(data_tuple, f)
 
 def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -633,10 +638,6 @@ def main():
 
     # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
     # roots
-    geomRoot = render.attachNewNode('geomRoot')
-    collideRoot = render.attachNewNode('collideRoot')
-    uiRoot = render.attachNewNode('uiRoot')
-    invisRoot = NodePath(PandaNode('invisRoot'))
 
     # frames XXX FIXME TODO this is a terrible way to pass this around...
     frames = {
@@ -646,9 +647,9 @@ def main():
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
 
-    bs = BoxSel(frames, True)
+    bs = BoxSel(frames)
 
-    rendMan = renderManager(geomRoot, collideRoot, uiRoot, invisRoot)  # TODO rendMan will auto handle GuiFrames
+    rendMan = renderManager()
 
     #ppe = ProcessPoolExecutor()
     #clientLoop.set_default_executor(ppe)  # FIXME this doesn't work ;_;

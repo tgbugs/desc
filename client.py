@@ -452,6 +452,7 @@ class renderManager(DirectObject):
             # is selected
         node = PandaNode('')  # use reparent to?
         return node
+
         print(len(ui))
         for position, uuid in zip(ui[0],ui[1]):  # FIXME weird erros here...
             # this is super slow and causes garbage-collection-states failure
@@ -472,7 +473,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(10):
+        for _ in range(2):
             r = RAND_REQUEST()
             self.submit_request(r)
 
@@ -610,8 +611,8 @@ def main():
     from panda3d.core import PStatClient
 
     from dragsel import BoxSel
-    from util import ui_text, console, exit_cleanup
-    from ui import CameraControl, Axis3d, Grid3d
+    from util import ui_text, console, exit_cleanup, frame_rate, startup_data
+    from ui import CameraControl, Axis3d, Grid3d, GuiFrame
 
     from threading import Thread
 
@@ -622,6 +623,8 @@ def main():
     base.setBackgroundColor(0,0,0)
     base.disableMouse()
     # TODO init all these into a dict or summat?
+    startup_data()
+    frame_rate()
     ut = ui_text()
     grid = Grid3d()
     axis = Axis3d()
@@ -629,17 +632,23 @@ def main():
     con = console()
 
     # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
+    # roots
     geomRoot = render.attachNewNode('geomRoot')
     collideRoot = render.attachNewNode('collideRoot')
     uiRoot = render.attachNewNode('uiRoot')
     invisRoot = NodePath(PandaNode('invisRoot'))
 
+    # frames XXX FIXME TODO this is a terrible way to pass this around...
+    frames = {
+        'data':GuiFrame('Data view')
+    }
+
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
 
-    bs = BoxSel(False, invisRoot)
+    bs = BoxSel(False, frames)
 
-    rendMan = renderManager(geomRoot, collideRoot, uiRoot, invisRoot)
+    rendMan = renderManager(geomRoot, collideRoot, uiRoot, invisRoot)  # TODO rendMan will auto handle GuiFrames
 
     #ppe = ProcessPoolExecutor()
     #clientLoop.set_default_executor(ppe)  # FIXME this doesn't work ;_;

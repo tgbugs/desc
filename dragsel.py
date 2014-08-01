@@ -152,16 +152,18 @@ def makeSelectRect():
 #use render 2d?
 
 class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
-    def __init__(self, visualize = False, invisRoot = None):
+    def __init__(self, visualize = False, frames = None):
         super(BoxSel, self).__init__()
         self.visualize = visualize
-        self.invisRoot=invisRoot
-        if self.invisRoot is None:
-            self.invisRoot = NodePath(PandaNode('invisRoot'))
+        #self.invisRoot=invisRoot
+        #if self.invisRoot is None:
+            #self.invisRoot = NodePath(PandaNode('invisRoot'))
 
         self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
         self.selRoot = render.attachNewNode('selRoot')
+
+        self.frames = frames
 
         if self.visualize:
             print("trying to show the collision bits")
@@ -169,7 +171,6 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             print(collRoot)
             for child in collRoot.getChildren():
                 child.show()
-
 
         #corner selection detection #XXX this turns out to be slower, only traverse all the l2 nodes once faster
         self.cornerPicker = CollisionTraverser()
@@ -201,20 +202,34 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
+        self.curSelNodes = []
 
         #taskMgr.add(self.clickTask, 'clickTask')
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
-        while 1:
-            try:
-                obj = self.curSelShown.pop()
+        if self.curSelShown:
+            self.curSelShown = []
+            self.frames['data'].del_all()  # FIXME!
+        self.clearHighlight()
+        
+    def clearHighlight(self):
+        if self.curSelNodes:
+            for node in self.curSelNodes:
+                node.removeNode()
+            self.curSelNode = []
+            #self.curSelNode.detachNode()
+        #while 1:
+            #try:
+                #uuid = self.curSelShown.pop()
+                #self.frames['data'].del_item(uuid)
+                #obj = self.curSelNodes.pop()
                 #obj.detachNode()
-                obj.reparentTo(self.invisRoot)
+                #obj.reparentTo(self.invisRoot)
                 #obj.remove()
-            except IndexError: #FIXME slow?
-                return None
+            #except IndexError: #FIXME slow?
+                #return None
 
-    def processTarget(self,target):  # FIXME this is wrong, it needs to accomodate more child nodes
+    def processTarget(self, target):  # FIXME this is wrong, it needs to accomodate more child nodes
         #TODO shouldn't we let nodes set their own "callback" on click? so that there is a type per instead of shoving it all here?
             #well we also need to keep track of the previously selected set of nodes so we can turn them back off
         #note: target is a CollisionEntry
@@ -226,33 +241,31 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
             #text = target.getPythonTag('text')
             #uuid = target.getPythonTag('uuid')
             intoNode = target
-            clear = False
+            uuid = intoNode.getPythonTag('uuid')  # FIXME it would see that this are not actually uuids...
         else:
-            clear = True
-            intoNode = target.getIntoNode()
-            #text = intoNode.getPythonTag('text')
-
-        uuid = intoNode.getPythonTag('uuid')  # FIXME it would see that this are not actually uuids...
-        self.selText.setText("%s"%uuid)
-
-        if self.__shift__:  # FIXME OH NO! we need a dict ;_; shift should toggle selection
-            pass
-        elif self.curSelShown:  # FIXME this makes reselection very slow !
-            if clear:
+            if not self.__shift__ and self.curSelNodes:
                 self.clearSelection()
+            intoNode = target.getIntoNode()
+            uuid = intoNode.getPythonTag('uuid')
+            self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, intoNode, True) )
+            self.highlight(uuid, intoNode, False)
 
-        textNode = self.invisRoot.find("%s_text"%uuid)  # FIXME garbage-collection-states #f
-        if textNode:
-            textNode.reparentTo(self.uiRoot)
-            self.curSelShown.append(textNode)
-        else:  # FIXME this is where the majority of the slowdown comes...
-            print('Node %s not found'%uuid)
-            textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
-            textNode.setPos(*intoNode.getBounds().getApproxCenter())
-            textNode.node().setText("%s"%uuid)
-            textNode.node().setEffect(BillboardEffect.makePointEye())
-            self.curSelShown.append(textNode)
+        #self.selText.setText("%s"%uuid)
 
+        self.curSelShown.append(intoNode)
+
+        #textNode = self.invisRoot.find("%s_text"%uuid)  # FIXME garbage-collection-states #f
+        #if textNode:
+            #textNode.reparentTo(self.uiRoot)
+            #self.curSelShown.append(textNode)
+        #else:  # FIXME this is where the majority of the slowdown comes...
+        #print('Node %s not found'%uuid)
+
+        #textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
+        #textNode.setPos(*intoNode.getBounds().getApproxCenter())
+        #textNode.node().setText("%s"%uuid)
+        #textNode.node().setEffect(BillboardEffect.makePointEye())
+        #self.curSelShown.append(textNode)
 
         #textNode.node().setCardDecal(True)
 
@@ -484,6 +497,30 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         self.projRoot.attachNewNode(pts)
         #self.projRoot.flattenStrong()  # this makes the colors go away ;_;
 
+        stop = self.frames['data'].getMaxItems()
+        self.show_stop = len(self.curSelShown[:stop])
+        self.show_count = 0
+        if self.show_stop:
+            taskMgr.add(self.show_task, 'show_task')
+
+    def show_task(self, task):
+        if self.show_count >= self.show_stop:
+            taskMgr.remove(task.getName())
+        else:  # adding buttons is pretty slow :/ TODO try to make these in the background?
+            into = self.curSelShown[self.show_count]
+            uuid = into.getPythonTag('uuid')
+            self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )
+            self.show_count += 1
+        return task.cont
+    
+    def highlight(self, uuid, intoNode, clear, *args):
+        if clear:
+            self.clearHighlight()
+        textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
+        textNode.setPos(*intoNode.getBounds().getApproxCenter())
+        textNode.node().setText("%s"%uuid)
+        textNode.node().setEffect(BillboardEffect.makePointEye())
+        self.curSelNodes.append(textNode)
 
     def _getEnclosedNodes(self):
         cx,cy,cz = self.__baseBox__.getPos()

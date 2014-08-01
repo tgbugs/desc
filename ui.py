@@ -435,20 +435,19 @@ class GuiFrame(DirectObject):
     #parent to other frames
     TEXT_MAGIC_NUMBER = .833333333334  #5/6 ?!?
     DRAW_ORDER={
-        'frame':('unsorted',10),
-        'frame_bg':('unsorted', -1),
+        'frame':('unsorted',0),
+        'frame_bg':('unsorted', 0),
         'items':('unsorted', 0),
-        'title':('unsorted', 1),
-        'border':('unsorted', 2),
+        'title':('unsorted', 0),
+        'border':('unsorted', 0),
     }
-
 
     def __init__(self, title,
                  shortcut = None,
                  x = 0,
-                 y = .5,
-                 width = .25,
-                 height = .25,
+                 y = 0,
+                 width = .2,
+                 height = 1,
                  #scale = .05,  # there is some black magic here :/
                  bdr_thickness = 2,
                  bdr_color = (.1, .1, .1, 1),
@@ -476,6 +475,7 @@ class GuiFrame(DirectObject):
         self.__winy__ = 0
         self.__ar__ = base.camLens.getAspectRatio()
         self.__was_dragging__ = False
+        self.__first_item__ = None
         self.items = OrderedDict()  # ordered dict to allow sequential addition
 
         #self.BT = buttonThrower if buttonThrower else base.buttonThrowers[0].node()
@@ -515,17 +515,19 @@ class GuiFrame(DirectObject):
         self.itemsParent = self.frame_bg.attachNewNode('items parent')
 
         # title
-        self.title_button = self.__add_item__(title, self.title_toggle_vis)
+        self.title_button = self.add_item(title, self.title_toggle_vis)
         
         # add any items that we got
         for item in items:
-            self.__add_item__(*item)
+            self.add_item(*item)
 
         # dragging
         self.title_button.bind(DGG.B1PRESS, self.__startDrag)
         self.title_button.bind(DGG.B1RELEASE, self.__stopDrag)
-        #self.frame_bg.bind(DGG.B1PRESS, self.__startDrag)  # this can cause problems w/ was dragging
-        #self.frame_bg.bind(DGG.B1RELEASE, self.__stopDrag)
+
+        # raise if we click the frame background
+        self.frame_bg.bind(DGG.B1PRESS, self.raise_)
+        #self.frame_bg.bind(DGG.B1RELEASE, self.__stopDrag)  # this can cause problems w/ was dragging
 
 
         # toggle vis
@@ -563,7 +565,7 @@ class GuiFrame(DirectObject):
             self.__winy__ = y
             self.frame_adjust()
 
-    def raise_(self):
+    def raise_(self, *args):
         """ function that raises windows
             call FIRST inside any function that should raise
         """
@@ -583,7 +585,7 @@ class GuiFrame(DirectObject):
                 b.setPos(0, 0, -self.text_h)
             b['frameSize'] = 0, self.width, 0, self.text_h
             b['text_scale'] = self.text_s, self.text_s
-            b['text_pos'] = 0, self.text_h - .8 * self.text_s
+            b['text_pos'] = 0, self.text_h - self.TEXT_MAGIC_NUMBER * self.text_s
         
     def getWindowSize(self, event=None):  # TODO see if we really need this
         self.__winx__ = base.win.getXSize()
@@ -594,19 +596,15 @@ class GuiFrame(DirectObject):
 
     # put origin in top left and positive down and right
     @staticmethod
-    def fix_x(x):
-        return (x - .5) * 2
+    def fix_x(x): return (x - .5) *  2
     @staticmethod
-    def fix_y(y):
-        return (y - .5) * -2
+    def fix_y(y): return (y - .5) * -2
     @staticmethod
-    def fix_w(n):
-        return n * 2
+    def fix_w(n): return  n * 2
     @staticmethod
-    def fix_h(n):
-        return -n * 2
+    def fix_h(n): return -n * 2
 
-    def __add_item__(self, text, command = None, args = tuple()): 
+    def add_item(self, text, command = None, args = tuple()): 
         args = list(args)
 
         #if not len(self.items):
@@ -616,32 +614,37 @@ class GuiFrame(DirectObject):
         else:
             parent = list(self.items.values())[-1]
 
-        def cmd(*args):
-            """ any item should raise
-            """
-            self.raise_()
-            command(*args)
+        if command != None:
+            def cmd(*args):
+                """ any item should raise
+                """
+                self.raise_()
+                command(*args)
+        else:
+            cmd = self.raise_
+
 
         b = DirectButton(
             parent=parent,
-            frameColor=(1,1,1,.2),
+            frameColor=(1,1,1,.0),  # a = 0 => no border overlap
             frameSize=(0, self.width, 0, self.text_h),
-            text=text,
+            text=' '+text,  # hack to keep spacing from border
             text_font=self.text_font,
             text_fg=self.text_color,
             text_scale=self.text_s,
-            text_pos=(0, self.text_h - .8 * self.text_s),
+            text_pos=(0, self.text_h - self.TEXT_MAGIC_NUMBER * self.text_s),
             command=cmd,
             relief=DGG.FLAT,
             text_align=TextNode.ALeft,
         )
 
         b.setPos(0, 0, -self.text_h)
+        b.setName('DirectButton-'+text)
         if not len(self.items):
             self.items['title'] = b
             b.setBin(*self.DRAW_ORDER['title'])
         else:
-            b['extraArgs'] = [self, id(b)]+args
+            b['extraArgs'] = args+[self, id(b)]
             b.node().setPythonTag('id', id(b))
             b.setBin(*self.DRAW_ORDER['items'])
             if len(self.items) is 1:  # the first item that is not the title
@@ -651,6 +654,22 @@ class GuiFrame(DirectObject):
             self.items[id(b)] = b
 
         return b
+
+    def del_all(self):
+        if self.__first_item__ != None:
+            d = self.items[self.__first_item__]
+            d.removeNode()
+            self.items = OrderedDict()
+            self.items['title'] = self.title_button
+
+    def del_item(self, text):  # FIXME uniqueness problems
+        #d = self.itemsParent.find('*%s*'%text)
+        d = [i for i in self.items.values() if i.getName().count(text)]
+        try:
+            self.__del_item__(d[0].getPythonTag('id'))
+        except IndexError:
+            print('that item does not seem to exist')
+            # if we have a name then there shouldn't be key errors
 
     def __del_item__(self, index):
         """ I have no idea how this is going to work """
@@ -686,6 +705,8 @@ class GuiFrame(DirectObject):
             b = parent.attachNewNode(Border.create())
             b.setBin(*cls.DRAW_ORDER['border'])
 
+    def getMaxItems(self):
+        return int(abs(self.height / self.text_h) - 1)
 
     def toggle_vis(self):
         self.raise_()
@@ -699,8 +720,10 @@ class GuiFrame(DirectObject):
             self.toggle_vis()
             if self.frame_bg.isHidden():
                 self.title_button.wrtReparentTo(self.frame)
+                self.title_button['frameColor'] = (1, 1, 1, .5)  # TODO
             else:
                 self.title_button.wrtReparentTo(self.frame_bg)
+                self.title_button['frameColor'] = (1, 1, 1, 0)  # TODO
         else:
             self.__was_dragging__ = False
 
@@ -858,7 +881,7 @@ def main():
         #GuiFrame('text', x=.5, y=.25, height=.25, width=.25, items = items),
     ]
     frames = [GuiFrame('%s'%i, x=-.1, y=.1, height=.25, width=-.25, items=items) for i in range(10)]
-    # FIXME calling __add_item__ after this causes weird behvaior
+    # FIXME calling add_item after this causes weird behvaior
 
     run()
 

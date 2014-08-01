@@ -20,6 +20,10 @@ sys.modules['core'] = sys.modules['panda3d.core']
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
     #that would vastly simplify life...? ehhhhh
 
+def dumps(object_):
+    """ Special dumps that adds a double stop to make deserializing easier """
+    return pickle.dumps(object-)+b'.'
+
 class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a token getter...
     """ this is going to be done with fixed byte sizes known small headers """
     def __new__(cls, *args, event_loop=None, **kwargs:'for create_connection'):
@@ -108,47 +112,6 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             self.__block_tuple__ = None
             self.data_received(b'')  # lots of little messages will bollox this
 
-
-    def __data_received(self, data): #works with the split version (ie fails)
-        self.__block__ += data
-        split = self.__block__.split(DataByteStream.STOP)
-        if len(split) is 1:  # no stops
-            if DataByteStream.OP_DATA not in self.__block__:  # no ops
-                self.__block__ = b''
-        else:
-            self.__block__ = split.pop()
-            response_generator = DataByteStream.decodeResponseStreams(split)
-            self.process_responses(response_generator)
-    
-    def _data_received(self, data):  # XXX deprecated
-        #print("received data length ",len(data))  # this *should* just be bam files coming back, no ids? or id header?
-        response_start = data.find(DataByteStream.OP_BAM)  # TODO modify this so that it can detect any of the types
-        if response_start != -1:
-            response_start += DataByteStream.LEN_OPCODE
-            hash_start = response_start + DataByteStream.LEN_CACHE
-            bam_start = hash_start + DataByteStream.LEN_MD5_HASH
-            bam_stop = bam_start + data[bam_start:].find(DataByteStream.STOP)  # FIXME make sure the bam byte stream doesnt have this in there...
-        cache = int(data[response_start:response_start + DataByteStream.LEN_CACHE])
-        request_hash = data[hash_start:hash_start + DataByteStream.LEN_MD5_HASH]
-        bam_data = data[bam_start:bam_stop]  # FIXME this may REALLY need to be albe to split across data_received calls...
-        #print('')
-        #print('bam_data',bam_data)
-
-        # TODO if the request hash is not in cache.keys() stick it in there and don't render it
-        if cache:  # FIXME this needs to be controlled locally based soley on request hash NOT cache bit
-            # TODO this is second field in header
-            self.update_cache(request_hash, bam_data)  # TODO: the mapping between requests and the data in the database needs to be injective
-        #else:  # this data was generated in response to a request
-            #self.render_bam(request_hash, zlib.decompress(bam_data))
-
-
-            # hrmmmm how do we get this data out!?
-            # its a precache... and the server is the
-            # one that is going to be doing predictions
-            # about what to load... this should not be
-            # synchronous synchrnomus requests should exist
-            # but mostly it hsould just be "here, get me this when you can"
-    
     def connection_lost(self, exc):  # somehow this never triggers...
         if exc is None:
             print('Data connection lost')
@@ -177,25 +140,6 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         # TODO add that hash to a 'waiting' list and then cross it off when we are done
             # could use that to quantify performance
             # XXX need this to prevent sending duplicate requests
-
-    @asyncio.coroutine
-    def _send_request(self, request, future):  # see if we need this / relates to how we deal with data_received
-        self.future_data = {}    
-        # maybe we don't need this? because we don't really care when it comes back?
-        # and we don't need to block for it? maybe in some cases it *could* be useful
-        # the way it is implemented at the moment with the dict is a bit of a problem
-        # if we want to use this we should either tag requests with their counter OR
-        # if there is no counter then we 
-        # XXX NOTE for now, future returns do not match requests
-        # in fact we may need to figure out what to do with data that is preloaded by the server w/o client happyness
-        # basically act like an http and SEND early and often
-
-        rh = hash(request)
-        self.future_data[rh] = future
-        # TODO XXX hashing requests will be SUPER important for caching, but how to determine the request
-        self.check_cache(rh)
-        self.transport.write(dumps(request))
-        yield from future
 
     def process_responses(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
         for request_hash, data_tuple in response_generator:

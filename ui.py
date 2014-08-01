@@ -433,15 +433,16 @@ class GuiFrame(DirectObject):
     #should be able to show/hide, do conditional show hide
     #position where you want
     #parent to other frames
-    #there should be a -list- tree of frames
     TEXT_MAGIC_NUMBER = .833333333334  #5/6 ?!?
     DRAW_ORDER={
-        'frame':('unsorted',0),
+        'frame':('unsorted',10),
         'frame_bg':('unsorted', -1),
         'items':('unsorted', 0),
         'title':('unsorted', 1),
         'border':('unsorted', 2),
     }
+
+
     def __init__(self, title,
                  shortcut = None,
                  x = 0,
@@ -458,8 +459,8 @@ class GuiFrame(DirectObject):
                  text_height_mm = 4,
                  items = tuple(),
                 ):
-    #item_w_pad = 1
-    #item_h_pad = 1
+        #item_w_pad = 1
+        #item_h_pad = 1
 
         self.title = title
         self.do_xywh(x, y, width, height)
@@ -469,7 +470,6 @@ class GuiFrame(DirectObject):
         self.text_color = text_color
         self.text_font = text_font
         self.text_height_mm = text_height_mm
-        #self.text_h = text_h
 
         #set up variables
         self.__winx__ = 0
@@ -492,10 +492,10 @@ class GuiFrame(DirectObject):
             self.frameRoot = aspect2d.attachNewNode('frameRoot')
 
         # create the parent node for this frame
-        parent = self.frameRoot.find('frame-*')
-        if not parent:
-            parent = self.frameRoot
-        self.frame = parent.attachNewNode('frame-%s-%s'%(title, id(self)))
+        #parent = self.frameRoot.find('frame-*')
+        #if not parent:
+            #parent = self.frameRoot
+        self.frame = self.frameRoot.attachNewNode('frame-%s-%s'%(title, id(self)))
         self.frame.setBin(*self.DRAW_ORDER['frame'])
 
         # background
@@ -563,8 +563,11 @@ class GuiFrame(DirectObject):
             self.__winy__ = y
             self.frame_adjust()
 
-    def do_frame_stack(self):
-        frames = self.frameRoot.findAllMatches('frame-*')
+    def raise_(self):
+        """ function that raises windows
+            call FIRST inside any function that should raise
+        """
+        self.frame.reparentTo(self.frameRoot)  # self.frame doesn't move so no wrt
 
     def frame_adjust(self):  # FIXME sometimes this fails to call...
         h_units = 2 * base.a2dTop
@@ -573,7 +576,7 @@ class GuiFrame(DirectObject):
         self.text_h = text_h
         for k,b in self.items.items():
             if k == 'title':
-                self.frame_bg.setPos(0, 0, self.text_h)
+                self.title_button.setPos(0, 0, -self.text_h)
             elif k == self.__first_item__:
                 b.setPos(0, 0, -(self.text_h * 2))
             else:
@@ -613,6 +616,12 @@ class GuiFrame(DirectObject):
         else:
             parent = list(self.items.values())[-1]
 
+        def cmd(*args):
+            """ any item should raise
+            """
+            self.raise_()
+            command(*args)
+
         b = DirectButton(
             parent=parent,
             frameColor=(1,1,1,.2),
@@ -622,7 +631,7 @@ class GuiFrame(DirectObject):
             text_fg=self.text_color,
             text_scale=self.text_s,
             text_pos=(0, self.text_h - .8 * self.text_s),
-            command=command,
+            command=cmd,
             relief=DGG.FLAT,
             text_align=TextNode.ALeft,
         )
@@ -630,9 +639,6 @@ class GuiFrame(DirectObject):
         b.setPos(0, 0, -self.text_h)
         if not len(self.items):
             self.items['title'] = b
-            #b.wrtReparentTo(self.frame)
-            #self.frame_bg.wrtReparentTo(b)
-            #self.x, _, self.y = b.getPos()
             b.setBin(*self.DRAW_ORDER['title'])
         else:
             b['extraArgs'] = [self, id(b)]+args
@@ -682,6 +688,7 @@ class GuiFrame(DirectObject):
 
 
     def toggle_vis(self):
+        self.raise_()
         if self.frame_bg.isHidden():
             self.frame_bg.show()
         else:
@@ -698,6 +705,7 @@ class GuiFrame(DirectObject):
             self.__was_dragging__ = False
 
     def __startDrag(self, crap):
+        self.raise_()
         self._ox, self._oy = base.mouseWatcherNode.getMouse()
         taskMgr.add(self.__drag,'dragging %s'%self.title)
         self.origBTprefix=self.BT.getPrefix()
@@ -838,20 +846,18 @@ def main():
     ax = Axis3d()
     gd = Grid3d()
 
-    items = [('testing%s'%i, lambda self, index: self.__del_item__(index) ) for i in range(10)]
+    items = [('testing%s'%i, lambda self, index: self.__del_item__(index) ) for i in range(8)]
     frames = [
-        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25),
+        #GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25),
         #GuiFrame('MegaTyj', x=-.3, y=-.3, height=.25, width=-.25, text_h=.2),
-        GuiFrame('1', x=-.1, y=.1, height=.25, width=-.25),
-        GuiFrame('2', x=-.1, y=.1, height=.25, width=-.25),
-        GuiFrame('3', x=-.1, y=.1, height=.25, width=-.25),
-        GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
-        GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
-        GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),
-        GuiFrame('text', x=.5, y=.5, height=.25, width=-.25, items = items),
+        #GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
+        #GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
+        #GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),
+        #GuiFrame('text', x=.5, y=.5, height=.25, width=-.25, items = items),
         #GuiFrame('text', x=.5, y=.5, height=-.25, width=-.25, items = items),
         #GuiFrame('text', x=.5, y=.25, height=.25, width=.25, items = items),
     ]
+    frames = [GuiFrame('%s'%i, x=-.1, y=.1, height=.25, width=-.25, items=items) for i in range(10)]
     # FIXME calling __add_item__ after this causes weird behvaior
 
     run()

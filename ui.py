@@ -350,11 +350,14 @@ class CameraControl(DirectObject):
 
     def pan(self, task):
         """ I don't like it, it's weird! """
+        invert = -1
+        magic_number = 15
+        magic_number = 20
         if base.mouseWatcherNode.hasMouse():
             x,y = base.mouseWatcherNode.getMouse()
             sx,sy = getattr(self,'__%s_s__'%(task.getName()))
-            dx = (x - sx) * self.XGAIN * self.__winx__ * 15
-            dy = (y - sy) * self.YGAIN * self.__winy__ * 15
+            dx = (x - sx) * self.XGAIN * self.__winx__ * magic_number * invert
+            dy = (y - sy) * self.YGAIN * self.__winy__ * magic_number * invert
             #cx,cy,cz = self.camera.getPos()
             self.camera.setPos(self.camera,dx,0,dy)
             setattr(self, '__%s_s__'%task.getName(), (x,y)) #reset each frame to compensate for moving from own position
@@ -445,9 +448,9 @@ class GuiFrame(DirectObject):
     def __init__(self, title,
                  shortcut = None,
                  x = 0,
-                 y = 0,
+                 y = .1,
                  width = .2,
-                 height = 1,
+                 height = .8,
                  #scale = .05,  # there is some black magic here :/
                  bdr_thickness = 2,
                  bdr_color = (.1, .1, .1, 1),
@@ -596,9 +599,9 @@ class GuiFrame(DirectObject):
 
     # put origin in top left and positive down and right
     @staticmethod
-    def fix_x(x): return (x - .5) *  2
+    def fix_x(x): return (x - .5) *  2  # TODO * base.a2dLeft?
     @staticmethod
-    def fix_y(y): return (y - .5) * -2
+    def fix_y(y): return (y - .5) * -2  # TODO * base.a2dTop?
     @staticmethod
     def fix_w(n): return  n * 2
     @staticmethod

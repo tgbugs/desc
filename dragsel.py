@@ -152,7 +152,7 @@ def makeSelectRect():
 #use render 2d?
 
 class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
-    def __init__(self, visualize = False, frames = None):
+    def __init__(self, frames = None, visualize = False):
         super(BoxSel, self).__init__()
         self.visualize = visualize
         #self.invisRoot=invisRoot
@@ -207,6 +207,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #taskMgr.add(self.clickTask, 'clickTask')
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
+        taskMgr.remove('show_task')
         if self.curSelShown:
             self.curSelShown = []
             self.frames['data'].del_all()  # FIXME!
@@ -233,13 +234,10 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         #TODO shouldn't we let nodes set their own "callback" on click? so that there is a type per instead of shoving it all here?
             #well we also need to keep track of the previously selected set of nodes so we can turn them back off
         #note: target is a CollisionEntry
-        #embed()
         #self.loadData(uid)
         #self.doRenderStuff() #this is the hard part...
 
         if taskMgr.hasTaskNamed('boxTask'):  # FIXME this seems a nasty way to control this...
-            #text = target.getPythonTag('text')
-            #uuid = target.getPythonTag('uuid')
             intoNode = target
             uuid = intoNode.getPythonTag('uuid')  # FIXME it would see that this are not actually uuids...
         else:
@@ -254,39 +252,10 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
         self.curSelShown.append(intoNode)
 
-        #textNode = self.invisRoot.find("%s_text"%uuid)  # FIXME garbage-collection-states #f
-        #if textNode:
-            #textNode.reparentTo(self.uiRoot)
-            #self.curSelShown.append(textNode)
-        #else:  # FIXME this is where the majority of the slowdown comes...
-        #print('Node %s not found'%uuid)
-
-        #textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
-        #textNode.setPos(*intoNode.getBounds().getApproxCenter())
-        #textNode.node().setText("%s"%uuid)
-        #textNode.node().setEffect(BillboardEffect.makePointEye())
-        #self.curSelShown.append(textNode)
-
-        #textNode.node().setCardDecal(True)
-
-
-        #if not text.node().getText():
-            #text.node().setText("%s"%uuid)
-        #text.show()
-
-            #add stuff, nasty race conditions if someone releases shift and the mouse at the same time
-            #and subtract from selection too while keeping the rest selected
-        #elif self.__ctrl__:  # may not need
-            #pass
-        #elif not taskMgr.hasTaskNamed('boxTask'):  # FIXME this seems a nasty way to control this...
-
         return None
 
     def gotClick(self):  # TODO rename this to inherit from HasSelectables
-        #if not self.__mouseDown__: #this case never happens unless the univers explodes?
-        #self.__mouseDown__ = True
-        target = self.getClickTarget()  #this isnt an RTS so we want click/drag
-        #TODO in theory this should not normally take this long???
+        target = self.getClickTarget()
         if target:
             self.processTarget(target)
         else:
@@ -315,18 +284,12 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
     def gotRelease(self):
         #self.__mouseDown__ = False
         if taskMgr.hasTaskNamed('boxTask'):
-            self.__baseBox__.hide()
+            if not self.visualize:
+                self.__baseBox__.hide()
             #if abs(self.__baseBox__.getScale()[0]) > .005:
             if abs(self.__baseBox__.getScale()[0]) > .0001:
                 self.getEnclosedNodes()
             taskMgr.remove('boxTask')
-
-    #def clickTask(self, task): #this will probably need to handle many possible click targets
-        #if type(self.__mouseDown__) is tuple:
-            #self.__mouseStart__ = self.__mouseDown__
-        #elif self.__mouseDown__:
-            #pass #dragging?
-        #return task.cont
 
     def boxTask(self, task): #this will only be active if mouse down and not click
         x,y = base.mouseWatcherNode.getMouse()
@@ -387,7 +350,7 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         lensFL = base.camLens.getFocalLength()
         fov = max(base.camLens.getFov()) * (pi/180)
         #print("focal length",lensFL)
-        print("fov", base.camLens.getFov())
+        #print("fov", base.camLens.getFov())
 
         points = []
         def projectNode(node):
@@ -489,14 +452,16 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
 
         print(len(self.curSelShown))
         #someday we thread this ;_;
-        l2s = makeSimpleGeom(l2points,[1,0,0,1])
-        l2n = self.selRoot.attachNewNode(l2s)
-        l2n.setRenderModeThickness(8)
+        if self.visualize:
+            l2s = makeSimpleGeom(l2points,[1,0,0,1])
+            l2n = self.selRoot.attachNewNode(l2s)
+            l2n.setRenderModeThickness(8)
 
-        pts = makeSimpleGeom(points,[1,1,1,1])
-        self.projRoot.attachNewNode(pts)
-        #self.projRoot.flattenStrong()  # this makes the colors go away ;_;
+            pts = makeSimpleGeom(points,[1,1,1,1])
+            self.projRoot.attachNewNode(pts)
+            #self.projRoot.flattenStrong()  # this makes the colors go away ;_;
 
+        # set up the task to add entries to the data frame TODO own function?
         stop = self.frames['data'].getMaxItems()
         self.show_stop = len(self.curSelShown[:stop])
         self.show_count = 0
@@ -521,144 +486,6 @@ class BoxSel(HasSelectables,DirectObject,object): ##python2 sucks
         textNode.node().setText("%s"%uuid)
         textNode.node().setEffect(BillboardEffect.makePointEye())
         self.curSelNodes.append(textNode)
-
-    def _getEnclosedNodes(self):
-        cx,cy,cz = self.__baseBox__.getPos()
-        sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
-        
-        collRoot = render.find('collideRoot')
-
-        
-        corners = [
-            #[cx + sx , cz + sz],
-            #[cx + sx , cz - sz],
-            #[cx - sx , cz + sz],
-            #[cx - sx , cz - sz],
-            [cx + sx , cz + sz],
-            [cx , cz + sz],
-            [cx + sx , cz],
-            [cx, cz],
-            #[cx + sx * .5, cz + sz * .5],
-        ]
-        #use 1 picker ray on the corners of the box to pick against MOUSE
-
-
-        rootSelNode = collRoot
-
-        nodes = set() 
-        #for c in corners:
-            #self.cornerPickerRay.setFromLens(base.camNode, *c)
-
-            #self.cornerPicker.traverse(rootSelNode)
-            #ents = [e for e in self.cpq.getEntries()]
-            #nodes.update(ents)
-
-            #print("entries",ents)
-            #print("nodes",nodes)
-
-            #if self.pq.getNumEntries() > 0: #if we got something sort it
-                #self.pq.sortEntries()
-                #return self.pq.getEntry(0)
-
-        #if not nodes:
-            #return False
-       
-
-        #nearPoint = render.getRelativePoint(camera, self.pickerRay.getOrigin())
-        #nearVec = render.getRelativeVector(camera, self.pickerRay.getDirection())
-        #thingToDrag.obj.setPos(PointAtZ(.5, nearPoint, nearVec)) #not sure how this works
-
-        x2 = cx + sx
-        if cx > x2:
-            uX = cx
-            lX = x2
-        else:
-            uX = x2
-            lX = cx
-
-        z2 = cz + sz
-        if cz > z2:
-            uZ = cz
-            lZ = z2
-        else:
-            uZ = z2
-            lZ = cz
-
-        #print("running enclosed node task")
-
-        #boxCentX = cx + sx * .5
-        #boxCentZ = cz + sz * .5
-        #subtract each center from the center of the coll circle
-        #make sure that that difference plus the radius is < scale * .5
-       
-        def checkNode(node):
-            #print(node)
-            #embed()  # FIXME lol oops, forgot that all the collision nodes are centered at zero and that their solids are positioned!
-            #point3d = node.getPos() #FIXME this wont work... we'll miss cases where center is outside
-            point3d = node.getBounds().getApproxCenter()  # FIXME this might work better if we position nodes instead of geoms?
-            radius = node.getBounds().getRadius()
-            #we need to move this point toward the center of the box...
-            p3 = base.cam.getRelativePoint(render, point3d)  # FIXME probably not render?
-            p2 = Point2()
-
-            rproj = Point2()
-            base.camLens.project(Point3(p3[0]+radius,p3[1],p3[2]), rproj)
-
-            dist = p2 - rproj
-            dist = dist.length()
-            #print(dist)
-            dist = 0  # XXX until we can figure out what is wrong
-
-            if not base.camLens.project(p3,p2):
-                #displacement = (p2[0]**2 + p2[1]**2) ** .5
-                #if displacement - dist < 1.414213:
-                #check if we are w/in the radius?
-                #print(p2)
-                return False
-
-            #r2d = Point3(p2[0], 0, p2[1])
-            #a2d = aspect2d.getRelativePoint(render2d, r2d)  # apparently we don't actually need this?
-            #render2d.attachNewNode(makePoint(r2d))
-            pX = p2[0] #r2d.getX()
-            pZ = p2[1] #r2d.getZ()
-
-            #if abs(pX - boxCentX) + radius < sx * .5 and abs(pZ - boxCentZ) + radius < sy * .5:
-                #for i in range(node.getNumChildren()):
-                    #proccessTarget(node.getChild(i))
-                #return True
-            if lX-dist <= pX and pX <= uX+dist: 
-                if lZ-dist <= pZ and pZ <= uZ+dist: 
-                    #print(node.getCollideMask())
-                    #print(BitMask32.bit(BITMASK_COLL_CLICK))
-                    if node.getCollideMask() == BitMask32.bit(BITMASK_COLL_CLICK): #FIXME we can massively improve performance on l2 nodes wholely contained in box
-                    #if node.getPythonTag('text'):
-                        self.processTarget(node)
-                        return True
-                    else:
-                        output = []
-                        out = None
-                        #print("NumChildren",node.getNumChildren())
-                        for i in range(node.getNumChildren()):
-                            out = checkNode(node.getChild(i))
-                        output.append(out)
-                        return output
-
-        output = []
-        out = None
-        for i in range(collRoot.getNumChildren()):  # It is faster to just iterate over all the l2 nodes
-            l2 = collRoot.getChild(i)
-            out = checkNode(collRoot.getChild(i))
-        #for node in nodes:
-            #collNode = node.getIntoNode()
-            #for i in range(collNode.getNumChildren()):
-                #out = checkNode(collNode.getChild(i))
-            #for j in range(l2.getNumChildren()):
-                #out = checkNode(l2.getChild(j))
-            output.append(out)
-        #print(output)
-
-        #just add the scale and everything will be ok
-        #start with the l2 nodes since there are fewer ie collision mask = BITMASK_COLL_MOUSE
 
 def makePoint(point=[0,0,0]):
     clr4 = [1,1,1,1]

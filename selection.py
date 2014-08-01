@@ -165,11 +165,12 @@ class BoxSel(HasSelectables,DirectObject):
 
         self.frames = frames
 
+        self.collRoot = render.find('collideRoot')
+        print(self.collRoot)
         if self.visualize:
             print("trying to show the collision bits")
-            self.collRoot = render.find('collideRoot')
             print(self.collRoot)
-            for child in self.collRoot.getChildren():
+            for child in self.collRoot.getChildren():  # doesnt work unless done at creation?
                 child.show()
 
         #setup the selection box
@@ -187,7 +188,7 @@ class BoxSel(HasSelectables,DirectObject):
         #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
-        self.curSelNodes = []
+        self.curSelPoints = []
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
         taskMgr.remove('show_task')
@@ -197,10 +198,10 @@ class BoxSel(HasSelectables,DirectObject):
         self.clearHighlight()
         
     def clearHighlight(self):
-        if self.curSelNodes:
-            for node in self.curSelNodes:
-                node.removeNode()
-            self.curSelNode = []
+        if self.curSelPoints:
+            for point in self.curSelPoints:
+                point.removeNode()
+            self.curSelPoints = []
             #self.curSelNode.detachNode()
         #while 1:
             #try:
@@ -224,7 +225,7 @@ class BoxSel(HasSelectables,DirectObject):
             intoNode = target
             uuid = intoNode.getPythonTag('uuid')  # FIXME it would see that this are not actually uuids...
         else:
-            if not self.__shift__ and self.curSelNodes:
+            if not self.__shift__ and self.curSelPoints:
                 self.clearSelection()
             intoNode = target.getIntoNode()
             uuid = intoNode.getPythonTag('uuid')
@@ -353,7 +354,7 @@ class BoxSel(HasSelectables,DirectObject):
                 if lZ <= pZ and pZ <= uZ: 
                     points.append([pX, 0, pZ])
                     self.processTarget(node)
-                    points3.append(point3)
+                    points3.append(point3d)
                     #self.projRoot.attachNewNode(makePoint(Point3(p2[0], 0, p2[1])))
 
         l2points = []
@@ -473,11 +474,18 @@ class BoxSel(HasSelectables,DirectObject):
     def highlight(self, uuid, intoNode, clear, *args):
         if clear:
             self.clearHighlight()
-        textNode = self.uiRoot.attachNewNode(TextNode("%s_text"%uuid))
-        textNode.setPos(*intoNode.getBounds().getApproxCenter())
+        pos = intoNode.getBounds().getApproxCenter()
+
+        point = makePoint(pos)
+        p = self.uiRoot.attachNewNode(point)
+        p.setRenderModeThickness(3)
+        self.curSelPoints.append(p)
+
+        textNode = p.attachNewNode(TextNode("%s_text"%uuid))
+        textNode.setPos(*pos)
         textNode.node().setText("%s"%uuid)
         textNode.node().setEffect(BillboardEffect.makePointEye())
-        self.curSelNodes.append(textNode)
+
 
 def makePoint(point=[0,0,0]):
     clr4 = [1,1,1,1]

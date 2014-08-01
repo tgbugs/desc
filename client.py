@@ -610,7 +610,7 @@ def main():
     from panda3d.core import loadPrcFileData
     from panda3d.core import PStatClient
 
-    from dragsel import BoxSel
+    from selection import BoxSel
     from util import ui_text, console, exit_cleanup, frame_rate, startup_data
     from ui import CameraControl, Axis3d, Grid3d, GuiFrame
 

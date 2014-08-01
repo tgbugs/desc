@@ -21,6 +21,12 @@ def lin():
         res, width, height = [fields[i] for i in xrandr_indexes]
         x, y = [int(r) for r in res.split('+')[0].split('x')]
         w, h = [int(v.rstrip('mm')) for v in (width, height)]
+        if not h:  # virtual machine likely
+            print("xrandr could not find screen size, are you in a vm?")
+            print("assuming HD+ 900p")
+            #return 5.1626226  # this is averaged w/ horizontal
+            return 5.1635111  # vertical only
+
         
         ppmm_w = x/w
         ppmm_h = y/h

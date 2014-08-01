@@ -435,6 +435,13 @@ class GuiFrame(DirectObject):
     #parent to other frames
     #there should be a -list- tree of frames
     TEXT_MAGIC_NUMBER = .833333333334  #5/6 ?!?
+    DRAW_ORDER={
+        'frame':('unsorted',0),
+        'frame_bg':('fixed', -1),
+        'items':('fixed', 0),
+        'title':('fixed', 1),
+        'border':('fixed', 2),
+    }
     def __init__(self, title,
                  shortcut = None,
                  x = 0,
@@ -447,8 +454,8 @@ class GuiFrame(DirectObject):
                  bg_color = (.7, .7, .7, .5),
                  text_color = (0, 0, 0, 1),
                  text_font = TextNode.getDefaultFont(),
-                 text_h = .05,
-                 text_height_mm = 4,  # TODO
+                 #text_h = .05,  # do not use directly
+                 text_height_mm = 4,
                  items = tuple(),
                 ):
     #item_w_pad = 1
@@ -462,7 +469,7 @@ class GuiFrame(DirectObject):
         self.text_color = text_color
         self.text_font = text_font
         self.text_height_mm = text_height_mm
-        self.text_h = text_h
+        #self.text_h = text_h
 
         #set up variables
         self.__winx__ = 0
@@ -480,12 +487,16 @@ class GuiFrame(DirectObject):
         self.accept('window-event', self.getWindowData)
 
         # get the root for all frames in the scene
-        frameRoot = aspect2d.find('frameRoot')
-        if not frameRoot:
-            frameRoot = aspect2d.attachNewNode('frameRoot')
+        self.frameRoot = aspect2d.find('frameRoot')
+        if not self.frameRoot:
+            self.frameRoot = aspect2d.attachNewNode('frameRoot')
 
         # create the parent node for this frame
-        self.frame = frameRoot.attachNewNode('frame-%s-%s'%(title, id(self)))
+        parent = self.frameRoot.find('frame-*')
+        if not parent:
+            parent = self.frameRoot
+        self.frame = parent.attachNewNode('frame-%s-%s'%(title, id(self)))
+        self.frame.setBin(*self.DRAW_ORDER['frame'])
 
         # background
         l,r,b,t = 0, self.width, 0, self.height
@@ -495,12 +506,13 @@ class GuiFrame(DirectObject):
                                     frameSize=(l,r,b,t),
                                     state=DGG.NORMAL,  # FIXME framesize is >_<
                                     suppressMouse=1)
+        self.frame_bg.setBin(*self.DRAW_ORDER['frame_bg'])
 
         # border
         self.__make_border__(self.frame_bg, self.bdr_thickness, self.bdr_color, l, r, b, t)
 
         # setup for items
-        self.itemsParent = self.frame_bg.attachNewNode('frame items')
+        self.itemsParent = self.frame_bg.attachNewNode('items parent')
 
         # title
         self.title_button = self.__add_item__(title, self.title_toggle_vis)
@@ -550,6 +562,9 @@ class GuiFrame(DirectObject):
             self.__winx__ = x
             self.__winy__ = y
             self.frame_adjust()
+
+    def do_frame_stack(self):
+        frames = self.frameRoot.findAllMatches('frame-*')
 
     def frame_adjust(self):  # FIXME sometimes this fails to call...
         h_units = 2 * base.a2dTop
@@ -617,11 +632,12 @@ class GuiFrame(DirectObject):
             self.items['title'] = b
             b.wrtReparentTo(self.frame)
             self.frame_bg.wrtReparentTo(b)
-            self.frame_bg.setBin('fixed',b.getBinDrawOrder()-1)
             self.x, _, self.y = b.getPos()
+            b.setBin(*self.DRAW_ORDER['title'])
         else:
             b['extraArgs'] = [self, id(b)]+args
             b.node().setPythonTag('id', id(b))
+            b.setBin(*self.DRAW_ORDER['items'])
             if len(self.items) is 1:  # the first item that is not the title
                 b.setPos(0, 0, -(self.text_h * 2))
                 self.__first_item__ = id(b)
@@ -647,9 +663,8 @@ class GuiFrame(DirectObject):
         else:  # we are removing the last button
             self.items.pop(index).removeNode()
 
-
-    @staticmethod
-    def __make_border__(parent, thickness, color, l, r , b, t):
+    @classmethod
+    def __make_border__(cls, parent, thickness, color, l, r , b, t):
         moveto_drawto = (
            ((l,0,t), (l,0,b)),
            ((r,0,t), (r,0,b)),
@@ -663,7 +678,8 @@ class GuiFrame(DirectObject):
             Border.moveTo(*moveto)
             Border.drawTo(*drawto)
             b = parent.attachNewNode(Border.create())
-            b.setBin('fixed', parent.getBinDrawOrder() + 2)
+            b.setBin(*cls.DRAW_ORDER['border'])
+
 
     def toggle_vis(self):
         if self.frame_bg.isHidden():
@@ -671,14 +687,11 @@ class GuiFrame(DirectObject):
         else:
             self.frame_bg.hide()
 
-
     def title_toggle_vis(self):
         if not self.__was_dragging__:
             self.toggle_vis()
         else:
             self.__was_dragging__ = False
-
-
 
     def __startDrag(self, crap):
         self._ox, self._oy = base.mouseWatcherNode.getMouse()
@@ -821,14 +834,14 @@ def main():
 
     items = [('testing%s'%i, lambda self, index: self.__del_item__(index) ) for i in range(10)]
     frames = [
-        #GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25, text_h=.2),
+        GuiFrame('MegaTyj', x=-.5, y=.5, height=.25, width=-.25),
         #GuiFrame('MegaTyj', x=-.3, y=-.3, height=.25, width=-.25, text_h=.2),
-        #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.1),
-        #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.05),
-        #GuiFrame('', x=-.1, y=.1, height=.25, width=-.25, text_h=.025),
+        GuiFrame('1', x=-.1, y=.1, height=.25, width=-.25),
+        GuiFrame('2', x=-.1, y=.1, height=.25, width=-.25),
+        GuiFrame('3', x=-.1, y=.1, height=.25, width=-.25),
         GuiFrame('testing', x=0, y=0, height=.25, width=.25, items = items),
-        #GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
-        #GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),
+        GuiFrame('cookies', x=1, y=1, height=-.25, width=-.25, items = items),
+        GuiFrame('neg x', x=-.25, y=0, height=.1, width=-.25, items = items),
         GuiFrame('text', x=.5, y=.5, height=.25, width=-.25, items = items),
         #GuiFrame('text', x=.5, y=.5, height=-.25, width=-.25, items = items),
         #GuiFrame('text', x=.5, y=.25, height=.25, width=.25, items = items),

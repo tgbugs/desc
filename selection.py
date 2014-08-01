@@ -24,6 +24,7 @@ from panda3d.core import CollisionHandlerQueue,CollisionRay,CollisionLine
 from numpy import pi, arange, sin, cos, tan, arctan2 #, arccos, arcsin, arctan2, arccos2, arcsin2
 
 import sys
+from math import copysign
 from threading import Thread
 from IPython import embed
 
@@ -185,10 +186,14 @@ class BoxSel(HasSelectables,DirectObject):
         self.accept('mouse1',self.gotClick)  # TODO keybinds
         self.accept('shift-mouse1',self.gotClick)
         self.accept('mouse1-up',self.gotRelease)
+        self.accept('s', self.toggle_vis)
         #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
         self.curSelPoints = []
+
+    def toggle_vis(self):
+        self.visualize = not self.visualize
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
         taskMgr.remove('show_task')
@@ -313,7 +318,7 @@ class BoxSel(HasSelectables,DirectObject):
         def calcRC(major, minor):
             if not minor:
                 return 0, [0]
-            ratio = major / minor
+            ratio = abs(major / minor)
             if ratio > 5:  # prevent combinatorial nightmares TODO tune me!
                 ratio = 5
             else:
@@ -325,11 +330,11 @@ class BoxSel(HasSelectables,DirectObject):
 
         asx, asz = abs(sx), abs(sz)
         if asx > asz:
-            boxRadius, majCents = calcRC(asx, asz)
+            boxRadius, majCents = calcRC(sx, sz)
             centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
         else:
         #elif asz >= asx:
-            boxRadius, majCents = calcRC(asz, asx)
+            boxRadius, majCents = calcRC(sz, sx)
             centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
 
         lensFL = base.camLens.getFocalLength()

@@ -646,7 +646,7 @@ def main():
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
 
-    bs = BoxSel(frames)
+    bs = BoxSel(frames, True)
 
     rendMan = renderManager(geomRoot, collideRoot, uiRoot, invisRoot)  # TODO rendMan will auto handle GuiFrames
 

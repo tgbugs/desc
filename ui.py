@@ -437,10 +437,10 @@ class GuiFrame(DirectObject):
     TEXT_MAGIC_NUMBER = .833333333334  #5/6 ?!?
     DRAW_ORDER={
         'frame':('unsorted',0),
-        'frame_bg':('fixed', -1),
-        'items':('fixed', 0),
-        'title':('fixed', 1),
-        'border':('fixed', 2),
+        'frame_bg':('unsorted', -1),
+        'items':('unsorted', 0),
+        'title':('unsorted', 1),
+        'border':('unsorted', 2),
     }
     def __init__(self, title,
                  shortcut = None,
@@ -630,9 +630,9 @@ class GuiFrame(DirectObject):
         b.setPos(0, 0, -self.text_h)
         if not len(self.items):
             self.items['title'] = b
-            b.wrtReparentTo(self.frame)
-            self.frame_bg.wrtReparentTo(b)
-            self.x, _, self.y = b.getPos()
+            #b.wrtReparentTo(self.frame)
+            #self.frame_bg.wrtReparentTo(b)
+            #self.x, _, self.y = b.getPos()
             b.setBin(*self.DRAW_ORDER['title'])
         else:
             b['extraArgs'] = [self, id(b)]+args
@@ -690,6 +690,10 @@ class GuiFrame(DirectObject):
     def title_toggle_vis(self):
         if not self.__was_dragging__:
             self.toggle_vis()
+            if self.frame_bg.isHidden():
+                self.title_button.wrtReparentTo(self.frame)
+            else:
+                self.title_button.wrtReparentTo(self.frame_bg)
         else:
             self.__was_dragging__ = False
 
@@ -722,7 +726,9 @@ class GuiFrame(DirectObject):
         """
         self.x = x
         self.y = y #- self.text_h  # FIXME is hard :/
-        self.title_button.setPos(x, 0, y)
+        self.frame_bg.setPos(x, 0, y)
+        if self.frame_bg.isHidden():
+            self.title_button.setPos(x, 0, y - self.text_h)
 
 
     def __enter__(self):

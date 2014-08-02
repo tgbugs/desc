@@ -442,7 +442,7 @@ class BoxSel(HasSelectables,DirectObject):
 
             #fovMaxCorr = fov**2 * .5 #tan(fov * .5) #fov**2 * .25 #(fov*.9 - 1)
             #fovCorr = point2projection.length() * fovMaxCorr - point2projection.length() + 1  # FIXME this fails hard at high fov derp and for low fov
-            fovCorr = 1
+            #fovCorr = 1
             
             # XXX the magic happens here
             #projNodeRadius = r3 * ((lensFL*1.7)/d1) * fovCorr  # FIXME for some reason 1.7 seems about right
@@ -452,9 +452,10 @@ class BoxSel(HasSelectables,DirectObject):
             radius_correction = 2  #no idea if this is correct...
             #if theta < fov:  # FIXME not right
             eccen_corr = theta
+            eccen_corr = 1
             #else:
                 #eccen_corr = 1
-            projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)
+            projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)  # need to compensate for distance effect on theta
 
             if self.visualize >= self.VIS_ALL:
                 # centers of all l2 points

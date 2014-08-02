@@ -223,11 +223,11 @@ class CameraControl(DirectObject):
 
 
         self.track = self.camera.attachNewNode('track')  #hack for pointing vector
-        self.track.setPos((0,10,0))
-        nn = GeomNode('helper')
-        ng = makeCameraTarget()
-        nn.addGeom(targetGeom)
-        self.track.attachNewNode(nn)
+        self.track.setPos((0,50,0))
+        #nn = GeomNode('helper')
+        #ng = makeCameraTarget()
+        #nn.addGeom(targetGeom)
+        #self.track.attachNewNode(nn)
 
         #keybind setup
         self.__ends__=defaultdict(list)

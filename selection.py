@@ -426,15 +426,12 @@ class BoxSel(HasSelectables,DirectObject):
             #camVec = LVector3f()
             #base.camLens.extrudeVec(camera.getPos(), camVec)
 
-            track = camera.attachNewNode('track')
-            track.setPos((0,1,0))  # amazingly this seems to work, it is a very stupid way to do things, but who cares
-            #v = track.attachNewNode(TextNode('wat'))
-            #v.node().setText('turds')
+            track = camera.find('track')
             t = render.getRelativePoint(track, track.getPos())
             c = render.getRelativePoint(camera, camera.getPos())
-            camVec = t - c
 
-            pointVect = p3 - camera.getPos()
+            camVec = t - c
+            pointVect = point3d - c
 
             print('cam vector', camVec)
             print('point vector',pointVect)
@@ -453,11 +450,11 @@ class BoxSel(HasSelectables,DirectObject):
 
             #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
             radius_correction = 2  #no idea if this is correct...
-            if theta < fov:  # FIXME not right
-                eccen_corr = theta
-            else:
-                eccen_corr = 1
-            projNodeRadius = (r3 * lensFL) / d1 * radius_correction * (eccen_corr % fov)
+            #if theta < fov:  # FIXME not right
+            eccen_corr = theta
+            #else:
+                #eccen_corr = 1
+            projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)
 
             if self.visualize >= self.VIS_ALL:
                 # centers of all l2 points

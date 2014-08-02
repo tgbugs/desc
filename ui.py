@@ -208,6 +208,7 @@ class CameraControl(DirectObject):
         if self.camera == None:
             self.camera = base.camera
 
+
         #XXX note, when moving cam target we need to make sure the camera doesnt move too...
         cameraBase = GeomNode('cameraBase') #utility node for pan
         targetGeom = makeCameraTarget()
@@ -219,6 +220,14 @@ class CameraControl(DirectObject):
         self.cameraTarget.reparentTo(self.cameraBase)
         #self.cameraTarget.reparentTo(render)
         self.camera.reparentTo(self.cameraTarget)
+
+
+        self.track = self.camera.attachNewNode('track')  #hack for pointing vector
+        self.track.setPos((0,10,0))
+        nn = GeomNode('helper')
+        ng = makeCameraTarget()
+        nn.addGeom(targetGeom)
+        self.track.attachNewNode(nn)
 
         #keybind setup
         self.__ends__=defaultdict(list)

@@ -3,26 +3,25 @@
 import asyncio
 import pickle
 import ssl
-import sys
 from time import sleep
 from concurrent.futures import ProcessPoolExecutor
 
 from IPython import embed
 
+from request import DataByteStream
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import Request, DataByteStream
-from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
-from dataIO import treeMe
 
-#fix sys module reference
-sys.modules['core'] = sys.modules['panda3d.core']
 
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
     #that would vastly simplify life...? ehhhhh
 
 def dumps(object_):
     """ Special dumps that adds a double stop to make deserializing easier """
-    return pickle.dumps(object-)+b'.'
+    return pickle.dumps(object_)+b'.'
+
+class no_repr(tuple):
+    def __repr__(self):
+        return "You do NOT want to see all these bytes in a debug!"
 
 class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a token getter...
     """ this is going to be done with fixed byte sizes known small headers """
@@ -103,6 +102,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             #print('post split block',self.__block__[self.__block_size__:])
             #embed()
             request_hash, data_tuple = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+            data_tuple = no_repr(data_tuple)
             #print('yes we are trying to render stuff')
             #self.event_loop.run_in_executor( None, self.set_nodes, request_hash, data_tuple )
             self.event_loop.call_soon(self.set_nodes, request_hash, data_tuple)  #still segfaults even if this is threadsafe
@@ -153,6 +153,7 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         raise NotImplementedError('patch this function with the shared stated version in renderManager')
 
 def main():
+    import sys
     from threading import Thread
 
     # render setup
@@ -165,6 +166,8 @@ def main():
     from util import ui_text, console, exit_cleanup, frame_rate, startup_data
     from ui import CameraControl, Axis3d, Grid3d, GuiFrame
 
+    # fix sys module reference
+    sys.modules['core'] = sys.modules['panda3d.core']
 
     PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
@@ -192,9 +195,10 @@ def main():
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
 
+    rendMan = renderManager()
+
     bs = BoxSel(frames)
 
-    rendMan = renderManager()
 
     #ppe = ProcessPoolExecutor()
     #clientLoop.set_default_executor(ppe)  # FIXME this doesn't work ;_;

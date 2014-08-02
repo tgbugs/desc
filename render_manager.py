@@ -1,5 +1,13 @@
+import pickle
+
+from IPython import embed
+
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import GeomNode, NodePath, PandaNode
+
+from dataIO import treeMe
+from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
+
 
 class renderManager(DirectObject):
     """ a class to manage, bam, coll, and ui (and more?) incoming data
@@ -30,9 +38,9 @@ class renderManager(DirectObject):
         self.uiRoot = uiRoot
 
         self.cache = {}
-        self.cache_age = deque()
+        #self.cache_age = deque()  # TODO implement this?
 
-        self.checkLock = Lock()  # TODO see if we need this
+        #self.checkLock = Lock()  # TODO see if we need this
 
         self.accept('r',self.fake_request)
         self.accept('p',self.fake_predict)
@@ -115,8 +123,8 @@ class renderManager(DirectObject):
         """ fire and forget """
         bam = self.makeBam(data_tuple[0])  #needs to return a node
         coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
-        from panda3d.core import GeomVertexReader
-        data = GeomVertexReader(bam.getGeom(0).getVertexData(), 'vertex')
+        #from panda3d.core import GeomVertexReader
+        #data = GeomVertexReader(bam.getGeom(0).getVertexData(), 'vertex')
         #while not data.isAtEnd():
             #print(data.getData3f(),end='    ')
             #pass

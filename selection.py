@@ -177,7 +177,7 @@ class BoxSel(HasSelectables,DirectObject):
             self.frames['data'] = f()
 
         self.collRoot = render.find('collideRoot')
-        print(self.collRoot)
+        print("collide Root",self.collRoot)
         if self.visualize:
             print("trying to show the collision bits")
             print(self.collRoot)

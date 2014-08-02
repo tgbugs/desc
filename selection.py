@@ -156,13 +156,20 @@ def makeSelectRect():
 #use render 2d?
 
 class BoxSel(HasSelectables,DirectObject):
-    def __init__(self, frames = None, visualize = False):
+    #visualization levels
+    VIS_OFF = 0
+    VIS_POINTS = 1
+    VIS_L2 = 2
+    VIS_ALL = 3
+    VIS_DEBUG = 4
+    def __init__(self, frames = None, visualize = VIS_POINTS):
         super().__init__()
         self.visualize = visualize
 
         self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
         self.selRoot = render.attachNewNode('selRoot')
+        self.collRoot = render.find('collideRoot')
 
         self.frames = frames
         if self.frames is None:
@@ -176,12 +183,6 @@ class BoxSel(HasSelectables,DirectObject):
                     pass
             self.frames['data'] = f()
 
-        self.collRoot = render.find('collideRoot')
-        if self.visualize:
-            print("trying to show the collision bits")
-            print("collide Root",self.collRoot)
-            for child in self.collRoot.getChildren():  # doesnt work unless done at creation?
-                child.show()
 
         #setup the selection box
         boxNode = GeomNode('selectBox')
@@ -195,14 +196,22 @@ class BoxSel(HasSelectables,DirectObject):
         self.accept('mouse1',self.gotClick)  # TODO keybinds
         self.accept('shift-mouse1',self.gotClick)
         self.accept('mouse1-up',self.gotRelease)
-        self.accept('s', self.toggle_vis)
+        self.accept('v', self.toggle_vis)
         #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
         self.curSelPoints = []
 
     def toggle_vis(self):
-        self.visualize = (self.visualize + 1) % 3  # rotate through the 3 levels
+        self.visualize = (self.visualize + 1) % 5  # rotate through 4 levels
+        if self.visualize == self.VIS_DEBUG:
+            for child in self.collRoot.getChildren():
+                child.show()
+        elif not self.visualize:
+            for child in self.collRoot.getChildren():
+                child.hide()
+
+
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
         taskMgr.remove('show_task')
@@ -282,7 +291,7 @@ class BoxSel(HasSelectables,DirectObject):
     def gotRelease(self):
         #self.__mouseDown__ = False
         if taskMgr.hasTaskNamed('boxTask'):
-            if not self.visualize:
+            if self.visualize <= self.VIS_POINTS:
                 self.__baseBox__.hide()
             #if abs(self.__baseBox__.getScale()[0]) > .005:
             if abs(self.__baseBox__.getScale()[0]) > .0001:
@@ -396,7 +405,7 @@ class BoxSel(HasSelectables,DirectObject):
             #rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2.126,pi/16)]
             #rads = [point2projection+fixAsp(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius)) for theta in arange(0,pi*2.126,pi/32)]
             #self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1],GeomLinestrips))
-            if self.visualize > 1:
+            if self.visualize >= self.VIS_ALL:
                 radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                 self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
 
@@ -415,7 +424,7 @@ class BoxSel(HasSelectables,DirectObject):
                 z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
                 rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
 
-                if self.visualize > 1:
+                if self.visualize >= self.VIS_ALL:
                     #radU = [boxCenter+(Point3(cos(theta)*distance, 0, sin(theta)*distance)) for theta in arange(0,pi*2.126,pi/32)]
                     #self.projRoot.attachNewNode(makeSimpleGeom(radU,[1,1,1,1],GeomLinestrips))
 
@@ -434,13 +443,13 @@ class BoxSel(HasSelectables,DirectObject):
                         projectNode(c)
                     if self.visualize:
                         l2points.append(point3d)
-                        if self.visualize > 1:
+                        if self.visualize >= self.VIS_ALL:
                             self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
                     #for j in range(node.getNumChildren()):
                         #projectNode(node.getChild(j))
                     return None  # return as soon as any one of the centers gets a hit
 
-                elif self.visualize > 1:
+                elif self.visualize >= self.VIS_ALL:
                     self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
         # actually do the projection
@@ -454,19 +463,18 @@ class BoxSel(HasSelectables,DirectObject):
         print(len(self.curSelShown))
         #someday we thread this ;_;
         if self.visualize:
-
-            l2s = makeSimpleGeom(l2points,[1,0,0,1])
-            l2n = self.selRoot.attachNewNode(l2s)
-            l2n.setRenderModeThickness(8)
-
             pts3 = makeSimpleGeom(points3, [1,1,1,1])
             p3n = self.selRoot.attachNewNode(pts3)
             p3n.setRenderModeThickness(3)  # render order >_<
 
-            #pts = makeSimpleGeom(points,[1,1,1,1])
-            #self.projRoot.attachNewNode(pts)
+            if self.visualize >= self.VIS_L2:
+                l2s = makeSimpleGeom(l2points,[1,0,0,1])
+                l2n = self.selRoot.attachNewNode(l2s)
+                l2n.setRenderModeThickness(8)
 
-            #self.projRoot.flattenStrong()  # this makes the colors go away ;_;
+                if self.visualize >= self.VIS_ALL:
+                    pts = makeSimpleGeom(points,[1,1,1,1])
+                    self.projRoot.attachNewNode(pts)
 
         # set up the task to add entries to the data frame TODO own function?
         stop = self.frames['data'].getMaxItems()
@@ -523,7 +531,7 @@ def makePoint(point=[0,0,0]):
 def main():
     import pickle
     from util import ui_text, console, exit_cleanup, frame_rate, startup_data
-    from client import renderManager
+    from render_manager import renderManager
     from ui import CameraControl, Axis3d, Grid3d
     with open('edge_case_data_tuple.pickle','rb') as f:
         data_tuple = pickle.load(f)

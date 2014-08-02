@@ -181,7 +181,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         sides = [maxs[i]-mins[i] for i in range(3)]
         side = max(sides)
         center = [side * .5 + mins[i] for i in range(3)]  # the real center
-        radius = (side**2 / 2)**.5
+        radius = (side**2 * .5)**.5
 
     if num_points <= 0:
         return False

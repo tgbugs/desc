@@ -5,7 +5,6 @@ from direct.gui.DirectButton import DirectButton
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
-from panda3d.core import PandaNode,NodePath
 from panda3d.core import TextNode
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
@@ -16,7 +15,7 @@ from panda3d.core import Texture, GeomNode
 from panda3d.core import Point3,Point2,Vec3,Vec4,BitMask32
 from panda3d.core import BillboardEffect
 
-#from panda3d.core import AmbientLight
+from panda3d.core import LPoint2f, LPoint3f, LVector3f
 
 from panda3d.core import CollisionTraverser,CollisionNode
 from panda3d.core import CollisionHandlerQueue,CollisionRay,CollisionLine
@@ -24,7 +23,6 @@ from panda3d.core import CollisionHandlerQueue,CollisionRay,CollisionLine
 from numpy import pi, arange, sin, cos, tan, arctan2 #, arccos, arcsin, arctan2, arccos2, arcsin2
 
 import sys
-from math import copysign
 from threading import Thread
 from IPython import embed
 
@@ -212,8 +210,6 @@ class BoxSel(HasSelectables,DirectObject):
             for child in self.collRoot.getChildren():
                 child.hide()
 
-
-
     def clearSelection(self):  # TODO enable saving selections to registers etc
         taskMgr.remove('show_task')
         if self.curSelShown:
@@ -396,7 +392,8 @@ class BoxSel(HasSelectables,DirectObject):
         def projectL2(node):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
             """ projec only the centers of l2 spehres, figure out how to get their radii """
             point3d = node.getBounds().getApproxCenter()
-            p3 = base.cam.getRelativePoint(render, point3d)
+            #p3 = base.cam.getRelativePoint(render, point3d)
+            p3 = camera.getRelativePoint(render, point3d)
             p2 = Point2()
 
             base.camLens.project(p3,p2)
@@ -409,6 +406,43 @@ class BoxSel(HasSelectables,DirectObject):
             d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
             if not d1:
                 d1 = 1E-9
+
+            
+
+            #h, p, r = camera.getParent().getHpr() * RADIANS_PER_DEGREE
+            #camF = LPoint3f()
+            #camN = LPoint3f()
+            #base.camLens.extrude(LPoint2f(0,0), camN , camF)
+            #c1 = render.getRelativeVector(base.camLens, base.camLens, camF)
+            #camPoint = render.getRelativePoint(render, camera.getPos())
+            #cvec = point3d - camPoint
+            #c2 = camera.getRelativeVector(render, cvec)
+            #camVec = camF - camera.getPos()
+
+            #camera.getRelativePoint(render, )
+            #camVec = camera.getRelativeVector(camera, extVec)
+
+            #camVec =  LVector3f(0,1,0)
+            #camVec = LVector3f()
+            #base.camLens.extrudeVec(camera.getPos(), camVec)
+
+            track = camera.attachNewNode('track')
+            track.setPos((0,1,0))  # amazingly this seems to work, it is a very stupid way to do things, but who cares
+            #v = track.attachNewNode(TextNode('wat'))
+            #v.node().setText('turds')
+            t = render.getRelativePoint(track, track.getPos())
+            c = render.getRelativePoint(camera, camera.getPos())
+            camVec = t - c
+
+            pointVect = p3 - camera.getPos()
+
+            print('cam vector', camVec)
+            print('point vector',pointVect)
+
+            theta = abs(camVec.relativeAngleRad(pointVect))
+            print('theta in pi radians', theta / pi)
+            print()
+
             #fovMaxCorr = fov**2 * .5 #tan(fov * .5) #fov**2 * .25 #(fov*.9 - 1)
             #fovCorr = point2projection.length() * fovMaxCorr - point2projection.length() + 1  # FIXME this fails hard at high fov derp and for low fov
             fovCorr = 1
@@ -419,7 +453,11 @@ class BoxSel(HasSelectables,DirectObject):
 
             #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
             radius_correction = 2  #no idea if this is correct...
-            projNodeRadius = (r3 * lensFL) / d1 * radius_correction
+            if theta < fov:  # FIXME not right
+                eccen_corr = theta
+            else:
+                eccen_corr = 1
+            projNodeRadius = (r3 * lensFL) / d1 * radius_correction * (eccen_corr % fov)
 
             if self.visualize >= self.VIS_ALL:
                 # centers of all l2 points
@@ -584,7 +622,8 @@ def main():
     import numpy as np
     from dataIO import treeMe
     from uuid import uuid4
-    n = 10000
+    from panda3d.core import GeomLinestrips
+    n = 1000
     #positions = np.array([i for i in zip(np.linspace(-1000,1000,n),np.linspace(-1000,1000,n),np.linspace(-1000,1000,n))]) # wat 1
     #positions = np.array([i for i in zip(np.linspace(-1000,1000,n),np.linspace(-1000,1000,n),np.zeros(n))]) # wat 2
     positions = np.array([i for i in zip(np.linspace(-1000,1000,n),np.zeros(n),np.zeros(n))])
@@ -596,6 +635,10 @@ def main():
     treeMe(r.collRoot, positions, uuids, bounds)
 
     base.camLens.setFov(90)
+
+    n = 1E4  # apparently 1e8 is a bit too big and 1e7 is slowwww... definitely need downsampling
+    positions = np.array([i for i in zip(10*np.sin(np.arange(0,n)),np.arange(0,n),10*np.cos(np.arange(0,n)))]) # fukken saved
+    r.geomRoot.attachNewNode(makeSimpleGeom(positions,(1,1,1,1), geomType=GeomLinestrips))
 
     #with open('edge_case_data_tuple.pickle','rb') as f:
         #data_tuple = pickle.load(f)

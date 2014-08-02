@@ -162,6 +162,7 @@ class BoxSel(HasSelectables,DirectObject):
     VIS_L2 = 2
     VIS_ALL = 3
     VIS_DEBUG = 4
+    VIS_DEBUG_LINES = 5
     def __init__(self, frames = None, visualize = VIS_POINTS):
         super().__init__()
         self.visualize = visualize
@@ -203,7 +204,7 @@ class BoxSel(HasSelectables,DirectObject):
         self.curSelPoints = []
 
     def toggle_vis(self):
-        self.visualize = (self.visualize + 1) % 5  # rotate through 4 levels
+        self.visualize = (self.visualize + 1) % 6  # rotate through 4 levels
         if self.visualize == self.VIS_DEBUG:
             for child in self.collRoot.getChildren():
                 child.show()
@@ -335,23 +336,28 @@ class BoxSel(HasSelectables,DirectObject):
         #boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5  # TODO we could make it so that every 2x change in raidus used 2 circles instead of 1 to prevent overshoot we can't just divide the radius by 2 though :/
         #boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
 
-        def calcRC(major, minor):
+        def calcSelectionBoxRC(major, minor):
             if not minor:
                 return 0, [0]
-            ratio = int(abs(major // minor))
+            ratio = abs(major / minor)
             if ratio > 5:  # prevent combinatorial nightmares TODO tune me!
                 ratio = 5
+            elif ratio < 1.5:
+                ratio = 1
+            else:
+                ratio = int(ratio)
+
             split = major / ratio
             radius = ((split * .5)**2 + (minor * .5)**2)**.5
             majCents = [(split * .5) + i*(split) for i in range(ratio)]
             return radius, majCents
 
         if abs(sx) > abs(sz):
-            boxRadius, majCents = calcRC(sx, sz)
+            boxRadius, majCents = calcSelectionBoxRC(sx, sz)
             centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
         else:
         #elif asz >= asx:
-            boxRadius, majCents = calcRC(sz, sx)
+            boxRadius, majCents = calcSelectionBoxRC(sz, sx)
             centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
 
         lensFL = base.camLens.getFocalLength()
@@ -359,8 +365,10 @@ class BoxSel(HasSelectables,DirectObject):
         #print("focal length",lensFL)
         #print("fov", base.camLens.getFov())
 
-        points = []
-        points3 = []
+        if self.visualize:
+            points3 = []
+            if self.visualize >= self.VIS_ALL:
+                points = []
         def projectNode(node):
             point3d = node.getBounds().getApproxCenter()
             p3 = base.cam.getRelativePoint(render, point3d)
@@ -374,12 +382,16 @@ class BoxSel(HasSelectables,DirectObject):
             # check if the points are inside the box
             if lX <= pX and pX <= uX:
                 if lZ <= pZ and pZ <= uZ: 
-                    points.append([pX, 0, pZ])
                     self.processTarget(node)
-                    points3.append(point3d)
-                    #self.projRoot.attachNewNode(makePoint(Point3(p2[0], 0, p2[1])))
+                    if self.visualize:
+                        points3.append(point3d)
+                        if self.visualize >= self.VIS_ALL:
+                            points.append([pX, 0, pZ])
 
-        l2points = []
+        if self.visualize >= self.VIS_L2:
+            l2points = []
+            if self.visualize >= self.VIS_ALL:
+                l2all = []
         utilityNode = render.attachNewNode('utilityNode')
         def projectL2(node):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
             """ projec only the centers of l2 spehres, figure out how to get their radii """
@@ -391,23 +403,39 @@ class BoxSel(HasSelectables,DirectObject):
 
             point2projection = Point3(p2[0],0,p2[1])
 
-            r3 = node.getBounds().getRadius()
+            r3 = node.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
             utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
+            # this also works correctly with no apparent issues
             d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
             if not d1:
                 d1 = 1E-9
             #fovMaxCorr = fov**2 * .5 #tan(fov * .5) #fov**2 * .25 #(fov*.9 - 1)
             #fovCorr = point2projection.length() * fovMaxCorr - point2projection.length() + 1  # FIXME this fails hard at high fov derp and for low fov
             fovCorr = 1
-            projNodeRadius = r3 * ((lensFL*1.7)/d1) * fovCorr  # FIXME for some reason 1.7 seems about right
+            
+            # XXX the magic happens here
+            #projNodeRadius = r3 * ((lensFL*1.7)/d1) * fovCorr  # FIXME for some reason 1.7 seems about right
+            #projNodeRadius = r3 * ((lensFL*2)/d1) * fovCorr
 
-            # testing stuff to view the (desired) projection of l2 nodes
-            #rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2.126,pi/16)]
-            #rads = [point2projection+fixAsp(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius)) for theta in arange(0,pi*2.126,pi/32)]
-            #self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,0,1,1],GeomLinestrips))
+            #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
+            radius_correction = 2  #no idea if this is correct...
+            projNodeRadius = (r3 * lensFL) / d1 * radius_correction
+
             if self.visualize >= self.VIS_ALL:
+                # centers of all l2 points
+                l2all.append(point3d)
+
+                # visualize the projected radius of l2 collision spheres
                 radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                 self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
+
+                # smaller radisu radU...?
+                #rads = [point2projection+fixAsp(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius)) for theta in arange(0,pi*2.126,pi/32)]
+                #self.projRoot.attachNewNode(makeSimpleGeom(rads,[0,1,1,1],GeomLinestrips))
+
+                # lower rez radU (same radisu)
+                #rads = [Point3(p2[0]+sin(theta)*projNodeRadius*cfx, 0, p2[1]+cos(theta)*projNodeRadius*cfz) for theta in arange(0,pi*2.126,pi/16)]  
+                #self.projRoot.attachNewNode(makeSimpleGeom(rads,[1,0,1,1],GeomLinestrips))
 
             #print("cfz",cfz)
 
@@ -425,40 +453,41 @@ class BoxSel(HasSelectables,DirectObject):
                 rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
 
                 if self.visualize >= self.VIS_ALL:
-                    #radU = [boxCenter+(Point3(cos(theta)*distance, 0, sin(theta)*distance)) for theta in arange(0,pi*2.126,pi/32)]
-                    #self.projRoot.attachNewNode(makeSimpleGeom(radU,[1,1,1,1],GeomLinestrips))
+                    # circle with a radius of distance centered at the middle of each selection box circle
+                    #bcDist = [boxCenter+(Point3(cos(theta)*distance, 0, sin(theta)*distance)) for theta in arange(0,pi*2.126,pi/32)]
+                    #self.projRoot.attachNewNode(makeSimpleGeom(bcDist,[1,1,1,1],GeomLinestrips))
 
+                    # circle with the radius for the corrected angle
                     #radRads = [ point2projection + (Point3( cos(theta)*rescaled, 0.0, sin(theta)*rescaled )) for theta in arange(0,pi*2.126,pi/32) ]
                     #rr = self.projRoot.attachNewNode(makeSimpleGeom(radRads,[1,1,0,1],GeomLinestrips))
 
+                    # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
                     circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
                     circleIntersect.setRenderModeThickness(4)
 
+                    # a circle of the box radius
                     boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
                     self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
-                    line = [point2projection, boxCenter]
+
+                    if self.visualize >= self.VIS_DEBUG_LINES:
+                        line = [point2projection, boxCenter]
+
 
                 if distance < boxRadius + rescaled:
                     for c in node.getChildren():
                         projectNode(c)
-                    if self.visualize:
+                    if self.visualize >= self.VIS_L2:
                         l2points.append(point3d)
-                        if self.visualize >= self.VIS_ALL:
+                        if self.visualize >= self.VIS_DEBUG_LINES:
                             self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
-                    #for j in range(node.getNumChildren()):
-                        #projectNode(node.getChild(j))
                     return None  # return as soon as any one of the centers gets a hit
 
-                elif self.visualize >= self.VIS_ALL:
+                elif self.visualize >= self.VIS_DEBUG_LINES:
                     self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
         # actually do the projection
         for c in self.collRoot.getChildren():  # FIXME this is linear and doesnt use the pseudo oct tree
             projectL2(c)
-        #for i in range(self.collRoot.getNumChildren()):  # FIXME linear search SUCKS :/ we have the oct tree :/
-            #projectL2(self.collRoot.getChild(i))
-            #for j in range(l2.getNumChildren()):
-                #projectNode(l2.getChild(j))
 
         print(len(self.curSelShown))
         #someday we thread this ;_;
@@ -468,13 +497,18 @@ class BoxSel(HasSelectables,DirectObject):
             p3n.setRenderModeThickness(3)  # render order >_<
 
             if self.visualize >= self.VIS_L2:
-                l2s = makeSimpleGeom(l2points,[1,0,0,1])
+                l2s = makeSimpleGeom(l2points,[0,1,0,1])
                 l2n = self.selRoot.attachNewNode(l2s)
                 l2n.setRenderModeThickness(8)
 
                 if self.visualize >= self.VIS_ALL:
+                    l2as = makeSimpleGeom(l2all,[1,0,0,1])
+                    l2an = self.selRoot.attachNewNode(l2as)
+                    l2an.setRenderModeThickness(8)
+
                     pts = makeSimpleGeom(points,[1,1,1,1])
                     self.projRoot.attachNewNode(pts)
+
 
         # set up the task to add entries to the data frame TODO own function?
         stop = self.frames['data'].getMaxItems()
@@ -533,8 +567,6 @@ def main():
     from util import ui_text, console, exit_cleanup, frame_rate, startup_data
     from render_manager import renderManager
     from ui import CameraControl, Axis3d, Grid3d
-    with open('edge_case_data_tuple.pickle','rb') as f:
-        data_tuple = pickle.load(f)
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
     base.disableMouse()
@@ -545,11 +577,33 @@ def main():
     CameraControl()
     Axis3d()
     Grid3d()
+
     r = renderManager()
-    r.cache['edgecase'] = False
-    r.set_nodes('edgecase',data_tuple)
+
+    from test_objects import makeSimpleGeom
+    import numpy as np
+    from dataIO import treeMe
+    from uuid import uuid4
+    n = 10000
+    #positions = np.array([i for i in zip(np.linspace(-1000,1000,n),np.linspace(-1000,1000,n),np.linspace(-1000,1000,n))]) # wat 1
+    #positions = np.array([i for i in zip(np.linspace(-1000,1000,n),np.linspace(-1000,1000,n),np.zeros(n))]) # wat 2
+    positions = np.array([i for i in zip(np.linspace(-1000,1000,n),np.zeros(n),np.zeros(n))])
+    #positions = np.random.randint(-1000,1000,(n,3))
+    # so it turns out that the collision nodes don't render properly on this, the tree constructed with math is correct, the rendering is not
+    r.geomRoot.attachNewNode(makeSimpleGeom(positions,(1,1,1,1)))
+    uuids = np.array(['%s'%uuid4() for _ in range(n)])
+    bounds = np.ones(n) * .5
+    treeMe(r.collRoot, positions, uuids, bounds)
+
+    base.camLens.setFov(90)
+
+    #with open('edge_case_data_tuple.pickle','rb') as f:
+        #data_tuple = pickle.load(f)
+    #r.cache['edgecase'] = False
+    #r.set_nodes('edgecase',data_tuple)
+
     ut = ui_text()
-    dt = BoxSel()
+    dt = BoxSel(visualize = BoxSel.VIS_ALL)
     run()
 
 if __name__ == '__main__':

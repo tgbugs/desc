@@ -208,7 +208,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
         l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
-        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??!
+        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??! XXX no?! diagonal bug?
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         #l2Node.show()
 

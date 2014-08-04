@@ -590,7 +590,11 @@ class GuiFrame(DirectObject):
         self.text_h = text_h
         for k,b in self.items.items():
             if k == 'title':
-                self.title_button.setPos(0, 0, -self.text_h)
+                if self.frame_bg.isHidden():
+                    x, y, z = self.frame_bg.getPos()
+                    self.title_button.setPos(x, y , z-self.text_h)
+                else:
+                    self.title_button.setPos(0, 0, -self.text_h)
             elif k == self.__first_item__:
                 b.setPos(0, 0, -(self.text_h * 2))
             else:

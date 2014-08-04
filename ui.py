@@ -598,7 +598,7 @@ class GuiFrame(DirectObject):
 
     def frame_adjust(self):  # FIXME sometimes this fails to call, also calls too often at startup
         self.setTextHeight()
-        MI = self.getMaxItems()
+        MI = self.getMaxItems()  # does not count title >_<
         LI = len(self.items)
         DI = MI - LI
         if DI >= 0:
@@ -644,8 +644,8 @@ class GuiFrame(DirectObject):
     def add_item(self, text, command = None, args = tuple()): 
         args = list(args)
         items = list(self.items)
-        total_slots = len(self.items)
-        if self.__add_head__ == total_slots:
+        last_slot = len(self.items)
+        if self.__add_head__ == last_slot:
             print('all slots are full, cannot add item to %s'%self)
             return None
         button = self.items[items[self.__add_head__]]
@@ -706,18 +706,18 @@ class GuiFrame(DirectObject):
 
         if text == ' blank':
             if self.__add_head__ is None:
-                self.__add_head__ = 0
+                self.__add_head__ = 1
 
         return b
 
     def del_all(self):
         if self.__first_item__ != None:
-            for id_, button in self.items.values():
+            for id_, button in self.items.items():
                 if id_ != 'title':
                     button['text'] = ' blank'
                     button['command'] = None
                     button['extraArgs'] = [self, id_]
-            self.__add_head__ = 0
+            self.__add_head__ = 1
 
     def del_item(self, text):  # FIXME uniqueness problems
         #d = self.itemsParent.find('*%s*'%text)
@@ -747,7 +747,7 @@ class GuiFrame(DirectObject):
         out['extraArgs'] = [self, index]
         out.reparentTo(parent)
         self.items[index] = out
-        if self.__add_head__:
+        if self.__add_head__ > 1:  # title is always at 0
             self.__add_head__ -= 1
 
     @classmethod

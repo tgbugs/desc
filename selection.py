@@ -433,12 +433,12 @@ class BoxSel(HasSelectables,DirectObject):
             camVec = t - c
             pointVect = point3d - c
 
-            print('cam vector', camVec)
-            print('point vector',pointVect)
+            #print('cam vector', camVec)
+            #print('point vector',pointVect)
 
             theta = abs(camVec.relativeAngleRad(pointVect))
-            print('theta in pi radians', theta / pi)
-            print()
+            #print('theta in pi radians', theta / pi)
+            #print()
 
             #fovMaxCorr = fov**2 * .5 #tan(fov * .5) #fov**2 * .25 #(fov*.9 - 1)
             #fovCorr = point2projection.length() * fovMaxCorr - point2projection.length() + 1  # FIXME this fails hard at high fov derp and for low fov
@@ -547,7 +547,7 @@ class BoxSel(HasSelectables,DirectObject):
 
 
         # set up the task to add entries to the data frame TODO own function?
-        stop = len(self.frames['data'].items)
+        stop = len(self.frames['data'].items) - 1
         for into in self.curSelShown[:stop]:
             uuid = into.getPythonTag('uuid')
             self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )

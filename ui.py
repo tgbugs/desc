@@ -483,8 +483,8 @@ class GuiFrame(DirectObject):
         self.text_height_mm = text_height_mm
 
         #set up variables
-        self.__winx__ = 0
-        self.__winy__ = 0
+        self.__winx__ = base.win.getXSize() 
+        self.__winy__ = base.win.getYSize()
         self.__ar__ = base.camLens.getAspectRatio()
         self.__was_dragging__ = False
         self.__first_item__ = None
@@ -497,6 +497,9 @@ class GuiFrame(DirectObject):
         self.pixels_per_mm = render.getPythonTag('system_data')['max_ppmm']
         self.getWindowData()
         self.accept('window-event', self.getWindowData)
+
+        #set the text height using the above data
+        self.setTextHeight()
 
         # get the root for all frames in the scene
         self.frameRoot = aspect2d.find('frameRoot')
@@ -546,9 +549,18 @@ class GuiFrame(DirectObject):
         if shortcut:
             self.accept(shortcut, self.toggle_vis)
 
+        # adjust the frame
+        self.frame_adjust()
+
     @property
     def text_s(self):
         return self.text_h * self.TEXT_MAGIC_NUMBER
+
+    def setTextHeight(self):
+        h_units = 2 * base.a2dTop
+        units_per_pixel = h_units / self.__winy__
+        text_h = self.text_height_mm * self.pixels_per_mm * units_per_pixel
+        self.text_h = text_h
 
     def do_xywh(self, x, y, w, h):
         """ makes negative wneg xidths and heights work
@@ -583,11 +595,19 @@ class GuiFrame(DirectObject):
         """
         self.frame.reparentTo(self.frameRoot)  # self.frame doesn't move so no wrt
 
-    def frame_adjust(self):  # FIXME sometimes this fails to call...
-        h_units = 2 * base.a2dTop
-        units_per_pixel = h_units / self.__winy__
-        text_h = self.text_height_mm * self.pixels_per_mm * units_per_pixel
-        self.text_h = text_h
+    def frame_adjust(self):  # FIXME sometimes this fails to call, also calls too often at startup
+        self.setTextHeight()
+        MI = self.getMaxItems()
+        LI = len(self.items)
+        DI = MI - LI
+        if DI >= 0:
+            for i in range(DI+1):
+                self.add_item('blank')
+        else:
+            for i in range(-(DI+1)):
+                k,v = self.items.popitem()  # remove the last nodes in order
+                v.removeNode()
+
         for k,b in self.items.items():
             if k == 'title':
                 if self.frame_bg.isHidden():
@@ -698,8 +718,7 @@ class GuiFrame(DirectObject):
                 c.setPos(out.getPos())
                 id_ = c.getPythonTag('id')
                 self.__first_item__ = id_
-            else:
-                self.items.pop(index)
+            self.items.pop(index)
             out.removeNode()  # FIXME for some reason using 'hide' causes bug
         else:  # we are removing the last button
             self.items.pop(index).removeNode()

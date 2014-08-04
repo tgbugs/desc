@@ -186,6 +186,87 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     if num_points <= 0:
         return False
 
+    def next_input():
+        bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+
+        partition = positions > center
+        
+        #the 8 conbinatorial cases
+        for i in range(num_points):
+            index = octit(partition[i])
+            bitmasks[index][i] = True
+        output = []
+        for i in range(8):
+            branch = bitmasks[i]  # this is where we can multiprocess
+            new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
+            subSet = positions[branch]
+            yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
+            #yield subSet, uuids[branch], geomCollide[branch], new_center
+            #output.append(zap)
+
+        #return output
+
+    next_leaves = [l for l in next_input()]
+
+    #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
+    if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
+        #leaf_avg = np.mean([len(tup[1]) for tup in next_leaves if len(tup[1]) > 0])
+        #if leaf_avg > TREE_MAX_POINTS / 8:
+        leaf_max = np.max([len(tup[1]) for tup in next_leaves])
+        if num_points < 4:
+            c = np.mean(positions, axis=0)
+            dists = []
+            for p1 in positions:
+                for p2 in positions:
+                    if p1 is not p2:
+                        d = np.linalg.norm(np.array(p2) - np.array(p1))
+                        dists.append(d)
+            r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
+            print(c, r)
+            l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
+            l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r*2))  # does this take a diameter??! XXX no?! diagonal bug?
+            l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+        elif leaf_max > num_points * .9:  # if any leaf has > half the points
+            return [treeMe(*leaf) for leaf in next_leaves]
+        else:
+            # go to the next level, if the average division performance across NON EMPTY leaves
+            l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
+            l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??! XXX no?! diagonal bug?
+            l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+
+        for p,uuid,geom in zip(positions,uuids,geomCollide):
+            childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
+            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) # we do it this way because it keeps framerates WAY higher dont know why
+            childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
+            childNode.setPythonTag('uuid',uuid)
+        return True
+
+        #if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
+            #print("detect a branch with 1")
+            #return nextLevel()
+
+    return [treeMe(*leaf) for leaf in next_leaves]
+
+def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake'):  # TODO in theory this could be multiprocessed
+    """ Divide the space covered by all the objects into an oct tree and then
+        replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
+        for some reason this massively improves performance even w/o the code
+        for mouse over adding and removing subsets of nodes.
+    """
+
+    num_points = len(positions)
+
+    if center == None:  # branch predictor should take care of this?
+        mins = [np.min(positions[:,i])-1 for i in range(3)]  #FIXME geom radius? fixed with -1 and only a concern at the corners really
+        maxs = [np.max(positions[:,i])+1 for i in range(3)]
+        sides = [maxs[i]-mins[i] for i in range(3)]
+        side = max(sides)
+        center = [side * .5 + mins[i] for i in range(3)]  # the real center
+        radius = (side**2 * .5)**.5
+
+    if num_points <= 0:
+        return False
+
     def nextLevel():
         bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
 

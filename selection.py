@@ -547,11 +547,14 @@ class BoxSel(HasSelectables,DirectObject):
 
 
         # set up the task to add entries to the data frame TODO own function?
-        stop = self.frames['data'].getMaxItems()
-        self.show_stop = len(self.curSelShown[:stop])
-        self.show_count = 0
-        if self.show_stop:
-            taskMgr.add(self.show_task, 'show_task')
+        stop = len(self.frames['data'].items)
+        for into in self.curSelShown[:stop]:
+            uuid = into.getPythonTag('uuid')
+            self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )
+        #self.show_stop = len(self.curSelShown[:stop])
+        #self.show_count = 0
+        #if self.show_stop:
+            #taskMgr.add(self.show_task, 'show_task')
 
     def show_task(self, task):
         if self.show_count >= self.show_stop:

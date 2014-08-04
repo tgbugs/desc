@@ -488,6 +488,7 @@ class GuiFrame(DirectObject):
         self.__ar__ = base.camLens.getAspectRatio()
         self.__was_dragging__ = False
         self.__first_item__ = None
+        self.__add_head__ = None
         self.items = OrderedDict()  # ordered dict to allow sequential addition
 
         #self.BT = buttonThrower if buttonThrower else base.buttonThrowers[0].node()
@@ -530,11 +531,11 @@ class GuiFrame(DirectObject):
         self.itemsParent = self.frame_bg.attachNewNode('items parent')
 
         # title
-        self.title_button = self.add_item(title, self.title_toggle_vis)
+        self.title_button = self.__create_item__(title, self.title_toggle_vis)
         
         # add any items that we got
         for item in items:
-            self.add_item(*item)
+            self.__create_item__(*item)  # FIXME when we call frame adjust we will loose the record of any data items
 
         # dragging
         self.title_button.bind(DGG.B1PRESS, self.__startDrag)
@@ -602,11 +603,11 @@ class GuiFrame(DirectObject):
         DI = MI - LI
         if DI >= 0:
             for i in range(DI+1):
-                self.add_item('blank')
+                self.__create_item__(' blank')
         else:
             for i in range(-(DI+1)):
                 k,v = self.items.popitem()  # remove the last nodes in order
-                v.removeNode()
+                v.removeNode()  # FIXME consider keeping these around?
 
         for k,b in self.items.items():
             if k == 'title':
@@ -641,6 +642,20 @@ class GuiFrame(DirectObject):
     def fix_h(n): return -n * 2
 
     def add_item(self, text, command = None, args = tuple()): 
+        args = list(args)
+        items = list(self.items)
+        total_slots = len(self.items)
+        if self.__add_head__ == total_slots:
+            print('all slots are full, cannot add item to %s'%self)
+            return None
+        button = self.items[items[self.__add_head__]]
+        button['text'] = text
+        button['command'] = command
+        button['extraArgs'] = args + button['extraArgs']  # blank buttons always have [self,id]
+        self.__add_head__ += 1
+
+
+    def __create_item__(self, text, command = None, args = tuple()): 
         args = list(args)
 
         #if not len(self.items):
@@ -689,14 +704,20 @@ class GuiFrame(DirectObject):
 
             self.items[id(b)] = b
 
+        if text == ' blank':
+            if self.__add_head__ is None:
+                self.__add_head__ = 0
+
         return b
 
     def del_all(self):
         if self.__first_item__ != None:
-            d = self.items[self.__first_item__]
-            d.removeNode()
-            self.items = OrderedDict()
-            self.items['title'] = self.title_button
+            for id_, button in self.items.values():
+                if id_ != 'title':
+                    button['text'] = ' blank'
+                    button['command'] = None
+                    button['extraArgs'] = [self, id_]
+            self.__add_head__ = 0
 
     def del_item(self, text):  # FIXME uniqueness problems
         #d = self.itemsParent.find('*%s*'%text)
@@ -726,6 +747,8 @@ class GuiFrame(DirectObject):
         out['extraArgs'] = [self, index]
         out.reparentTo(parent)
         self.items[index] = out
+        if self.__add_head__:
+            self.__add_head__ -= 1
 
     @classmethod
     def __make_border__(cls, parent, thickness, color, l, r , b, t):

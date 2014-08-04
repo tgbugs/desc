@@ -226,7 +226,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r*2))  # does this take a diameter??! XXX no?! diagonal bug?
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
-        elif leaf_max > num_points * .9:  # if any leaf has > half the points
+        elif leaf_max > num_points * .90:  # if any leaf has > half the points
             return [treeMe(*leaf) for leaf in next_leaves]
         else:
             # go to the next level, if the average division performance across NON EMPTY leaves

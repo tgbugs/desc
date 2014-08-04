@@ -42,9 +42,13 @@ class renderManager(DirectObject):
 
         #self.checkLock = Lock()  # TODO see if we need this
 
-        self.accept('r',self.fake_request)
-        self.accept('p',self.fake_predict)
-        self.accept('n',self.rand_request)
+        self.accept('r', self.fake_request)
+        self.accept('p', self.fake_predict)
+        self.accept('n', self.rand_request)
+        self.accept('c', self.embed)
+
+    def embed(self):
+        embed()
 
     def set_send_request(self, send_request:'function *args = (request,)'):
         self.__send_request__ = send_request

@@ -338,7 +338,7 @@ class BoxSel(HasSelectables,DirectObject):
             ratio = abs(major / minor)
             if ratio > 5:  # prevent combinatorial nightmares TODO tune me!
                 ratio = 5
-            elif ratio < 1.5:
+            elif ratio < 1.25:
                 ratio = 1
             else:
                 ratio = int(ratio)

@@ -718,10 +718,14 @@ class GuiFrame(DirectObject):
                 c.setPos(out.getPos())
                 id_ = c.getPythonTag('id')
                 self.__first_item__ = id_
-            self.items.pop(index)
-            out.removeNode()  # FIXME for some reason using 'hide' causes bug
-        else:  # we are removing the last button
-            self.items.pop(index).removeNode()
+                out.setPos(0, 0, -self.text_h)
+        self.items.pop(index)
+        parent = list(self.items.values())[-1]
+        out['text'] = ' del blank'
+        #out['command'] = None
+        out['extraArgs'] = [self, index]
+        out.reparentTo(parent)
+        self.items[index] = out
 
     @classmethod
     def __make_border__(cls, parent, thickness, color, l, r , b, t):

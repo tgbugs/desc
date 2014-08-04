@@ -211,7 +211,7 @@ class BoxSel(HasSelectables,DirectObject):
                 child.hide()
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
-        taskMgr.remove('show_task')
+        #taskMgr.remove('show_task')
         if self.curSelShown:
             self.curSelShown = []
             self.frames['data'].del_all()  # FIXME!
@@ -245,7 +245,7 @@ class BoxSel(HasSelectables,DirectObject):
             intoNode = target
             uuid = intoNode.getPythonTag('uuid')  # FIXME it would see that this are not actually uuids...
         else:
-            if not self.__shift__ and self.curSelPoints:
+            if not self.__shift__ and self.curSelShown:
                 self.clearSelection()
             intoNode = target.getIntoNode()
             uuid = intoNode.getPythonTag('uuid')

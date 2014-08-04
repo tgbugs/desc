@@ -174,6 +174,7 @@ class BoxSel(HasSelectables,DirectObject):
         if self.frames is None:
             self.frames = {}
             class f:
+                items = {}
                 def del_all(self):
                     pass
                 def add_item(self, *args, **kwargs):

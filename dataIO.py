@@ -181,7 +181,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         sides = [maxs[i]-mins[i] for i in range(3)]
         side = max(sides)
         center = [side * .5 + mins[i] for i in range(3)]  # the real center
-        radius = (side**2 * .5)**.5
+        radius = (.5 * side**2)**.5  # sqrt( 2*(.5 * side)**2 )
 
     if num_points <= 0:
         return False
@@ -200,7 +200,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             branch = bitmasks[i]  # this is where we can multiprocess
             new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
             subSet = positions[branch]
-            yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
+            yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, ( .5 * side**2) ** .5
             #yield subSet, uuids[branch], geomCollide[branch], new_center
             #output.append(zap)
 
@@ -224,14 +224,14 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
             print(c, r)
             l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
-            l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r*2))  # does this take a diameter??! XXX no?! diagonal bug?
+            l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
             return [treeMe(*leaf) for leaf in next_leaves]
         else:
             # go to the next level, if the average division performance across NON EMPTY leaves
             l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
-            l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??! XXX no?! diagonal bug?
+            l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
 
         for p,uuid,geom in zip(positions,uuids,geomCollide):
@@ -281,7 +281,7 @@ def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = Non
             branch = bitmasks[i]  # this is where we can multiprocess
             new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
             subSet = positions[branch]
-            zap = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5)
+            zap = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, (side**2 * .5) ** .5)
             output.append(zap)
 
         return output
@@ -289,7 +289,7 @@ def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = Non
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
         l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
-        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))  # does this take a diameter??! XXX no?! diagonal bug?
+        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius))
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         #l2Node.show()
 

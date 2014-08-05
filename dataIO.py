@@ -270,7 +270,7 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     if pipe:
         to_send = collect_pool(todo)
         print('trying to send data! len = ', len(to_send))
-        print(to_send[0].lsNamesRecurse())
+        #print(to_send[0].lsNamesRecurse())
         for s in to_send:
             pipe.send(s)
         #pipe.send('STOP')

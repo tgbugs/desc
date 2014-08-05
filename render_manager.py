@@ -72,8 +72,9 @@ class renderManager(DirectObject):
     def add_coll_task(self, task):
         #if self.add_queue:
         try:
-            #self.add_queue.get_nowait().reparentTo(self.collRoot)
-            self.add_queue.popleft().reparentTo(self.collRoot)
+            for i in range(40):
+                #self.add_queue.get_nowait().reparentTo(self.collRoot)
+                self.add_queue.popleft().reparentTo(self.collRoot)
         #else:
         #except IndexError:
         except Empty:
@@ -154,35 +155,17 @@ class renderManager(DirectObject):
             for request_hash, (recv, bam, ui, cache_) in self.pipes.items():
                 try:
                     if recv.poll():
-                        #nodes = pickle.loads(zlib.decompress(coll.recv_bytes()))
-                        #print('poll says we have data')
-
-                        #t1 = time.time()
                         node = recv.recv()
-                        #t2 = time.time()
-                        #dt = t2 - t1
-                        #print('dt for recv %s was: '%node, dt)  #so apparently this goes pretty darned fast?
-
-                        #print('received')
-                        #if node == 'STOP':
-                            #continue
-                            #raise EOFError('Got STOP')
-
                         self.__inc_nodes__[request_hash].append(node)
                         if not cache_:  # render the l2 node!
-                            #node.reparentTo(self.collRoot)
                             self.add_queue.append(node)
-                            #self.add_queue.put(node)
-                            #print(node)
                             if not taskMgr.hasTaskNamed('add_collision'):
                                 taskMgr.add(self.add_coll_task,'add_collision')
-                #except (EOFError, OSError) as e:
                 except EOFError as e:
-                    recv.close()  # so apparently this line is real important
+                    recv.close()
                     to_pop.append(request_hash)
                     nodes = self.__inc_nodes__.pop(request_hash)
                     self.cache[request_hash] = bam, nodes, ui
-                    #print('SUCCESS pipe is closed')
                 except OSError as e:
                     embed()
 
@@ -191,8 +174,8 @@ class renderManager(DirectObject):
                 print('popped',tup)
             to_pop = []
 
-            #if not self.pipes:
-                #taskMgr.remove('coll_task')
+            if not self.pipes:
+                taskMgr.remove('coll_task')
         return task.cont
                 
     def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?

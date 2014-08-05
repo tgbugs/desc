@@ -3,8 +3,10 @@
 import asyncio
 import pickle
 import ssl
+import time
 from time import sleep
 from concurrent.futures import ProcessPoolExecutor
+from threading import Thread
 
 from IPython import embed
 
@@ -59,12 +61,17 @@ class newConnectionProtocol(asyncio.Protocol):  # this could just be made into a
             print("New connection transport closed.")
 
     @asyncio.coroutine
-    def get_data_token(self):
-        yield from self.future_token
+    def get_data_token(self, timeout = None):
+        #yield from self.future_token
+        yield from asyncio.wait_for(self.future_token, timeout)
+
         #try: yield from self.future_token
         #except asyncio.futures.InvalidStateError as e:
             #print(e)
             #print('ssuming that this is because the future is already finished')
+
+    #def wait_for_token(self, timeout = None):
+        #self.event_loop.run_until_complete(asyncio.wait_for(self.future_token, timeout))
 
 class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
     def __new__(cls, token):
@@ -123,8 +130,9 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             print('Data connection lost')
             print('trying to reconnect')
             self.event_loop.call_soon_threadsafe(self.event_loop.stop)  # this is a hack
-            sleep(.1)
-            taskMgr.add(self.reup_con,'reupTask')
+            #sleep(1)
+            self.__timer_start__ = time.time()
+            taskMgr.add(self.recon_task,'recon_task')  # FIXME
             #self.reup_con()
             #t = asyncio.Task(self.reup_con(), loop=self.event_loop)
             #t = asyncio.Task(self.reup_con, loop=self.event_loop)  # FIXME replace with self.event_loop.create_task(self.reup_con) 3.4.2
@@ -137,6 +145,26 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             #but that could get really nast if we have a partition and
             #we try to reconnect repeatedly
             #asyncio.get_event_loop().close()  # FIXME probs don't need this
+
+    def recon_task(self, task):  # FIXME
+        if time.time() - self.__timer_start__ > 10:
+            print('running recon task')
+            try:
+                coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
+                conTransport, conProtocol = self.event_loop.run_until_complete(coro_conClient)
+                self.event_loop.run_until_complete(conProtocol.get_data_token(1))  # FIXME still blocks ;_;
+                self.token = conProtocol.future_token.result()
+                coro_dataClient = self.event_loop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
+                self.event_loop.run_until_complete(coro_dataClient) # can this work with with?
+                asyncThread = Thread(target=self.event_loop.run_forever)
+                asyncThread.start()
+                taskMgr.remove(task.getName())
+            except (ConnectionRefusedError, TimeoutError) as e:
+                self.__timer_start__ = time.time()
+            finally:
+                return task.cont
+        else:
+            return task.cont
 
     def send_request(self, request):
         """ this is called BY renderManager.get_cache !!!!"""
@@ -162,7 +190,6 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
 
 def main():
     import sys
-    from threading import Thread
 
     # render setup
     from direct.showbase.ShowBase import ShowBase
@@ -225,24 +252,6 @@ def main():
     clientLoop.run_until_complete(conProtocol.get_data_token())
     token = conProtocol.future_token.result()
 
-    def recon_task(self, task):
-        taskMgr.remove('reupTask')
-        return task.cont
-        try:
-            coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
-            conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-            clientLoop.run_until_complete(conProtocol.get_data_token())
-            self.token = conProtocol.future_token.result()
-            coro_dataClient = clientLoop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
-            clientLoop.run_until_complete(coro_dataClient) # can this work with with?
-            asyncThread = Thread(target=clientLoop.run_forever)
-            asyncThread.start()
-            taskMgr.remove('reupTask')
-            return task.cont
-        except ConnectionRefusedError as e:
-            return task.cont
-
-    setattr(dataProtocol, 'reup_con', recon_task)
 
     datCli = datCli_base(token)
     coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)

@@ -1,7 +1,11 @@
 """
     DirectObject class in panda for DRAWING the data we get back, this might be run on a remote panda instance?
 """
+import zlib
+import pickle
+from time import sleep
 from uuid import uuid4
+
 import numpy as np
 from IPython import embed
 
@@ -259,9 +263,12 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
 
     if pipe:
         #print(todo)
+        #to_send = zlib.compress(pickle.dumps(collect_pool(todo)))
         to_send = collect_pool(todo)
         print('trying to send data! len = ', len(to_send))
-        pipe.send(to_send)
+        for s in to_send:
+            sleep(.001)
+            pipe.send(s)
         pipe.close()
         #pipe.put(to_send)
         return None

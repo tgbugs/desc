@@ -1,4 +1,6 @@
 import pickle
+import zlib
+from collections import deque
 from multiprocessing import Pool, Manager
 from multiprocessing import Pipe as mpp
 from multiprocessing import Queue as mpq
@@ -33,8 +35,10 @@ class renderManager(DirectObject):
     
     def __init__(self, event_loop = None):
         self.event_loop = event_loop
+        self.__inc_nodes__ = {}
         #self.manager = Manager()
         #self.q = self.manager.Queue()
+        self.add_queue = deque
 
         geomRoot = render.find('geomRoot')
         if not geomRoot:
@@ -63,6 +67,9 @@ class renderManager(DirectObject):
         self.accept('c', self.embed)
 
         self.pool = Pool()
+
+    def add_coll_task(self, task):
+        self.add_queue.pop_left().reparentTo(self.collRoot)
 
     def embed(self):
         embed()
@@ -119,18 +126,29 @@ class renderManager(DirectObject):
             else:
                 print('already being rendered', bam)
 
+        self.__inc_nodes__[request_hash] = []
+
         #send, recv = coll
         #q = coll
         def coll_task(task):
-            #try:
-            if coll.poll:
-                nodes = coll.recv()
-                self.cache[request_hash] = bam, nodes, ui
-                if not cache_:
-                    self.render(bam, nodes, ui)
-                coll.close()
-                taskMgr.remove(task.getName())
+            try:
+                if coll.poll:
+                    #nodes = pickle.loads(zlib.decompress(coll.recv_bytes()))
+                    node = coll.recv()
+                    self.__inc_nodes__[request_hash].append(node)
+                    if not cache_:  # render the l2 node!
+                        node.reparentTo(self.collRoot)
+            except EOFError:
                 print('SUCCESS pipe is closed')
+                coll.close()
+                nodes = self.__inc_nodes__.pop(request_hash)
+                #if not cache_:
+                    #self.render(bam, nodes, ui)
+                self.cache[request_hash] = bam, nodes, ui
+                taskMgr.remove(task.getName())
+            finally:
+                return task.cont
+                
             """
             try:
                 nodes = self.q.get_nowait()

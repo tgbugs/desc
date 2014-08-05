@@ -179,13 +179,14 @@ def collect_pool(todo):
                 output.append(thing)
     return output
 
-def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pool = None, pipe = None):  # TODO in theory this could be multiprocessed
+def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pipe = None):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
         for some reason this massively improves performance even w/o the code
         for mouse over adding and removing subsets of nodes.
     """
     #if pipe:
+        #pipe.send('START')  # this doesnt seem to help
     #collRoot = NodePath(PandaNode(''))
 
     num_points = len(positions)
@@ -232,14 +233,12 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
-            if pool:
-                todo = pool.map(treeMeMap, next_leaves)
-            elif pipe:
+            if pipe:
                 print("hit an early pip")
                 to_send = collect_pool(todo)
                 for s in to_send:
                     pipe.send(s)
-                pipe.send('STOP')
+                #pipe.send('STOP')
                 pipe.close()
                 #sleep(.1)
                 #pipe.send('STOP')
@@ -266,19 +265,15 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             #print("detect a branch with 1")
             #return nextLevel()
 
-    #if pool:
-        #todo = pool.map(treeMeMap, next_leaves)
-    #else:
     todo = [treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
-        #print(todo)
-        #to_send = zlib.compress(pickle.dumps(collect_pool(todo)))
         to_send = collect_pool(todo)
         print('trying to send data! len = ', len(to_send))
+        print(to_send[0].lsNamesRecurse())
         for s in to_send:
             pipe.send(s)
-        pipe.send('STOP')
+        #pipe.send('STOP')
         pipe.close()  #FIXME apparently this causes ALL sorts of problems
         #del pipe
         #sleep(.1)
@@ -436,8 +431,6 @@ def main():
 
     #profileOctit()
 
-    from multiprocessing import Pool
-    pool = Pool()
 
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
@@ -456,7 +449,7 @@ def main():
         #uuids = np.arange(0,nnodes) * (i + 1)
         uuids = np.array(["%s"%uuid4() for _ in range(nnodes)])
         geomCollide = np.ones(nnodes) * .5
-        out = treeMe(level2Root, positions, uuids, geomCollide, pool = pool)
+        out = treeMe(level2Root, positions, uuids, geomCollide)
         #print(out)
         render.attachNewNode(makeSimpleGeom(positions,np.random.rand(4)))
 

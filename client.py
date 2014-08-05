@@ -106,7 +106,12 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             #print('yes we are trying to render stuff')
             #self.event_loop.run_in_executor( None, self.set_nodes, request_hash, data_tuple )
             #self.event_loop.call_soon_threadsafe(self.set_nodes, request_hash, data_tuple)  #still segfaults even if this is threadsafe
-            self.set_nodes(request_hash, data_tuple)
+            #sleep(.1)
+            try:
+                if not self.cache[request_hash]:
+                    self.set_nodes(request_hash, data_tuple)
+            except KeyError:
+                pass  # FIXME currently not caching anything to hunt down the lockup bug
             #self.set_nodes(*output)
             self.__block__ = self.__block__[self.__block_size__:]
             self.__block_size__ = None
@@ -142,10 +147,12 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             # could use that to quantify performance
             # XXX need this to prevent sending duplicate requests
 
-    def process_responses(self, response_generator):  # TODO this should be implemented in a subclass specific to panda, same w/ the server
+    def process_responses(self, response_generator):  # XXX deprecated
+        # TODO this should be implemented in a subclass specific to panda, same w/ the server
         for request_hash, data_tuple in response_generator:
             #print('yes we are trying to render stuff')
-            self.event_loop.run_in_executor( None , lambda: self.set_nodes(request_hash, data_tuple) )  # amazingly this works!
+            #self.event_loop.run_in_executor( None , lambda: self.set_nodes(request_hash, data_tuple) )  # amazingly this works!
+            self.set_nodes(request_hash, data_tuple)
 
     def set_nodes(self, request_hash, data_tuple):
         raise NotImplementedError('patch this function with the shared stated version in renderManager')
@@ -195,14 +202,13 @@ def main():
 
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
+    ppe = ProcessPoolExecutor()
+    clientLoop.set_default_executor(ppe)
 
     rendMan = renderManager(clientLoop)
 
     bs = BoxSel(frames)
 
-
-    #ppe = ProcessPoolExecutor()
-    #clientLoop.set_default_executor(ppe)  # FIXME this doesn't work ;_;
 
     # TODO ssl contexts
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -211,6 +217,7 @@ def main():
     datCli_base = type('dataProtocol',(dataProtocol,),
                   {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
                    'render_set_send_request':rendMan.set_send_request,
+                   'cache':rendMan.cache,
                    'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
     coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)

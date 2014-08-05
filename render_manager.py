@@ -8,7 +8,7 @@ from multiprocessing import Queue as mpq
 from multiprocessing.queues import Empty
 from queue import Queue as tq
 from threading import Lock
-from concurrent.futures import ProcessPoolExecutor
+#from concurrent.futures import ProcessPoolExecutor
 
 from IPython import embed
 
@@ -42,9 +42,6 @@ class renderManager(DirectObject):
         self.pipes = {}
         self.add_queue = deque()
         self.pipeLock = Lock()
-        #self.add_queue = tq()
-        #self.manager = Manager()
-        #self.q = self.manager.Queue()
 
         geomRoot = render.find('geomRoot')
         if not geomRoot:
@@ -65,16 +62,12 @@ class renderManager(DirectObject):
         self.cache = {}
         #self.cache_age = deque()  # TODO implement this?
 
-        #self.checkLock = Lock()  # TODO see if we need this
-
         self.accept('r', self.fake_request)
         self.accept('p', self.fake_predict)
         self.accept('n', self.rand_request)
         self.accept('c', self.embed)
 
-        #self.pool = Pool()
-        #taskMgr.add(self.add_coll_task,'add_collision')
-        self.ppe = ProcessPoolExecutor()
+        #self.ppe = ProcessPoolExecutor()
 
     def add_coll_task(self, task):
         #if self.add_queue:
@@ -153,22 +146,28 @@ class renderManager(DirectObject):
 
         #send, recv = coll
         #q = coll
+
+    #@profile_me
     def coll_task(self,task):
         with self.pipeLock:
             to_pop = []
             for request_hash, (recv, bam, ui, cache_) in self.pipes.items():
                 try:
-                    if recv.poll:
+                    if recv.poll():
                         #nodes = pickle.loads(zlib.decompress(coll.recv_bytes()))
-                        #t1 = time.time()
                         #print('poll says we have data')
+
+                        #t1 = time.time()
                         node = recv.recv()
-                        #print('received')
-                        if node == 'STOP':
-                            raise EOFError('Got STOP')
                         #t2 = time.time()
                         #dt = t2 - t1
-                        #print('dt for recv was: ', dt)  #so apparently this goes pretty darned fast?
+                        #print('dt for recv %s was: '%node, dt)  #so apparently this goes pretty darned fast?
+
+                        #print('received')
+                        #if node == 'STOP':
+                            #continue
+                            #raise EOFError('Got STOP')
+
                         self.__inc_nodes__[request_hash].append(node)
                         if not cache_:  # render the l2 node!
                             #node.reparentTo(self.collRoot)
@@ -178,12 +177,12 @@ class renderManager(DirectObject):
                             if not taskMgr.hasTaskNamed('add_collision'):
                                 taskMgr.add(self.add_coll_task,'add_collision')
                 #except (EOFError, OSError) as e:
-                except EOFError:
-                    #print('SUCCESS pipe is closed')
+                except EOFError as e:
                     recv.close()  # so apparently this line is real important
                     to_pop.append(request_hash)
                     nodes = self.__inc_nodes__.pop(request_hash)
                     self.cache[request_hash] = bam, nodes, ui
+                    #print('SUCCESS pipe is closed')
                 except OSError as e:
                     embed()
 
@@ -258,19 +257,9 @@ class renderManager(DirectObject):
     #@profile_me
     def makeColl(self, coll_tup):
         node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
-
-        #nodes = treeMe(node, *coll_tup, pool=self.pool)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
-        #return nodes
-
         send, recv = mpp()
-        #q = mpq()
         pos, uuid, geom = coll_tup
-        self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
-        #self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
-        #return send, recv
-        #embed()
-        #print(q.get())
-        #self.pipes[reqeust_hash] = recv
+        self.event_loop.run_in_executor(None, treeMe, node, pos, uuid, geom, None, None, None, None, send)
         return recv
 
 
@@ -295,7 +284,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(2):
+        for _ in range(1):
             r = RAND_REQUEST()
             self.submit_request(r)
 

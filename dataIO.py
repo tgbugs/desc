@@ -176,12 +176,16 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     num_points = len(positions)
 
     if center == None:  # branch predictor should take care of this?
-        mins = [np.min(positions[:,i])-1 for i in range(3)]  #FIXME geom radius? fixed with -1 and only a concern at the corners really
-        maxs = [np.max(positions[:,i])+1 for i in range(3)]
-        sides = [maxs[i]-mins[i] for i in range(3)]
-        side = max(sides)
-        center = [side * .5 + mins[i] for i in range(3)]  # the real center
-        radius = (.5 * side**2)**.5  # sqrt( 2*(.5 * side)**2 )
+        #mins = [np.min(positions[:,i])-1 for i in range(3)]  #FIXME geom radius? fixed with -1 and only a concern at the corners really
+        #maxs = [np.max(positions[:,i])+1 for i in range(3)]
+        #sides = [maxs[i]-mins[i] for i in range(3)]
+        #side = max(sides)
+        #center = [side * .5 + mins[i] for i in range(3)]  # the real center
+        center = np.mean(positions, axis=0)
+        radius = np.max(np.linalg.norm(positions - center))
+        side = ((4/3) * radius**2) ** .5
+        radius += 2
+        #radius = (2 * (.5 * side)**2)**.5#(.5 * side**2)**.5  # sqrt( 2*(.5 * side)**2 )
 
     if num_points <= 0:
         return False
@@ -200,7 +204,8 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             branch = bitmasks[i]  # this is where we can multiprocess
             new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
             subSet = positions[branch]
-            yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, ( .5 * side**2) ** .5
+            #yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5 #( .5 * side**2) ** .5
+            yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
             #yield subSet, uuids[branch], geomCollide[branch], new_center
             #output.append(zap)
 
@@ -231,7 +236,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         else:
             # go to the next level, if the average division performance across NON EMPTY leaves
             l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
-            l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius))
+            l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
 
         for p,uuid,geom in zip(positions,uuids,geomCollide):

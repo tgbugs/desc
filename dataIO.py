@@ -241,6 +241,8 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
                     pipe.send(s)
                 pipe.send('STOP')
                 pipe.close()
+                #sleep(.1)
+                #pipe.send('STOP')
                 return None
             else:
                 todo = [treeMe(*leaf) for leaf in next_leaves]
@@ -278,7 +280,9 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             pipe.send(s)
         pipe.send('STOP')
         pipe.close()  #FIXME apparently this causes ALL sorts of problems
-        del pipe
+        #del pipe
+        #sleep(.1)
+        #pipe.send('STOP')
         #pipe.put(to_send)
         #return None
     else:

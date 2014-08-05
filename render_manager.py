@@ -7,6 +7,7 @@ from multiprocessing import Pipe as mpp
 from multiprocessing import Queue as mpq
 from multiprocessing.queues import Empty
 from queue import Queue as tq
+from threading import Lock
 from concurrent.futures import ProcessPoolExecutor
 
 from IPython import embed
@@ -38,7 +39,9 @@ class renderManager(DirectObject):
     def __init__(self, event_loop = None):
         self.event_loop = event_loop
         self.__inc_nodes__ = {}
+        self.pipes = {}
         self.add_queue = deque()
+        self.pipeLock = Lock()
         #self.add_queue = tq()
         #self.manager = Manager()
         #self.q = self.manager.Queue()
@@ -70,7 +73,7 @@ class renderManager(DirectObject):
         self.accept('c', self.embed)
 
         #self.pool = Pool()
-        #taskMgr.add(self.add_coll_task,'add_coll_task')
+        #taskMgr.add(self.add_coll_task,'add_collision')
         self.ppe = ProcessPoolExecutor()
 
     def add_coll_task(self, task):
@@ -78,11 +81,11 @@ class renderManager(DirectObject):
         try:
             #self.add_queue.get_nowait().reparentTo(self.collRoot)
             self.add_queue.popleft().reparentTo(self.collRoot)
-            print('l2 node added')
         #else:
         #except IndexError:
         except Empty:
-            taskMgr.remove('add_coll_task')
+            taskMgr.remove('add_collision')
+            print('l2 nodes added')
         finally:
             return task.cont
 
@@ -133,6 +136,7 @@ class renderManager(DirectObject):
         #except KeyError:
             #pass
 
+    #def make_nt_task(self, request_hash, bam, coll, ui, cache_ = False):
     def make_nt_task(self, request_hash, bam, coll, ui, cache_ = False):
         """ given a node tuple return a task that will render/cache it when finished """
         if not cache_:
@@ -141,60 +145,57 @@ class renderManager(DirectObject):
             else:
                 print('already being rendered', bam)
 
-        self.__inc_nodes__[request_hash] = []
+        with self.pipeLock:
+            self.__inc_nodes__[request_hash] = []
+            self.pipes[request_hash] = coll, bam, ui, cache_
+            if not taskMgr.hasTaskNamed('coll_task'):
+                taskMgr.add(self.coll_task,'coll_task') # %s'%request_hash)
 
         #send, recv = coll
         #q = coll
-        def coll_task(task):
-            try:
-                print('trying to poll')
-                if coll.poll:
-                    print('polled?')
-                    #nodes = pickle.loads(zlib.decompress(coll.recv_bytes()))
-                    #t1 = time.time()
-                    node = coll.recv()
-                    print('received')
-                    if node == 'STOP':
-                        raise EOFError
-                    #t2 = time.time()
-                    #dt = t2 - t1
-                    #print('dt for recv was: ', dt)  #so apparently this goes pretty darned fast?
-                    self.__inc_nodes__[request_hash].append(node)
-                    if not cache_:  # render the l2 node!
-                        #node.reparentTo(self.collRoot)
-                        self.add_queue.append(node)
-                        print(node)
-                        #self.add_queue.put(node)
-                        if not taskMgr.hasTaskNamed('add_coll_task'):
-                            taskMgr.add(self.add_coll_task,'add_coll_task')
-            except EOFError:
-                print('SUCCESS pipe is closed')
-                coll.close()
-                nodes = self.__inc_nodes__.pop(request_hash)
-                #if not cache_:
-                    #self.render(bam, nodes, ui)
-                self.cache[request_hash] = bam, nodes, ui
-                taskMgr.remove(task.getName())
-            finally:
-                return task.cont
-                
-            """
-            try:
-                nodes = self.q.get_nowait()
-                #nodes = recv.recv()
-                #print('RECEIVED',nodes)
-                self.cache[request_hash] = bam, nodes, ui
-                if not cache_:
-                    self.render(bam, nodes, ui)
-                #recv.close()
-                taskMgr.remove(task.getName())
-            except Empty:
-                print('nothing yet')
-            finally:
-                return task.cont
-            #"""
-        taskMgr.add(coll_task,'coll_task %s'%request_hash)
+    def coll_task(self,task):
+        with self.pipeLock:
+            to_pop = []
+            for request_hash, (recv, bam, ui, cache_) in self.pipes.items():
+                try:
+                    if recv.poll:
+                        #nodes = pickle.loads(zlib.decompress(coll.recv_bytes()))
+                        #t1 = time.time()
+                        #print('poll says we have data')
+                        node = recv.recv()
+                        #print('received')
+                        if node == 'STOP':
+                            raise EOFError('Got STOP')
+                        #t2 = time.time()
+                        #dt = t2 - t1
+                        #print('dt for recv was: ', dt)  #so apparently this goes pretty darned fast?
+                        self.__inc_nodes__[request_hash].append(node)
+                        if not cache_:  # render the l2 node!
+                            #node.reparentTo(self.collRoot)
+                            self.add_queue.append(node)
+                            #self.add_queue.put(node)
+                            #print(node)
+                            if not taskMgr.hasTaskNamed('add_collision'):
+                                taskMgr.add(self.add_coll_task,'add_collision')
+                #except (EOFError, OSError) as e:
+                except EOFError:
+                    #print('SUCCESS pipe is closed')
+                    recv.close()  # so apparently this line is real important
+                    to_pop.append(request_hash)
+                    nodes = self.__inc_nodes__.pop(request_hash)
+                    self.cache[request_hash] = bam, nodes, ui
+                except OSError as e:
+                    embed()
 
+            for rh in to_pop:
+                tup = self.pipes.pop(rh)
+                print('popped',tup)
+            to_pop = []
+
+            #if not self.pipes:
+                #taskMgr.remove('coll_task')
+        return task.cont
+                
     def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
         """ this is the callback used by the data protocol """
         #print('cache updated')
@@ -269,6 +270,7 @@ class renderManager(DirectObject):
         #return send, recv
         #embed()
         #print(q.get())
+        #self.pipes[reqeust_hash] = recv
         return recv
 
 
@@ -293,7 +295,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(1):
+        for _ in range(2):
             r = RAND_REQUEST()
             self.submit_request(r)
 

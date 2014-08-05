@@ -25,11 +25,12 @@ def profile_me(function):
         pr = cProfile.Profile()
         s = io.StringIO()
         pr.enable()
-        function(*args,**kwargs)
+        out = function(*args,**kwargs)
         pr.disable()
         ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
         ps.print_stats()
         print(function.__name__,s.getvalue())
+        return out
     wrapped.__name__ = function.__name__
     return wrapped
 

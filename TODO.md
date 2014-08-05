@@ -42,6 +42,7 @@ just setPythonTag (and increase the priority if empty) of that node when we get 
 
 things
 ======
+ 0. really weird bug with the server where predictions are not sent?
  7. we could use getPythonTag to make it really easy to link collision nodes to vertecies...
  6. collision nodes need to be able to quickly reference the geometry atom
     they are bound to, this means the index of a specific vertex in a geom or

@@ -165,6 +165,28 @@ TREE_LOGIC = np.array([
 TREE_MAX_POINTS = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
 #TREE_MAX_POINTS = 1024
 
+octit = {
+    (0,0,0):0,
+    (0,0,1):1,
+    (0,1,0):2,
+    (0,1,1):3,
+    (1,0,0):4,
+    (1,0,1):5,
+    (1,1,0):6,
+    (1,1,1):7,
+}
+octit = {
+    (False,False,False):0,
+    (False,False,True):1,
+    (False,True,False):2,
+    (False,True,True):3,
+    (True,False,False):4,
+    (True,False,True):5,
+    (True,True,False):6,
+    (True,True,True):7,
+}
+
+
 
 def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake'):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
@@ -176,42 +198,30 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     num_points = len(positions)
 
     if center == None:  # branch predictor should take care of this?
-        #mins = [np.min(positions[:,i])-1 for i in range(3)]  #FIXME geom radius? fixed with -1 and only a concern at the corners really
-        #maxs = [np.max(positions[:,i])+1 for i in range(3)]
-        #sides = [maxs[i]-mins[i] for i in range(3)]
-        #side = max(sides)
-        #center = [side * .5 + mins[i] for i in range(3)]  # the real center
         center = np.mean(positions, axis=0)
         radius = np.max(np.linalg.norm(positions - center))
         side = ((4/3) * radius**2) ** .5
         radius += 2
-        #radius = (2 * (.5 * side)**2)**.5#(.5 * side**2)**.5  # sqrt( 2*(.5 * side)**2 )
 
     if num_points <= 0:
         return False
 
-    def next_input():
-        bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+    bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+    partition = positions > center
+    
+    #the 8 conbinatorial cases
+    for i in range(num_points):
+        #index = octit(partition[i])
+        index = octit[tuple(partition[i])]
+        bitmasks[index][i] = True
+    next_leaves = []
+    for i in range(8):
+        branch = bitmasks[i]  # this is where we can multiprocess
+        new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
+        subSet = positions[branch]
+        next_leaves.append((level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
+        #yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
 
-        partition = positions > center
-        
-        #the 8 conbinatorial cases
-        for i in range(num_points):
-            index = octit(partition[i])
-            bitmasks[index][i] = True
-        output = []
-        for i in range(8):
-            branch = bitmasks[i]  # this is where we can multiprocess
-            new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
-            subSet = positions[branch]
-            #yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5 #( .5 * side**2) ** .5
-            yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
-            #yield subSet, uuids[branch], geomCollide[branch], new_center
-            #output.append(zap)
-
-        #return output
-
-    next_leaves = [l for l in next_input()]
 
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
@@ -227,7 +237,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                         d = np.linalg.norm(np.array(p2) - np.array(p1))
                         dists.append(d)
             r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
-            print(c, r)
+            #print(c, r)
             l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
@@ -262,12 +272,10 @@ def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = Non
     num_points = len(positions)
 
     if center == None:  # branch predictor should take care of this?
-        mins = [np.min(positions[:,i])-1 for i in range(3)]  #FIXME geom radius? fixed with -1 and only a concern at the corners really
-        maxs = [np.max(positions[:,i])+1 for i in range(3)]
-        sides = [maxs[i]-mins[i] for i in range(3)]
-        side = max(sides)
-        center = [side * .5 + mins[i] for i in range(3)]  # the real center
-        radius = (side**2 * .5)**.5
+        center = np.mean(positions, axis=0)
+        radius = np.max(np.linalg.norm(positions - center))
+        side = ((4/3) * radius**2) ** .5
+        radius += 2
 
     if num_points <= 0:
         return False
@@ -286,7 +294,7 @@ def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = Non
             branch = bitmasks[i]  # this is where we can multiprocess
             new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
             subSet = positions[branch]
-            zap = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, (side**2 * .5) ** .5)
+            zap = treeMe(level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5)
             output.append(zap)
 
         return output
@@ -294,7 +302,7 @@ def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = Non
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
         l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
-        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius))
+        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius*2))
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         #l2Node.show()
 
@@ -312,7 +320,7 @@ def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = Non
 
     return nextLevel()
 
-def octit(position):  # use this not entirely sure why it is better, maybe fewer missed branches?
+def _octit(position):  # use this not entirely sure why it is better, maybe fewer missed branches?
     """ take the booleans returned from positions > center and map to cases """
     x, y, z = position
     if x:

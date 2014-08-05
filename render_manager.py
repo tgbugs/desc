@@ -8,6 +8,8 @@ from panda3d.core import GeomNode, NodePath, PandaNode
 from dataIO import treeMe
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 
+from prof import profile_me
+
 
 class renderManager(DirectObject):
     """ a class to manage, bam, coll, and ui (and more?) incoming data
@@ -147,11 +149,13 @@ class renderManager(DirectObject):
         #node.addGeom(out)
         return out
 
+    @profile_me
     def makeColl(self, coll_tup):
-        node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
-        # FIXME treeMe is SUPER slow... :/
-        treeMe(node, *coll_tup)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
-        print('coll node successfully made')
+        for i in range(10):
+            node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
+            # FIXME treeMe is SUPER slow... :/
+            treeMe(node, *coll_tup)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+            print('coll node successfully made')
         return node
 
     def makeUI(self, ui):  # FIXME this works inconsistently with other stuff
@@ -170,7 +174,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(2):
+        for _ in range(10):
             r = RAND_REQUEST()
             self.submit_request(r)
 

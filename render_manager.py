@@ -8,6 +8,10 @@ from panda3d.core import GeomNode, NodePath, PandaNode
 from dataIO import treeMe
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 
+from multiprocessing import Pool
+#import sys  # we shouldnt need to call this here
+#sys.modules['core'] = sys.modules['panda3d.core']
+
 from prof import profile_me
 
 
@@ -48,6 +52,8 @@ class renderManager(DirectObject):
         self.accept('p', self.fake_predict)
         self.accept('n', self.rand_request)
         self.accept('c', self.embed)
+
+        self.pool = Pool()
 
     def embed(self):
         embed()
@@ -151,11 +157,14 @@ class renderManager(DirectObject):
 
     @profile_me
     def makeColl(self, coll_tup):
-        for i in range(10):
-            node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
-            # FIXME treeMe is SUPER slow... :/
-            treeMe(node, *coll_tup)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
-            print('coll node successfully made')
+        #for i in range(10):
+        node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
+        # FIXME treeMe is SUPER slow... :/
+        nodes = treeMe(node, *coll_tup, pool=self.pool)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+        #nodes = treeMe(node, *coll_tup)
+        for n in nodes:
+            n.reparentTo(node)
+        print('coll node successfully made')
         return node
 
     def makeUI(self, ui):  # FIXME this works inconsistently with other stuff

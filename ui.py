@@ -643,6 +643,8 @@ class GuiFrame(DirectObject):
 
     def add_item(self, text, command = None, args = tuple()): 
         args = list(args)
+        if text[0] != ' ':
+            text = ' '+text
         items = list(self.items)
         last_slot = len(self.items)
         if self.__add_head__ == last_slot:
@@ -721,6 +723,8 @@ class GuiFrame(DirectObject):
 
     def del_item(self, text):  # FIXME uniqueness problems
         #d = self.itemsParent.find('*%s*'%text)
+        if text[0] != ' ':
+            text = ' '+text
         d = [i for i in self.items.values() if i.getName().count(text)]
         try:
             self.__del_item__(d[0].getPythonTag('id'))

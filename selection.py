@@ -244,12 +244,12 @@ class BoxSel(HasSelectables,DirectObject):
 
         if taskMgr.hasTaskNamed('boxTask'):  # FIXME this seems a nasty way to control this...
             intoNode = target
-            uuid = intoNode.getPythonTag('uuid')  # FIXME it would see that this are not actually uuids...
+            uuid = intoNode.getTag('uuid')  # FIXME it would see that this are not actually uuids...
         else:
             if not self.__shift__ and self.curSelShown:
                 self.clearSelection()
             intoNode = target.getIntoNode()
-            uuid = intoNode.getPythonTag('uuid')
+            uuid = intoNode.getTag('uuid')
             self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, intoNode, True) )
             self.highlight(uuid, intoNode, False)
 
@@ -550,7 +550,7 @@ class BoxSel(HasSelectables,DirectObject):
         # set up the task to add entries to the data frame TODO own function?
         stop = len(self.frames['data'].items) - 1
         for into in self.curSelShown[:stop]:
-            uuid = into.getPythonTag('uuid')
+            uuid = into.getTag('uuid')
             self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )
         #self.show_stop = len(self.curSelShown[:stop])
         #self.show_count = 0
@@ -562,7 +562,7 @@ class BoxSel(HasSelectables,DirectObject):
             taskMgr.remove(task.getName())
         else:  # adding buttons is pretty slow :/ TODO try to make these in the background?
             into = self.curSelShown[self.show_count]
-            uuid = into.getPythonTag('uuid')
+            uuid = into.getTag('uuid')
             self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )
             self.show_count += 1
         return task.cont

@@ -166,7 +166,7 @@ TREE_MAX_POINTS = 512  # super conventient due to 8 ** 3 = 512 :D basically at t
 #TREE_MAX_POINTS = 1024
 
 
-def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake'):  # TODO in theory this could be multiprocessed
+def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pool = None):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
         for some reason this massively improves performance even w/o the code
@@ -196,9 +196,18 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
         branch = bitmasks[i]  # this is where we can multiprocess
         new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
         subSet = positions[branch]
-        next_leaves.append((level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
-        #yield level2Root, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
+        next_leaves.append((collRoot, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
+        #yield collRoot, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
 
+    def collect_pool(todo):
+        output = []
+        for thing in todo:
+            if thing:
+                if hasattr(thing,'__iter__'):
+                    output += thing  # safe because called all the way down
+                else:
+                    output.append(thing)
+        return output
 
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
@@ -215,14 +224,19 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
                         dists.append(d)
             r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
             #print(c, r)
-            l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
+            l2Node = collRoot.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
-            return [treeMe(*leaf) for leaf in next_leaves]
+            if pool:
+                todo = pool.map(treeMeMap, next_leaves)
+            else:
+                todo = [treeMe(*leaf) for leaf in next_leaves]
+            return collect_pool(todo)
+
         else:
             # go to the next level, if the average division performance across NON EMPTY leaves
-            l2Node = level2Root.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
+            l2Node = collRoot.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
             l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
 
@@ -230,14 +244,22 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
             childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) # we do it this way because it keeps framerates WAY higher dont know why
             childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
-            childNode.setPythonTag('uuid',uuid)
-        return True
+            #childNode.setPythonTag('uuid',uuid)
+            childNode.setTag('uuid',uuid)
+        return l2Node
 
         #if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
             #print("detect a branch with 1")
             #return nextLevel()
 
-    return [treeMe(*leaf) for leaf in next_leaves]
+    if pool:
+        todo = pool.map(treeMeMap, next_leaves)
+    else:
+        todo = [treeMe(*leaf) for leaf in next_leaves]
+    return collect_pool(todo)
+
+def treeMeMap(leaf):
+    return treeMe(*leaf)
 
 def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake'):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
@@ -360,9 +382,11 @@ def main():
     from panda3d.core import PStatClient
 
     from selection import BoxSel
-    from util import ui_text, console
+    from util import ui_text, console, exit_cleanup
     from ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
+    import sys
+    sys.modules['core'] = sys.modules['panda3d.core']
 
     PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
@@ -378,8 +402,12 @@ def main():
     cc = CameraControl()
     base.disableMouse()
     con = console()
+    exit_cleanup()
 
     #profileOctit()
+
+    from multiprocessing import Pool
+    pool = Pool()
 
     #counts = [1,250,510,511,512,513,1000,2000,10000]
     #counts = [1000,1000]
@@ -398,7 +426,7 @@ def main():
         #uuids = np.arange(0,nnodes) * (i + 1)
         uuids = np.array(["%s"%uuid4() for _ in range(nnodes)])
         geomCollide = np.ones(nnodes) * .5
-        out = treeMe(level2Root, positions, uuids, geomCollide)
+        out = treeMe(level2Root, positions, uuids, geomCollide, pool = pool)
         #print(out)
         render.attachNewNode(makeSimpleGeom(positions,np.random.rand(4)))
 

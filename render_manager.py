@@ -72,7 +72,7 @@ class renderManager(DirectObject):
     def add_coll_task(self, task):
         #if self.add_queue:
         try:
-            for i in range(40):
+            for i in range(50):
                 #self.add_queue.get_nowait().reparentTo(self.collRoot)
                 self.add_queue.popleft().reparentTo(self.collRoot)
         #else:
@@ -267,7 +267,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(1):
+        for _ in range(10):
             r = RAND_REQUEST()
             self.submit_request(r)
 

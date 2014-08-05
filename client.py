@@ -195,7 +195,7 @@ def main():
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
 
-    rendMan = renderManager()
+    rendMan = renderManager(clientLoop)
 
     bs = BoxSel(frames)
 

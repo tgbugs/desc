@@ -1,4 +1,9 @@
 import pickle
+from multiprocessing import Pool, Manager
+from multiprocessing import Pipe as mpp
+from multiprocessing import Queue as mpq
+from multiprocessing.queues import Empty
+from concurrent.futures import ProcessPoolExecutor
 
 from IPython import embed
 
@@ -8,11 +13,11 @@ from panda3d.core import GeomNode, NodePath, PandaNode
 from dataIO import treeMe
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 
-from multiprocessing import Pool
 #import sys  # we shouldnt need to call this here
 #sys.modules['core'] = sys.modules['panda3d.core']
 
 from prof import profile_me
+
 
 
 class renderManager(DirectObject):
@@ -26,7 +31,11 @@ class renderManager(DirectObject):
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
     
-    def __init__(self):
+    def __init__(self, event_loop = None):
+        self.event_loop = event_loop
+        self.manager = Manager()
+        self.q = self.manager.Queue()
+
         geomRoot = render.find('geomRoot')
         if not geomRoot:
             geomRoot = render.attachNewNode('geomRoot')
@@ -102,6 +111,39 @@ class renderManager(DirectObject):
         #except KeyError:
             #pass
 
+    def make_nt_task(self, request_hash, bam, coll, ui, cache_ = False):
+        """ given a node tuple return a task that will render/cache it when finished """
+        if not cache_:
+            if not bam.getNumParents():
+                self.geomRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
+            else:
+                print('already being rendered', bam)
+
+        #send, recv = coll
+        #q = coll
+        def coll_task(task):
+            #try:
+            #if send.closed:
+                #coll[0].send('test')
+                #print('FAIL pipe not closed')
+                #embed()
+            #except BrokenPipeError:
+            try:
+                nodes = self.q.get_nowait()
+                #nodes = recv.recv()
+                print('SUCCESS pipe is closed')
+                #print('RECEIVED',nodes)
+                self.cache[request_hash] = bam, nodes, ui
+                if not cache_:
+                    self.render(bam, nodes, ui)
+                #recv.close()
+                taskMgr.remove(task.getName())
+            except Empty:
+                print('nothing yet')
+            finally:
+                return task.cont
+        taskMgr.add(coll_task,'coll_task %s'%request_hash)
+
     def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
         """ this is the callback used by the data protocol """
         #print('cache updated')
@@ -109,31 +151,37 @@ class renderManager(DirectObject):
         #capture_datatuple(data_tuple)  # XXX for debugging selection
         try:
             #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
-            if not self.cache[request_hash]:
+            if not self.cache[request_hash]:  # request expected
                 #self.render(*self.cache[request_hash])
                 #print(len(node_tuple))
                 node_tuple = self.make_nodes(request_hash, data_tuple)
-                self.cache[request_hash] = node_tuple
-                self.render(*node_tuple)
+                self.make_nt_task(request_hash, *node_tuple)
+
         except KeyError:
             print("predicted data view cached")
             node_tuple = self.make_nodes(request_hash, data_tuple)
-            self.cache[request_hash] = node_tuple
+            self.make_nt_task(request_hash, *node_tuple, cache=True)
+            #self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
         if not bam.getNumParents():
             self.geomRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
         else:
             print('already being rendered', bam)
+
+        [n.reparentTo(self.collRoot) for n in coll]
+
+
         #bam.reparentTo(self.geomRoot)
         #self.collRoot.attachNewNode(coll)
-        [c.reparentTo(self.collRoot) for c in coll.getChildren()]  # FIXME too slow!
+        #[c.reparentTo(self.collRoot) for c in coll.getChildren()]  # FIXME too slow!
         #self.uiRoot.attachNewNode(ui)
         #print(self.uiRoot.getChildren())  # utf-8 errors
 
     def make_nodes(self, request_hash, data_tuple):
         """ fire and forget """
         bam = self.makeBam(data_tuple[0])  #needs to return a node
+        bam.setName(repr(request_hash))
         coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
         #from panda3d.core import GeomVertexReader
         #data = GeomVertexReader(bam.getGeom(0).getVertexData(), 'vertex')
@@ -144,7 +192,7 @@ class renderManager(DirectObject):
         coll = self.makeColl(coll_tup)  #needs to return a node
         ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
-        [n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
+        #[n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
         #[print(n) for n in node_tuple]
         return node_tuple
 
@@ -155,17 +203,28 @@ class renderManager(DirectObject):
         #node.addGeom(out)
         return out
 
-    @profile_me
+    #@profile_me
     def makeColl(self, coll_tup):
-        #for i in range(10):
         node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
-        # FIXME treeMe is SUPER slow... :/
-        nodes = treeMe(node, *coll_tup, pool=self.pool)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+
+        #nodes = treeMe(node, *coll_tup, pool=self.pool)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
+        #return nodes
+
+        #send, recv = mpp()
+        #q = mpq()
+        pos, uuid, geom = coll_tup
+        self.event_loop.run_in_executor(ProcessPoolExecutor(), treeMe, node, pos, uuid, geom, None, None, None, None, None, self.q)
+        #self.event_loop.run_in_executor(ProcessPoolExecutor(), treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
+        #return send, recv
+        #embed()
+        #print(q.get())
+        return None
+
+
         #nodes = treeMe(node, *coll_tup)
-        for n in nodes:
-            n.reparentTo(node)
-        print('coll node successfully made')
-        return node
+        #for n in nodes:
+            #n.reparentTo(node)
+        #print('coll node successfully made')
 
     def makeUI(self, ui):  # FIXME this works inconsistently with other stuff
         """ we may not need this if we stick all the UI data in geom or coll nodes? """

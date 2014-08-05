@@ -6,7 +6,7 @@ import numpy as np
 from IPython import embed
 
 from direct.showbase.DirectObject import DirectObject
-from panda3d.core import TextNode
+from panda3d.core import TextNode, PandaNode, NodePath
 from panda3d.core import CollisionNode, CollisionSphere
 from panda3d.core import BitMask32
 
@@ -165,13 +165,24 @@ TREE_LOGIC = np.array([
 TREE_MAX_POINTS = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
 #TREE_MAX_POINTS = 1024
 
+def collect_pool(todo):
+    output = []
+    for thing in todo:
+        if thing:
+            if hasattr(thing,'__iter__'):
+                output += thing  # safe because called all the way down
+            else:
+                output.append(thing)
+    return output
 
-def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pool = None):  # TODO in theory this could be multiprocessed
+def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pool = None, pipe = None):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
         for some reason this massively improves performance even w/o the code
         for mouse over adding and removing subsets of nodes.
     """
+    #if pool:
+        #collRoot = NodePath(PandaNode(''))
 
     num_points = len(positions)
 
@@ -198,17 +209,6 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         subSet = positions[branch]
         next_leaves.append((collRoot, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
         #yield collRoot, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
-
-    def collect_pool(todo):
-        output = []
-        for thing in todo:
-            if thing:
-                if hasattr(thing,'__iter__'):
-                    output += thing  # safe because called all the way down
-                else:
-                    output.append(thing)
-        return output
-
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
         #leaf_avg = np.mean([len(tup[1]) for tup in next_leaves if len(tup[1]) > 0])
@@ -256,7 +256,17 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         todo = pool.map(treeMeMap, next_leaves)
     else:
         todo = [treeMe(*leaf) for leaf in next_leaves]
-    return collect_pool(todo)
+
+    if pipe:
+        #print(todo)
+        to_send = collect_pool(todo)
+        print('trying to send data! len = ', len(to_send))
+        #pipe.send(to_send)
+        #pipe.close()
+        pipe.put(to_send)
+        return None
+    else:
+        return collect_pool(todo)
 
 def treeMeMap(leaf):
     return treeMe(*leaf)

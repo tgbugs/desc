@@ -216,20 +216,29 @@ class dataServerProtocol(asyncio.Protocol):
             if request is not None:
                 data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
                 if data_stream is None:
-                    pipes.append(mpp())
-                    self.event_loop.run_in_executor( None, make_response, pipes[-1][0], request, self.respMaker )
+                    send, recv = mpp()
+                    pipes.append(recv)
+                    #pipes.append(mpp())
+                    self.event_loop.run_in_executor( None, make_response, send, request, self.respMaker )
                     for_pred.append(request)
                 else:
                     self.transport.write(data_stream)
                     #print('WHAT WE GOT THAT HERE')
                     #print('data stream tail',data_stream[-10:])
 
-        for _, recv in pipes:  # this blocks hardcore?
-            data_stream = recv.recv_bytes()
-            self.transport.write(data_stream)
-            recv.close()
-            self.rcm.update_cache(request.hash_, data_stream)
-            #print(self.pprefix,'req tail',data_stream[-10:])
+        while 1:
+            pops = []
+            for i, recv in enumerate(pipes):
+                if recv.poll():
+                    data_stream = recv.recv_bytes()
+                    self.transport.write(data_stream)
+                    recv.close()
+                    pops.append(i)
+                    self.rcm.update_cache(request.hash_, data_stream)
+            for index in pops:
+                pipes.pop(index)
+            if not pipes:
+                break
 
         print(self.pprefix, 'finished processing requests')
         
@@ -332,6 +341,7 @@ def make_response(pipe, request, respMaker):
     data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
     pipe.send_bytes(data_stream)
     pipe.close()
+    del pipe
 
 def request_prediction(pipe, request, respMaker):
     for preq in respMaker.make_predictions(request):

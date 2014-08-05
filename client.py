@@ -107,11 +107,11 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             #self.event_loop.run_in_executor( None, self.set_nodes, request_hash, data_tuple )
             #self.event_loop.call_soon_threadsafe(self.set_nodes, request_hash, data_tuple)  #still segfaults even if this is threadsafe
             #sleep(.1)
-            try:
-                if not self.cache[request_hash]:
-                    self.set_nodes(request_hash, data_tuple)
-            except KeyError:
-                pass  # FIXME currently not caching anything to hunt down the lockup bug
+            #try:
+                #if not self.cache[request_hash]:
+            self.set_nodes(request_hash, data_tuple)
+            #except KeyError:
+                #pass  # FIXME currently not caching anything to hunt down the lockup bug
             #self.set_nodes(*output)
             self.__block__ = self.__block__[self.__block_size__:]
             self.__block_size__ = None

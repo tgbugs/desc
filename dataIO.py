@@ -165,28 +165,6 @@ TREE_LOGIC = np.array([
 TREE_MAX_POINTS = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
 #TREE_MAX_POINTS = 1024
 
-octit = {
-    (0,0,0):0,
-    (0,0,1):1,
-    (0,1,0):2,
-    (0,1,1):3,
-    (1,0,0):4,
-    (1,0,1):5,
-    (1,1,0):6,
-    (1,1,1):7,
-}
-octit = {
-    (False,False,False):0,
-    (False,False,True):1,
-    (False,True,False):2,
-    (False,True,True):3,
-    (True,False,False):4,
-    (True,False,True):5,
-    (True,True,False):6,
-    (True,True,True):7,
-}
-
-
 
 def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake'):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
@@ -211,8 +189,7 @@ def treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None
     
     #the 8 conbinatorial cases
     for i in range(num_points):
-        #index = octit(partition[i])
-        index = octit[tuple(partition[i])]
+        index = octit(partition[i])
         bitmasks[index][i] = True
     next_leaves = []
     for i in range(8):
@@ -320,7 +297,7 @@ def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = Non
 
     return nextLevel()
 
-def _octit(position):  # use this not entirely sure why it is better, maybe fewer missed branches?
+def octit(position):  # use this not entirely sure why it is better, maybe fewer missed branches?
     """ take the booleans returned from positions > center and map to cases """
     x, y, z = position
     if x:
@@ -346,20 +323,31 @@ def _octit(position):  # use this not entirely sure why it is better, maybe fewe
             else:
                 return 7
 
+_octit = {
+    (False,False,False):0,
+    (False,False,True):1,
+    (False,True,False):2,
+    (False,True,True):3,
+    (True,False,False):4,
+    (True,False,True):5,
+    (True,True,False):6,
+    (True,True,True):7,
+}
+
 def profileOctit():
     from prof import profile_me
 
-    data = np.random.rand(10000000,3) - .5 > 0
+    data = np.random.rand(1000000,3) - .5 > 0
 
     @profile_me
     def a(data):
         for d in data:
-            altoctit(d)
+            z = octit(d)
 
-    @profile_me #faster
+    @profile_me # using the dict is SUPER slow O_O
     def b(data):
         for d in data:
-            octit(d)
+            z = _octit[tuple(d)]
 
     a(data)
     b(data)
@@ -371,7 +359,7 @@ def main():
     from panda3d.core import loadPrcFileData
     from panda3d.core import PStatClient
 
-    from dragsel import BoxSel
+    from selection import BoxSel
     from util import ui_text, console
     from ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
@@ -411,7 +399,7 @@ def main():
         uuids = np.array(["%s"%uuid4() for _ in range(nnodes)])
         geomCollide = np.ones(nnodes) * .5
         out = treeMe(level2Root, positions, uuids, geomCollide)
-        print(out)
+        #print(out)
         render.attachNewNode(makeSimpleGeom(positions,np.random.rand(4)))
 
     #uiRoot = render.find('uiRoot')

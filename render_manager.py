@@ -1,10 +1,12 @@
 import pickle
 import zlib
+import time
 from collections import deque
 from multiprocessing import Pool, Manager
 from multiprocessing import Pipe as mpp
 from multiprocessing import Queue as mpq
 from multiprocessing.queues import Empty
+from queue import Queue as tq
 from concurrent.futures import ProcessPoolExecutor
 
 from IPython import embed
@@ -36,9 +38,10 @@ class renderManager(DirectObject):
     def __init__(self, event_loop = None):
         self.event_loop = event_loop
         self.__inc_nodes__ = {}
+        self.add_queue = deque()
+        #self.add_queue = tq()
         #self.manager = Manager()
         #self.q = self.manager.Queue()
-        self.add_queue = deque
 
         geomRoot = render.find('geomRoot')
         if not geomRoot:
@@ -66,10 +69,22 @@ class renderManager(DirectObject):
         self.accept('n', self.rand_request)
         self.accept('c', self.embed)
 
-        self.pool = Pool()
+        #self.pool = Pool()
+        #taskMgr.add(self.add_coll_task,'add_coll_task')
+        self.ppe = ProcessPoolExecutor()
 
     def add_coll_task(self, task):
-        self.add_queue.pop_left().reparentTo(self.collRoot)
+        #if self.add_queue:
+        try:
+            #self.add_queue.get_nowait().reparentTo(self.collRoot)
+            self.add_queue.popleft().reparentTo(self.collRoot)
+            print('l2 node added')
+        #else:
+        #except IndexError:
+        except Empty:
+            taskMgr.remove('add_coll_task')
+        finally:
+            return task.cont
 
     def embed(self):
         embed()
@@ -132,12 +147,26 @@ class renderManager(DirectObject):
         #q = coll
         def coll_task(task):
             try:
+                print('trying to poll')
                 if coll.poll:
+                    print('polled?')
                     #nodes = pickle.loads(zlib.decompress(coll.recv_bytes()))
+                    #t1 = time.time()
                     node = coll.recv()
+                    print('received')
+                    if node == 'STOP':
+                        raise EOFError
+                    #t2 = time.time()
+                    #dt = t2 - t1
+                    #print('dt for recv was: ', dt)  #so apparently this goes pretty darned fast?
                     self.__inc_nodes__[request_hash].append(node)
                     if not cache_:  # render the l2 node!
-                        node.reparentTo(self.collRoot)
+                        #node.reparentTo(self.collRoot)
+                        self.add_queue.append(node)
+                        print(node)
+                        #self.add_queue.put(node)
+                        if not taskMgr.hasTaskNamed('add_coll_task'):
+                            taskMgr.add(self.add_coll_task,'add_coll_task')
             except EOFError:
                 print('SUCCESS pipe is closed')
                 coll.close()
@@ -235,8 +264,8 @@ class renderManager(DirectObject):
         send, recv = mpp()
         #q = mpq()
         pos, uuid, geom = coll_tup
-        self.event_loop.run_in_executor(ProcessPoolExecutor(), treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
-        #self.event_loop.run_in_executor(ProcessPoolExecutor(), treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
+        self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
+        #self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
         #return send, recv
         #embed()
         #print(q.get())
@@ -264,7 +293,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(10):
+        for _ in range(1):
             r = RAND_REQUEST()
             self.submit_request(r)
 

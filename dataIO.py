@@ -185,8 +185,8 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         for some reason this massively improves performance even w/o the code
         for mouse over adding and removing subsets of nodes.
     """
-    #if pool:
-        #collRoot = NodePath(PandaNode(''))
+    #if pipe:
+    #collRoot = NodePath(PandaNode(''))
 
     num_points = len(positions)
 
@@ -234,6 +234,14 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
             if pool:
                 todo = pool.map(treeMeMap, next_leaves)
+            elif pipe:
+                print("hit an early pip")
+                to_send = collect_pool(todo)
+                for s in to_send:
+                    pipe.send(s)
+                pipe.send('STOP')
+                pipe.close()
+                return None
             else:
                 todo = [treeMe(*leaf) for leaf in next_leaves]
             return collect_pool(todo)
@@ -256,10 +264,10 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             #print("detect a branch with 1")
             #return nextLevel()
 
-    if pool:
-        todo = pool.map(treeMeMap, next_leaves)
-    else:
-        todo = [treeMe(*leaf) for leaf in next_leaves]
+    #if pool:
+        #todo = pool.map(treeMeMap, next_leaves)
+    #else:
+    todo = [treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
         #print(todo)
@@ -267,11 +275,12 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         to_send = collect_pool(todo)
         print('trying to send data! len = ', len(to_send))
         for s in to_send:
-            sleep(.001)
             pipe.send(s)
-        pipe.close()
+        pipe.send('STOP')
+        pipe.close()  #FIXME apparently this causes ALL sorts of problems
+        del pipe
         #pipe.put(to_send)
-        return None
+        #return None
     else:
         return collect_pool(todo)
 

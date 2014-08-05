@@ -161,8 +161,6 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
                 taskMgr.remove(task.getName())
             except (ConnectionRefusedError, TimeoutError) as e:
                 self.__timer_start__ = time.time()
-            except:
-                embed()
             finally:
                 return task.cont
         else:

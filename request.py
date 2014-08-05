@@ -113,7 +113,6 @@ class DataByteStream:
 
         print("response stream is being made")
 
-        print('compressed data tail',data[-100:])
 
         data_stream = cls.OP_DATA + request_hash + data_size + n_fields + offsets + data
         
@@ -127,6 +126,7 @@ class DataByteStream:
             #f.write(lines)
             #f.write('\n\n')
 
+        print('compressed data tail',data[-100:])
         return data_stream
 
     @classmethod

@@ -191,7 +191,7 @@ class dataServerProtocol(asyncio.Protocol):
 
         else:
             request_generator = self.process_data(data)
-            self.process_requests(request_generator)
+            self.process_requests(request_generator)  # FIXME too many calls to this...
 
     def eof_received(self):
         os.system("echo 'firewall is now DRAGONS!'")  # TODO actually close
@@ -226,21 +226,35 @@ class dataServerProtocol(asyncio.Protocol):
                     #print('WHAT WE GOT THAT HERE')
                     #print('data stream tail',data_stream[-10:])
 
-        while 1:
-            pops = []
-            for i, recv in enumerate(pipes):
-                if recv.poll():
-                    data_stream = recv.recv_bytes()
-                    self.transport.write(data_stream)
-                    recv.close()
-                    pops.append(i)
-                    self.rcm.update_cache(request.hash_, data_stream)
-            for index in pops:
-                pipes.pop(index)
-            if not pipes:
-                break
+        if pipes:
+            while 1:
+                pops = []
+                for i, recv in enumerate(pipes):
+                    try:
+                        if recv.poll():  # FIXME why does this not raise an EOFError?
+                            data_stream = recv.recv_bytes()
+                            self.transport.write(data_stream)
+                            self.rcm.update_cache(request.hash_, data_stream)
+                            recv.close()
+                            pops.append(i)
+                    except (EOFError, OSError) as e:
+                        print(e)
+                    except BaseException:
+                        embed()
+                
+                if pops:
+                    pops.sort()
+                    pops.reverse()  # so that the index doesn't change
+                    print(pipes)
+                    print('things to pop',pops)
+                    for index in pops:
+                        pipes.pop(index)
+                if not pipes:
+                    break
 
-        print(self.pprefix, 'finished processing requests')
+            print(self.pprefix, 'finished processing requests')
+        else:
+            print(self.pprefix, 'there were no requests')
         
         #do prediction
         if pred < 1:
@@ -339,8 +353,11 @@ def make_response(pipe, request, respMaker):
     rh =  request.hash_
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
     data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+    print('sending data stream')
     pipe.send_bytes(data_stream)
+    print('sent data stream')
     pipe.close()
+    print('closed pipe')
     del pipe
 
 def request_prediction(pipe, request, respMaker):
@@ -355,7 +372,8 @@ def p_recv_future(p_recv, future):
 
 def main():
     serverLoop = asyncio.get_event_loop()
-    serverLoop.set_default_executor(ProcessPoolExecutor())
+    ppe = ProcessPoolExecutor()
+    serverLoop.set_default_executor(ppe)
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)

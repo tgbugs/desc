@@ -129,10 +129,14 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         if exc is None:
             print('Data connection lost')
             print('trying to reconnect')
-            self.event_loop.call_soon_threadsafe(self.event_loop.stop)  # this is a hack
-            #sleep(1)
-            self.__timer_start__ = time.time()
-            taskMgr.add(self.recon_task,'recon_task')  # FIXME
+
+            #embed()
+            return asyncio.Task(self.connection_task(), loop=self.event_loop)
+
+            #self.event_loop.call_soon_threadsafe(self.event_loop.stop)  # this is a hack
+            #self.__timer_start__ = time.time()
+            #taskMgr.add(self.recon_task,'recon_task')  # FIXME
+
             #self.reup_con()
             #t = asyncio.Task(self.reup_con(), loop=self.event_loop)
             #t = asyncio.Task(self.reup_con, loop=self.event_loop)  # FIXME replace with self.event_loop.create_task(self.reup_con) 3.4.2
@@ -145,6 +149,23 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
             #but that could get really nast if we have a partition and
             #we try to reconnect repeatedly
             #asyncio.get_event_loop().close()  # FIXME probs don't need this
+
+    @asyncio.coroutine
+    def connection_task(self):
+        while 1:
+            coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, event_loop=self.event_loop, ssl=None)
+            try:
+                _, conProtocol = yield from asyncio.Task(coro_conClient, loop=self.event_loop)
+                self.token = yield from asyncio.wait_for(conProtocol.future_token, None, loop=self.event_loop)
+                #self.token = conProtocol.future_token.result()
+                coro_dataClient = self.event_loop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
+                yield from asyncio.Task(coro_dataClient, loop=self.event_loop)
+                break
+            except ConnectionRefusedError:
+                yield from asyncio.sleep(5, loop=self.event_loop)
+
+        #_, conProtocol = yield from asyncio.wait_for(coro_conClient, loop=self.event_loop)
+
 
     def recon_task(self, task):  # FIXME
         if time.time() - self.__timer_start__ > 10:

@@ -261,9 +261,9 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         #print(todo)
         to_send = collect_pool(todo)
         print('trying to send data! len = ', len(to_send))
-        #pipe.send(to_send)
-        #pipe.close()
-        pipe.put(to_send)
+        pipe.send(to_send)
+        pipe.close()
+        #pipe.put(to_send)
         return None
     else:
         return collect_pool(todo)

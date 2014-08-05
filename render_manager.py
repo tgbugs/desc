@@ -33,8 +33,8 @@ class renderManager(DirectObject):
     
     def __init__(self, event_loop = None):
         self.event_loop = event_loop
-        self.manager = Manager()
-        self.q = self.manager.Queue()
+        #self.manager = Manager()
+        #self.q = self.manager.Queue()
 
         geomRoot = render.find('geomRoot')
         if not geomRoot:
@@ -123,15 +123,18 @@ class renderManager(DirectObject):
         #q = coll
         def coll_task(task):
             #try:
-            #if send.closed:
-                #coll[0].send('test')
-                #print('FAIL pipe not closed')
-                #embed()
-            #except BrokenPipeError:
+            if coll.poll:
+                nodes = coll.recv()
+                self.cache[request_hash] = bam, nodes, ui
+                if not cache_:
+                    self.render(bam, nodes, ui)
+                coll.close()
+                taskMgr.remove(task.getName())
+                print('SUCCESS pipe is closed')
+            """
             try:
                 nodes = self.q.get_nowait()
                 #nodes = recv.recv()
-                print('SUCCESS pipe is closed')
                 #print('RECEIVED',nodes)
                 self.cache[request_hash] = bam, nodes, ui
                 if not cache_:
@@ -142,6 +145,7 @@ class renderManager(DirectObject):
                 print('nothing yet')
             finally:
                 return task.cont
+            #"""
         taskMgr.add(coll_task,'coll_task %s'%request_hash)
 
     def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
@@ -160,7 +164,7 @@ class renderManager(DirectObject):
         except KeyError:
             print("predicted data view cached")
             node_tuple = self.make_nodes(request_hash, data_tuple)
-            self.make_nt_task(request_hash, *node_tuple, cache=True)
+            self.make_nt_task(request_hash, *node_tuple, cache_=True)
             #self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):
@@ -210,15 +214,15 @@ class renderManager(DirectObject):
         #nodes = treeMe(node, *coll_tup, pool=self.pool)  # positions, uuids, geomCollide (should be the radius of the bounding volume)
         #return nodes
 
-        #send, recv = mpp()
+        send, recv = mpp()
         #q = mpq()
         pos, uuid, geom = coll_tup
-        self.event_loop.run_in_executor(ProcessPoolExecutor(), treeMe, node, pos, uuid, geom, None, None, None, None, None, self.q)
+        self.event_loop.run_in_executor(ProcessPoolExecutor(), treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
         #self.event_loop.run_in_executor(ProcessPoolExecutor(), treeMe, node, pos, uuid, geom, None, None, None, None, None, send)
         #return send, recv
         #embed()
         #print(q.get())
-        return None
+        return recv
 
 
         #nodes = treeMe(node, *coll_tup)

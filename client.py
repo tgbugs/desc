@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.4
 
+
 import ssl
 import time
 from asyncio import get_event_loop
@@ -7,9 +8,16 @@ from threading import Thread
 
 from IPython import embed
 
+#import rpdb2
+#rpdb2.start_embedded_debugger("asdf123")
+#rpdb2.settrace()
+
 
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
     #that would vastly simplify life...? ehhhhh
+
+def startup():
+    return "starting"
 
 def main():
     import sys
@@ -55,7 +63,10 @@ def main():
     #asyncio and network setup
     clientLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
-    clientLoop.set_default_executor(ppe)
+    #startup = lambda: "STARTING"
+    out = ppe.submit(startup)  # FIXME WAT WAT WAT mega bug with starting the process pool for the first time in run_in_executor, something with future state = running
+    print(out)
+    #clientLoop.set_default_executor(ppe)
 
     #make sure we can exit
     el = exit_cleanup(clientLoop, ppe)  #use this to call stop() on run_forever

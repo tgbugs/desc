@@ -187,7 +187,10 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     """
     #if pipe:
         #pipe.send('START')  # this doesnt seem to help
-    #collRoot = NodePath(PandaNode(''))
+        #collRoot = NodePath(PandaNode(''))
+
+    if pipe:
+        print('yes we are trying to treeMe')
 
     num_points = len(positions)
 
@@ -268,11 +271,15 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     todo = [treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
-        print(pipe)
-        to_send = collect_pool(todo)
-        for s in to_send:
-            pipe.send(s)
-        pipe.close()
+        print("wtf send")
+        try:
+            to_send = collect_pool(todo)
+            for s in to_send:
+                pipe.send(s)
+            pipe.close()
+            print("send done",pipe)
+        except BaseException as e:
+            print('send fail',e)
         """
         try:
             #print('trying to send data! len = ', len(to_send))

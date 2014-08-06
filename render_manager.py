@@ -23,6 +23,7 @@ from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 
 from prof import profile_me
 
+#import rpdb2
 
 
 class renderManager(DirectObject):
@@ -157,7 +158,7 @@ class renderManager(DirectObject):
                 print('already being rendered', bam)
 
         with self.pipeLock:
-            print('got pipelock')
+            #print('got pipelock')
             self.__inc_nodes__[request_hash] = []  # FIXME this could overwrite received nodes?
             self.pipes[request_hash] = coll, bam, ui, render_
             if not taskMgr.hasTaskNamed('coll_task'):
@@ -313,7 +314,10 @@ class renderManager(DirectObject):
         #return treeMe(node, pos, uuid, geom, None, None, None, request_hash)
         recv, send = mpp(False)
         #try:
-        self.event_loop.run_in_executor(None, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
+        #rpdb2.setbreak()
+        future = self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
+        #embed()
+        print('yes we are running stuff')
         return recv
         #except RuntimeError:
             #return None  # happens at shutdown

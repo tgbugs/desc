@@ -82,6 +82,8 @@ class DataByteStream:
     #FIELDS_TYPE = 'B'  # this gives an 8bit unsigned int
     #OFFSET_TYPE = 'I'  # this gives a 32bit unsigned int
 
+    DEBUG = False
+
     @classmethod
     def makeTokenStream(cls, token):
         if len(token) != cls.LEN_TOKEN:
@@ -188,10 +190,11 @@ class DataByteStream:
         hashStart = -data_size - offLen - cls.LEN_HEADER_FIXED + cls.LEN_OPCODE
         request_hash = bytes_[hashStart:hashStart + cls.LEN_HASH]
 
-        print('header',bytes_[:-data_size])
 
         offblock = bytes_[-data_size - offLen:-data_size]
-        print('compressed data length', len(bytes_[-data_size:]))
+        if cls.DEBUG:
+            print('header',bytes_[:-data_size])
+            print('compressed data length', len(bytes_[-data_size:]))
         if cls.LOCAL:
             data = bytes_[-data_size:]  # this is gurantted to end because of the code in data_received XXX
         else:

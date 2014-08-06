@@ -171,7 +171,7 @@ class renderManager(DirectObject):
         with self.pipeLock:
             pops = []
             recv_counter = 0
-            done = 0
+            #done = 0
             for request_hash, (recv, bam, ui, render_) in self.pipes.items():  # TODO there is a way to listen to multiple pipes iirc
                 if recv_counter >= self.RECV_LIMIT:
                     break
@@ -179,8 +179,8 @@ class renderManager(DirectObject):
                     if recv.poll():
                         nodes = recv.recv()
                         self.cache[request_hash] = bam, nodes, ui
-                        #recv.close()
-                        #to_pop.append(request_hash)
+                        recv.close()
+                        pops.append(request_hash)
 
                         #recv_counter += 1
                         #self.__inc_nodes__[request_hash].append(node)
@@ -188,9 +188,10 @@ class renderManager(DirectObject):
                             self.coll_add_queue.extend(nodes)
                             if not taskMgr.hasTaskNamed('add_collision'):
                                 taskMgr.add(self.add_collision_task,'add_collision')
-                except (EOFError, OSError):  # recv() raises this once the other end is closed
-                    done += 1
-                    recv.close()
+                except EOFError:  # recv() raises this once the other end is closed
+                    pass
+                    #done += 1
+                    #recv.close()
                     #embed()
                     #print('processing done, closing the pipe')
                     #recv.close()
@@ -199,14 +200,14 @@ class renderManager(DirectObject):
                     #self.cache[request_hash] = bam, nodes, ui
                     #nodes = self.__inc_nodes__[request_hash]
 
-            #for rh in pops:
-                #tup = self.pipes.pop(rh)
-                #print('popped',tup)
-            #pops = []
+            for rh in pops:
+                tup = self.pipes.pop(rh)
+                print('popped',tup)
+            pops = []
 
             #print(done, len(self.pipes))
-            if done == len(self.pipes):
-            #if not self.pipes:
+            #if done == len(self.pipes):
+            if not self.pipes:
                 print('we are done')
                 taskMgr.remove('coll_task')
         return task.cont

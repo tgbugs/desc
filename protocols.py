@@ -376,7 +376,7 @@ class dataServerProtocol(asyncio.Protocol):
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
             yield from DataByteStream.decodePickleStreams(split)
 
-    def process_requests(self, requests:'iterable', pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
+    def process_requests(self, requests:'iterable', pred = 1):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         #print(self.pprefix,'processing requests')
         pipes = []
         for_pred = []
@@ -400,10 +400,10 @@ class dataServerProtocol(asyncio.Protocol):
                 for i, recv in enumerate(pipes):
                     try:
                         if recv.poll():
-                            data_stream = recv.recv_bytes()  # this would raise EOF but we pop
-                            self.transport.write(data_stream)
-                            self.sent.append(data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH])
-                            self.rcm.update_cache(request.hash_, data_stream)
+                            _data_stream = recv.recv_bytes()  # this would raise EOF but we pop
+                            self.transport.write(_data_stream)
+                            self.sent.append(_data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH])
+                            self.rcm.update_cache(request.hash_, _data_stream)
                             recv.close()
                             pops.append(i)
                     except EOFError:

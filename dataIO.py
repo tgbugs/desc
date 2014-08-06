@@ -286,9 +286,11 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             except BaseException as e:
                 print(request_hash,'second level',e)
                 print(len(to_send))
+                pipe.close()
         except BaseException as e:
             print(request_hash,e)
             print(len(to_send))
+            pipe.close()
         """
         try:  # FIXME we shouldn't need this, pipe should close() on gc on error
             for s in to_send:

@@ -1,268 +1,25 @@
 #!/usr/bin/env python3.4
 
-import asyncio
 import pickle
 import ssl
-import os  # for dealing with firewall stuff
 import sys
+from asyncio import get_event_loop
 from uuid import uuid4
 from collections import defaultdict, deque
-from time import sleep
-#from queue import Queue
 from threading import Thread
-from multiprocessing import Pipe as mpp
-#from multiprocessing import Queue as mpq
-from multiprocessing import Manager
-from multiprocessing import Process
-from multiprocessing import Lock as mpl
-from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
-from numpy.random import bytes as make_bytes
 from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import Request, DataByteStream, FAKE_PREDICT
 from test_objects import makeSimpleGeom
-
-#from massive_bam import massive_bam as example_bam
-from small_bam import small_bam as example_bam
+from request import FAKE_PREDICT
 
 #fix sys module reference
 sys.modules['core'] = sys.modules['panda3d.core']
 
 
 #TODO logging...
-class connectionServerProtocol(asyncio.Protocol):  # this is really the auth server protocol
-    """ Define the protocol for handling basic connections
-        should spin up client specific connections?
-
-        Turns out that this automatically spins up isolated
-        versions of itself for each connection, we just need
-        to make sure that we print the client info ahead of the
-        message so we know which connection we are getting data
-        about
-    """
-    def __new__(cls, tm):
-        cls.tm = tm
-        cls.__new__ = super().__new__
-        return cls
-
-    def connection_made(self, transport):
-        cert = transport.get_extra_info('peercert')
-        if not cert:
-            #make a cert, sign it ourselves so we know it came from us, and send it to the client
-            #use that cert id to get stored data if needs be
-            #this is NOT secure
-            pass
-        self.transport = transport
-        self.pprefix = transport.get_extra_info('peername')
-        self.ip = transport.get_extra_info('peername')[0]
-        #for now we are just going to give clients peer certs and not worry about it
-
-        #client telling us this is a new user request
-
-        #client telling us this is an existing auth
-
-        #client telling us this is 
-
-        #not new user
-        #if not add it
-        #request the passphrase locked private key #this fails because people need to be able to change passwords >_<
-
-        #make some bytes
-        #encrypt those bytes with their public key
-        #send them the encrypted bytes
-        #wait to get the unencrypted bytes back
-        #check if they match #make sure this is done in constant time
-
-
-
-        #print('connection from: %s'%peername)
-
-
-        #TODO I think we need to have a way to track 'sessions' or 'clients'
-            #NOT users, though that would still be useful if people are using
-            #the same system
-            #however, auth will all be done locally on the machine with the
-            #proper protections to prevent a malicious client fubar all
-        #since we all we really want is to be able to give a unique id its
-        #existing data...
-        #the ident and auth code probably needs to go here since establishing
-        #the transport is PRIOR to that, getting the SSLed channel comes first
-        #but we don't want application auth mixed up in that, so do it here
-        #XXX I suppose that we could do it all with ssl certs?
-            #ie: don't implement your own auth system tis hard
-
-        #if everything succeeds
-
-    def data_received(self, data):  # data is a bytes object
-        done = False
-        print(self.pprefix,data)
-        if data == b'I promis I real client, plz dataz':
-            self.transport.write(b'ok here dataz')
-            token = make_bytes(DataByteStream.LEN_TOKEN)
-            token_stream = DataByteStream.makeTokenStream(token)
-            self.tm.update_ip_token_pair(self.ip, token)
-            self.open_data_firewall(self.ip)
-            #DO ALL THE THINGS
-            #TODO pass that token value paired with the peer cert to the data server...
-                #if we use client certs then honestly we dont really need the token at all
-                #so we do need the token, but really only as a "we're ready for you" message
-            #open up the firewall to give that ip address access to that port
-            print('token stream',token_stream)
-            self.transport.write(token_stream)
-        if done:
-            self.transport.write_eof()
-
-    def eof_received(self):
-        #clean up the connection and store stuff because the client has exited
-        self.transport.close()
-        print(self.ip, 'got eof')
-
-    def register_data_server_token_setter(self,function):
-        self.send_ip_token_pair = function
-
-    def open_data_firewall(self, ip_address):
-        """ probably nftables? """
-        # TODO NOTE: this should probably be implemented under the assumption that
-            #the data server is NOT the same as the connection server
-        os.system('echo "firewall is now kittens!"')
-    
-
-class dataServerProtocol(asyncio.Protocol):
-    """ Data server protocol that holds the code for managing incoming data
-        streams. It should be data agnoistic, thus try to keep the code that
-        actually manipulates the data in DataByteStream.
-    """
-
-    def __new__(cls, event_loop, respMaker, rcm, tm, ppe):
-        cls.event_loop = event_loop
-        cls.respMaker = respMaker
-        cls.rcm = rcm
-        cls.tm = tm
-        cls.ppe = ppe  # process pool executor
-        cls.__new__ = super().__new__
-        return cls
-        
-
-    def __init__(self):
-        self.token_received = False
-        self.__block__ = b''
-        self.__resp_done__ = False
-        self.respMaker = self.respMaker()  # FIXME if this fixes stuff then wtf
-
-    def connection_made(self, transport):
-        peername = transport.get_extra_info('peername')
-        print("connection from:",peername)
-        try:
-            self.expected_tokens = self.tm.get_tokens_for_ip(peername[0])
-            #self.get_tokesn_for_ip = None  # XXX will fail, reference to method persists
-            self.transport = transport
-            self.pprefix = peername
-            self.ip = peername[0]
-        except KeyError:
-            transport.write(b'This is a courtesy message alerting you that your'
-                            b' IP is not on the list of IPs authorized to make'
-                            b' data connections. Query: How did you get through'
-                            b' the firewall?')
-            # probably should log this event
-            transport.write_eof()
-            print(peername,'This IP is not in the list (dict) of know ips. Terminated.')
-
-    def data_received(self, data):
-        if not self.token_received:
-            self.__block__ += data
-            try:
-                token, token_end = DataByteStream.decodeToken(self.__block__)
-                if token in self.expected_tokens:
-                    self.token_received = True  # dont store the token anywhere in memory, ofc if you can find the t_r bit and flip it...
-                    self.tm.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
-                    #self.remove_token_for_ip = None  # done with it, remove it from this instance XXX will fail
-                    self.expected_tokens = None  # we don't need access to those tokens anymore
-                    del self.expected_tokens
-                    print(self.pprefix,'token auth successful')
-                    self.__block__ = self.__block__[token_end:]  # nasty \x80 showing up
-                    self.process_requests(self.process_data(b''))  # run this in case a request follows the token, this will reset block
-                else:
-                    print(self.pprefix,'token auth failed, received token not expected')
-                    self.__block__ = b''
-                    # should probably send a fail message? where else are they going to get their token??
-            except IndexError:
-                pass  # block already has the existing data wait for more
-
-        else:
-            request_generator = self.process_data(data)  # FIXME one big issue with this is there is a HUGE glut before we start returning >_<
-            self.process_requests(request_generator)  # FIXME too many calls to this...
-
-    def eof_received(self):
-        self.transport.close()
-        os.system("echo 'firewall is now DRAGONS!'")  # TODO actually close
-        print(self.pprefix,'data server got eof')
-
-    def process_data(self,data):  # XXX is this actually a coroutine?
-        self.__block__ += data
-        split = self.__block__.split(DataByteStream.STOP)  # split requires a copy?
-        if len(split) is 1:  # NO STOPS
-            if DataByteStream.OP_PICKLE not in self.__block__:  # NO OPS
-                self.__block__ = b''
-            yield None  # self.__block__ already updated
-        else:  # len(split) > 1:
-            self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
-            yield from DataByteStream.decodePickleStreams(split)
-
-    def process_requests(self, requests:'iterable', pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
-        #print(self.pprefix,'processing requests')
-        pipes = []
-        for_pred = []
-        for request in requests:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
-            if request is not None:
-                data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
-                if data_stream is None:
-                    send, recv = mpp()
-                    pipes.append(recv)
-                    #pipes.append(mpp())
-                    self.event_loop.run_in_executor( self.ppe, make_response, send, request, self.respMaker )
-                    for_pred.append(request)
-                else:
-                    self.transport.write(data_stream)
-                    #print('WHAT WE GOT THAT HERE')
-                    #print('data stream tail',data_stream[-10:])
-
-        if pipes:
-            while 1:
-                pops = []
-                for i, recv in enumerate(pipes):
-                    try:
-                        if recv.poll():  # FIXME why does this not raise an EOFError?
-                            data_stream = recv.recv_bytes()
-                            self.transport.write(data_stream)
-                            self.rcm.update_cache(request.hash_, data_stream)
-                            recv.close()
-                            pops.append(i)
-                    except (EOFError, OSError) as e:
-                        print(e)
-                    except BaseException:
-                        embed()
-                
-                if pops:
-                    pops.sort()
-                    pops.reverse()  # so that the index doesn't change
-                    print(pipes)
-                    print('things to pop',pops)
-                    for index in pops:
-                        pipes.pop(index)
-                if not pipes:
-                    break
-
-            print(self.pprefix, 'finished processing requests')
-        else:
-            print(self.pprefix, 'there were no requests')
-        
-        #do prediction
-        if pred < 1:
-            for request in for_pred:
-                self.process_requests(self.respMaker.make_predictions(request), pred + 1)
 
 class responseMaker:  # TODO we probably move this to its own file?
     def __init__(self):
@@ -351,30 +108,10 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
         print(self.tokenDict)
 
 
-def make_response(pipe, request, respMaker):
-    """ returns the request hash and a compressed bam stream """
-    rh =  request.hash_
-    data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
-    data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-    print('sending data stream')
-    pipe.send_bytes(data_stream)
-    print('sent data stream')
-    pipe.close()
-    print('closed pipe')
-    del pipe
-
-def request_prediction(pipe, request, respMaker):
-    for preq in respMaker.make_predictions(request):
-        send_response(data_queue, preq)
-    pipe.close()
-
-def p_recv_future(p_recv, future):
-    future.set_result(p_recv.recv_bytes())
-    
-
-
 def main():
-    serverLoop = asyncio.get_event_loop()
+    from concurrent.futures import ProcessPoolExecutor
+    from protocols import connectionServerProtocol, dataServerProtocol
+    serverLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
     #serverLoop.set_default_executor(ppe)  #guido says bad
 
@@ -419,7 +156,6 @@ def main():
         serverLoop.close()
         ppe.shutdown(wait=True)
         print('',end='')  # apparently this helps avoid a stuck lock
-
 
 
 if __name__ == "__main__":

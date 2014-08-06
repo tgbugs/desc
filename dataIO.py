@@ -268,12 +268,23 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     todo = [treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
-        to_send = collect_pool(todo)
-        #print('trying to send data! len = ', len(to_send))
-        #print(to_send[0].lsNamesRecurse())
-        #pipe.send('STOP')
-        pipe.send(to_send)
-        #pipe.close()
+        try:
+            to_send = collect_pool(todo)
+            #print('trying to send data! len = ', len(to_send))
+            #print(to_send[0].lsNamesRecurse())
+            #pipe.send('STOP')
+            pipe.send(to_send)
+            pipe.close()
+            print('data sent from treeMe')
+        except BrokenPipeError:
+            try:
+                pipe.send(to_send)
+                pipe.close()
+                print('data sent from treeMe')
+            except BaseException as e:
+                print('second level',e)
+        except BaseException as e:
+            print(e)
         """
         try:  # FIXME we shouldn't need this, pipe should close() on gc on error
             for s in to_send:

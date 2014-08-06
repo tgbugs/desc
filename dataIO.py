@@ -269,15 +269,19 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
 
     if pipe:
         to_send = collect_pool(todo)
-        print('trying to send data! len = ', len(to_send))
+        #print('trying to send data! len = ', len(to_send))
         #print(to_send[0].lsNamesRecurse())
-        try:
+        #pipe.send('STOP')
+        pipe.send(to_send)
+        #pipe.close()
+        """
+        try:  # FIXME we shouldn't need this, pipe should close() on gc on error
             for s in to_send:
                 pipe.send(s)
-            #pipe.send('STOP')
             pipe.close()
         except (BrokenPipeError, FileNotFoundError) as e:  # FIXME not sure if FNFE actually happens here...
             pipe.close()
+        #"""
     else:
         return collect_pool(todo)
 

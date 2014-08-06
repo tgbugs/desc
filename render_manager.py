@@ -35,9 +35,14 @@ class renderManager(DirectObject):
         process pool?? it shouldn't affect framerates if I'm thinking about this the
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
-    RECV_LIMIT = 2  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
-    BAM_ADD_LIMIT = 3  # TODO
-    COLL_ADD_LIMIT = 50  # in theory we could scale this based on load
+    #RECV_LIMIT = 50  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
+    #BAM_ADD_LIMIT = 3  # TODO
+    #COLL_ADD_LIMIT = 50  # in theory we could scale this based on load
+
+    RECV_LIMIT = 99999  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
+    BAM_ADD_LIMIT = 99999  # TODO
+    COLL_ADD_LIMIT = 99999  # in theory we could scale this based on load
+    
     def __init__(self, event_loop = None, ppe = None):
         self.event_loop = event_loop
         self.ppe = ppe  # FIXME
@@ -70,8 +75,10 @@ class renderManager(DirectObject):
         self.accept('p', self.fake_predict)
         self.accept('n', self.rand_request)
         self.accept('c', self.embed)
+        self.accept('k', self.print_cache)
 
-        #self.ppe = ProcessPoolExecutor()
+    def print_cache(self):
+        print([repr(k) for k in self.cache.keys()])
 
     def add_collision_task(self, task):
         bamEmpty = False
@@ -140,9 +147,9 @@ class renderManager(DirectObject):
             #pass
 
     #def make_nt_task(self, request_hash, bam, coll, ui, cache_ = False):
-    def make_nt_task(self, request_hash, bam, coll, ui, cache_ = False):
+    def make_nt_task(self, request_hash, bam, coll, ui, render_ = False):
         """ given a node tuple return a task that will render/cache it when finished """
-        if not cache_:
+        if render_:
             if not bam.getNumParents():
                 #self.geomRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
                 self.bam_add_queue.append(bam)
@@ -150,8 +157,9 @@ class renderManager(DirectObject):
                 print('already being rendered', bam)
 
         with self.pipeLock:
-            self.__inc_nodes__[request_hash] = []
-            self.pipes[request_hash] = coll, bam, ui, cache_
+            print('got pipelock')
+            self.__inc_nodes__[request_hash] = []  # FIXME this could overwrite received nodes?
+            self.pipes[request_hash] = coll, bam, ui, render_
             if not taskMgr.hasTaskNamed('coll_task'):
                 taskMgr.add(self.coll_task,'coll_task') # %s'%request_hash)
 
@@ -163,25 +171,30 @@ class renderManager(DirectObject):
         with self.pipeLock:
             to_pop = []
             recv_counter = 0
-            for request_hash, (recv, bam, ui, cache_) in self.pipes.items():
+            for request_hash, (recv, bam, ui, render_) in self.pipes.items():  # TODO there is a way to listen to multiple pipes iirc
                 if recv_counter >= self.RECV_LIMIT:
                     break
                 try:
                     if recv.poll():
-                        node = recv.recv()
-                        recv_counter += 1
-                        self.__inc_nodes__[request_hash].append(node)
-                        if not cache_:  # render the l2 node!
-                            self.coll_add_queue.append(node)
+                        nodes = recv.recv()
+                        self.cache[request_hash] = bam, nodes, ui
+                        #recv.close()
+                        #to_pop.append(request_hash)
+
+                        #recv_counter += 1
+                        #self.__inc_nodes__[request_hash].append(node)
+                        if render_:  # render the l2 node!
+                            self.coll_add_queue.extend(nodes)
                             if not taskMgr.hasTaskNamed('add_collision'):
                                 taskMgr.add(self.add_collision_task,'add_collision')
-                except EOFError as e:
+                except EOFError:  # recv() raises this once the other end is closed
+                    #embed()
+                    print('processing done, closing the pipe')
                     recv.close()
                     to_pop.append(request_hash)
-                    nodes = self.__inc_nodes__.pop(request_hash)
-                    self.cache[request_hash] = bam, nodes, ui
-                except OSError as e:
-                    embed()
+                    #nodes = self.__inc_nodes__.pop(request_hash)
+                    #self.cache[request_hash] = bam, nodes, ui
+                    #nodes = self.__inc_nodes__[request_hash]
 
             for rh in to_pop:
                 tup = self.pipes.pop(rh)
@@ -197,18 +210,19 @@ class renderManager(DirectObject):
         #print('cache updated')
         #print('bam length', len(data_tuple[0]))
         #capture_datatuple(data_tuple)  # XXX for debugging selection
+        #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
+
         try:
-            #if request_hash in self.cache:  # FIXME what to do if we already have the data?! knowing that a prediction is in server cache doesn't tell us if we have sent it out already... # TODO cache inv
             if not self.cache[request_hash]:  # request expected
                 #self.render(*self.cache[request_hash])
                 #print(len(node_tuple))
                 node_tuple = self.make_nodes(request_hash, data_tuple)
-                self.make_nt_task(request_hash, *node_tuple)
+                self.make_nt_task(request_hash, *node_tuple, render_=True)
 
         except KeyError:
             print("predicted data view cached")
             node_tuple = self.make_nodes(request_hash, data_tuple)
-            self.make_nt_task(request_hash, *node_tuple, cache_=True)
+            self.make_nt_task(request_hash, *node_tuple)
             #self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):  # XXX almost deprecated

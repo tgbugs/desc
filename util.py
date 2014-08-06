@@ -35,6 +35,7 @@ class exit_cleanup(DirectObject):
             self.event_loop.call_soon_threadsafe(self.event_loop.stop)
         if self.ppe:
             self.ppe.shutdown(wait=False)  # WE still have to wait
+            
         sys.exit()  # FIXME for some reason tasks seem to persist
 
 class ui_text(DirectObject):

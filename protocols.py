@@ -95,7 +95,7 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
     def __new__(cls, set_nodes, render_set_send_request, cache, event_loop):
         cls.set_nodes = set_nodes
         cls.render_set_send_request = render_set_send_request
-        cls.cache = cache
+        #cls.cache = cache
         cls.event_loop = event_loop
         cls.__new__ = super().__new__
         return cls
@@ -108,7 +108,6 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
         self.__block__ = b''
         self.__block_size__ = None
         self.__block_tuple__ = None
-
 
     def connection_made(self, transport):
         transport.write(b'hello there')
@@ -308,6 +307,7 @@ class dataServerProtocol(asyncio.Protocol):
         cls.tm = tm
         cls.ppe = ppe  # process pool executor
         cls.__new__ = super().__new__
+        cls.sent = []
         return cls
         
 
@@ -386,11 +386,11 @@ class dataServerProtocol(asyncio.Protocol):
                 if data_stream is None:
                     send, recv = mpp()
                     pipes.append(recv)
-                    #pipes.append(mpp())
                     self.event_loop.run_in_executor( self.ppe, make_response, send, request, self.respMaker )
                     for_pred.append(request)
                 else:
                     self.transport.write(data_stream)
+                    self.sent.append(data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH])
                     #print('WHAT WE GOT THAT HERE')
                     #print('data stream tail',data_stream[-10:])
 
@@ -399,21 +399,23 @@ class dataServerProtocol(asyncio.Protocol):
                 pops = []
                 for i, recv in enumerate(pipes):
                     try:
-                        if recv.poll():  # FIXME why does this not raise an EOFError?
-                            data_stream = recv.recv_bytes()
+                        if recv.poll():
+                            data_stream = recv.recv_bytes()  # this would raise EOF but we pop
                             self.transport.write(data_stream)
+                            self.sent.append(data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH])
                             self.rcm.update_cache(request.hash_, data_stream)
                             recv.close()
                             pops.append(i)
-                    except (EOFError, OSError) as e:
-                        print(e)
-                
+                    except EOFError:
+                        print("The other end was closed before we received anything!?")
+
                 if pops:
                     pops.sort()
                     pops.reverse()  # so that the index doesn't change
                     print(pipes)
                     print('things to pop',pops)
                     for index in pops:
+                        print("popping:",index)
                         pipes.pop(index)
                 if not pipes:
                     break

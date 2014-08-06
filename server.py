@@ -82,6 +82,8 @@ class requestCacheManager:
             return None
 
     def update_cache(self, request_hash, data_stream):  # TODO only call this if 
+        print('cache updated!')
+        print(request_hash)
         self.cache[request_hash] = data_stream
         self.cache_age.append(request_hash)
         while len(self.cache_age) > self.cache_limit:
@@ -145,7 +147,7 @@ def main():
     serverThread.start()
     print('ready')
     try:
-        #embed()
+        embed()
         serverThread.join()
     except KeyboardInterrupt:
         serverLoop.call_soon_threadsafe(serverLoop.stop)

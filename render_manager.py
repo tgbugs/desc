@@ -45,7 +45,7 @@ class renderManager(DirectObject):
     
     def __init__(self, event_loop = None, ppe = None):
         self.event_loop = event_loop
-        #self.ppe = ppe  # FIXME
+        self.ppe = ppe  # FIXME
         self.__inc_nodes__ = {}
         self.pipes = {}
         self.coll_add_queue = deque()
@@ -312,11 +312,11 @@ class renderManager(DirectObject):
         pos, uuid, geom = coll_tup
         #return treeMe(node, pos, uuid, geom, None, None, None, request_hash)
         recv, send = mpp(False)
-        try:
-            self.event_loop.run_in_executor(None, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
-            return recv
-        except RuntimeError:
-            return None  # happens at shutdown
+        #try:
+        self.event_loop.run_in_executor(None, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
+        return recv
+        #except RuntimeError:
+            #return None  # happens at shutdown
 
 
         #nodes = treeMe(node, *coll_tup)

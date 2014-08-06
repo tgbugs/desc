@@ -117,6 +117,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
 
     def eof_received(self):
         #clean up the connection and store stuff because the client has exited
+        self.transport.close()
         print(self.ip, 'got eof')
 
     def register_data_server_token_setter(self,function):
@@ -135,11 +136,12 @@ class dataServerProtocol(asyncio.Protocol):
         actually manipulates the data in DataByteStream.
     """
 
-    def __new__(cls, event_loop, respMaker, rcm, tm):
+    def __new__(cls, event_loop, respMaker, rcm, tm, ppe):
         cls.event_loop = event_loop
         cls.respMaker = respMaker
         cls.rcm = rcm
         cls.tm = tm
+        cls.ppe = ppe  # process pool executor
         cls.__new__ = super().__new__
         return cls
         
@@ -190,10 +192,11 @@ class dataServerProtocol(asyncio.Protocol):
                 pass  # block already has the existing data wait for more
 
         else:
-            request_generator = self.process_data(data)
+            request_generator = self.process_data(data)  # FIXME one big issue with this is there is a HUGE glut before we start returning >_<
             self.process_requests(request_generator)  # FIXME too many calls to this...
 
     def eof_received(self):
+        self.transport.close()
         os.system("echo 'firewall is now DRAGONS!'")  # TODO actually close
         print(self.pprefix,'data server got eof')
 
@@ -219,7 +222,7 @@ class dataServerProtocol(asyncio.Protocol):
                     send, recv = mpp()
                     pipes.append(recv)
                     #pipes.append(mpp())
-                    self.event_loop.run_in_executor( None, make_response, send, request, self.respMaker )
+                    self.event_loop.run_in_executor( self.ppe, make_response, send, request, self.respMaker )
                     for_pred.append(request)
                 else:
                     self.transport.write(data_stream)
@@ -373,7 +376,7 @@ def p_recv_future(p_recv, future):
 def main():
     serverLoop = asyncio.get_event_loop()
     ppe = ProcessPoolExecutor()
-    serverLoop.set_default_executor(ppe)
+    #serverLoop.set_default_executor(ppe)  #guido says bad
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
@@ -394,7 +397,7 @@ def main():
         # constructs these so that when a new protocol is started those methods
         # are passed in and thus can successfully be deleted from a class instance
 
-    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm)
+    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm, ppe)
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box
@@ -403,6 +406,7 @@ def main():
 
     serverThread = Thread(target=serverLoop.run_forever)
     serverThread.start()
+    print('ready')
     try:
         #embed()
         serverThread.join()
@@ -413,6 +417,8 @@ def main():
         serverCon.close()
         serverData.close()
         serverLoop.close()
+        ppe.shutdown(wait=True)
+        print('',end='')  # apparently this helps avoid a stuck lock
 
 
 

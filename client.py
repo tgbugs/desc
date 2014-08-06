@@ -129,17 +129,16 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
         if exc is None:
             print('Data connection lost')
             print('trying to reconnect')
-
-            return asyncio.Task(self.connection_task(), loop=self.event_loop)
-
-            #self.event_loop.call_soon_threadsafe(self.event_loop.stop)  # this is a hack
-            #self.__timer_start__ = time.time()
-            #taskMgr.add(self.recon_task,'recon_task')  # FIXME
+        if exc == 'START':
+            print('connecting to data server')
         else:
             print('connection lost error was',exc)
 
+        return asyncio.Task(self.connection_task(), loop=self.event_loop)
+
     @asyncio.coroutine
     def connection_task(self):
+        """ MAGIC :D """
         while 1:
             coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, event_loop=self.event_loop, ssl=None)
             try:
@@ -150,26 +149,6 @@ class dataProtocol(asyncio.Protocol):  # in theory there will only be 1 of these
                 break
             except ConnectionRefusedError:
                 yield from asyncio.sleep(5, loop=self.event_loop)
-
-    def recon_task(self, task):  # FIXME
-        if time.time() - self.__timer_start__ > 10:
-            print('running recon task')
-            try:
-                coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
-                conTransport, conProtocol = self.event_loop.run_until_complete(coro_conClient)
-                self.event_loop.run_until_complete(conProtocol.get_data_token(1))  # FIXME still blocks ;_;
-                self.token = conProtocol.future_token.result()
-                coro_dataClient = self.event_loop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
-                self.event_loop.run_until_complete(coro_dataClient) # can this work with with?
-                asyncThread = Thread(target=self.event_loop.run_forever)
-                asyncThread.start()
-                taskMgr.remove(task.getName())
-            except (ConnectionRefusedError, TimeoutError) as e:
-                self.__timer_start__ = time.time()
-            finally:
-                return task.cont
-        else:
-            return task.cont
 
     def send_request(self, request):
         """ this is called BY renderManager.get_cache !!!!"""
@@ -235,15 +214,14 @@ def main():
     #asyncio and network setup
     clientLoop = asyncio.get_event_loop()
     ppe = ProcessPoolExecutor()
-    clientLoop.set_default_executor(ppe)
+    #clientLoop.set_default_executor(ppe)
 
     #make sure we can exit
-    el = exit_cleanup(clientLoop)  #use this to call stop() on run_forever
+    el = exit_cleanup(clientLoop, ppe)  #use this to call stop() on run_forever
 
-    rendMan = renderManager(clientLoop)
+    rendMan = renderManager(clientLoop, ppe)
 
     bs = BoxSel(frames)
-
 
     # TODO ssl contexts
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -255,25 +233,11 @@ def main():
                    'cache':rendMan.cache,
                    'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
-    #coro_conClient = newConnectionProtocol('127.0.0.1', CONNECTION_PORT, ssl=None)
-    #conTransport, conProtocol = clientLoop.run_until_complete(coro_conClient)
-    #clientLoop.run_until_complete(conProtocol.get_data_token())
-    #token = conProtocol.future_token.result()
-
-
-    #datCli = datCli_base(token)
     datCli = datCli_base()
-    datCli.connection_lost(None)
-    #coro_dataClient = clientLoop.create_connection(datCli, '127.0.0.1', DATA_PORT, ssl=None)
-    #transport, protocol = clientLoop.run_until_complete(coro_dataClient) # can this work with with?
+    datCli.connection_lost('START')
 
-
-    #taskMgr.add(setup_connection,'reupTask')
-
-    #run it
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
-    #embed()
     run()  # this MUST be called last because we use sys.exit() to terminate
     assert False, 'Note how this never gets printed due to sys.exit()'
 

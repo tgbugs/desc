@@ -35,12 +35,16 @@ class renderManager(DirectObject):
         process pool?? it shouldn't affect framerates if I'm thinking about this the
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
-    
-    def __init__(self, event_loop = None):
+    RECV_LIMIT = 2  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
+    BAM_ADD_LIMIT = 3  # TODO
+    COLL_ADD_LIMIT = 50  # in theory we could scale this based on load
+    def __init__(self, event_loop = None, ppe = None):
         self.event_loop = event_loop
+        self.ppe = ppe  # FIXME
         self.__inc_nodes__ = {}
         self.pipes = {}
-        self.add_queue = deque()
+        self.coll_add_queue = deque()
+        self.bam_add_queue = deque()
         self.pipeLock = Lock()
 
         geomRoot = render.find('geomRoot')
@@ -69,17 +73,22 @@ class renderManager(DirectObject):
 
         #self.ppe = ProcessPoolExecutor()
 
-    def add_coll_task(self, task):
-        #if self.add_queue:
+    def add_collision_task(self, task):
+        bamEmpty = False
         try:
-            for i in range(50):
+            for i in range(self.BAM_ADD_LIMIT):
+                self.geomRoot.attachNewNode(self.bam_add_queue.popleft())
+        except IndexError:
+            bamEmpty = True
+
+        try:
+            for i in range(self.COLL_ADD_LIMIT):
                 #self.add_queue.get_nowait().reparentTo(self.collRoot)
-                self.add_queue.popleft().reparentTo(self.collRoot)
-        #else:
-        #except IndexError:
-        except Empty:
-            taskMgr.remove('add_collision')
-            print('l2 nodes added')
+                self.coll_add_queue.popleft().reparentTo(self.collRoot)
+        except IndexError:
+            #print('l2 nodes added')
+            if bamEmpty:
+                taskMgr.remove('add_collision')
         finally:
             return task.cont
 
@@ -135,7 +144,8 @@ class renderManager(DirectObject):
         """ given a node tuple return a task that will render/cache it when finished """
         if not cache_:
             if not bam.getNumParents():
-                self.geomRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
+                #self.geomRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
+                self.bam_add_queue.append(bam)
             else:
                 print('already being rendered', bam)
 
@@ -152,15 +162,19 @@ class renderManager(DirectObject):
     def coll_task(self,task):
         with self.pipeLock:
             to_pop = []
+            recv_counter = 0
             for request_hash, (recv, bam, ui, cache_) in self.pipes.items():
+                if recv_counter >= self.RECV_LIMIT:
+                    break
                 try:
                     if recv.poll():
                         node = recv.recv()
+                        recv_counter += 1
                         self.__inc_nodes__[request_hash].append(node)
                         if not cache_:  # render the l2 node!
-                            self.add_queue.append(node)
+                            self.coll_add_queue.append(node)
                             if not taskMgr.hasTaskNamed('add_collision'):
-                                taskMgr.add(self.add_coll_task,'add_collision')
+                                taskMgr.add(self.add_collision_task,'add_collision')
                 except EOFError as e:
                     recv.close()
                     to_pop.append(request_hash)
@@ -197,8 +211,11 @@ class renderManager(DirectObject):
             self.make_nt_task(request_hash, *node_tuple, cache_=True)
             #self.cache[request_hash] = node_tuple
 
-    def render(self, bam, coll, ui):
+    def render(self, bam, coll, ui):  # XXX almost deprecated
         if not bam.getNumParents():
+            #self.bam_add_queue.append(bam)  # MMMM baby can you feel the overhead?
+            #if not taskMgr.hasTaskNamed('coll_task'):
+                #taskMgr.add(self.coll_task,'coll_task') # %s'%request_hash)
             self.geomRoot.attachNewNode(bam)  # FIXME this isn't quite right :/
         else:
             print('already being rendered', bam)
@@ -242,7 +259,10 @@ class renderManager(DirectObject):
         node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
         send, recv = mpp()
         pos, uuid, geom = coll_tup
-        self.event_loop.run_in_executor(None, treeMe, node, pos, uuid, geom, None, None, None, None, send)
+        try:
+            self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, None, send)
+        except RuntimeError:
+            return None  # happens at shutdown
         return recv
 
 

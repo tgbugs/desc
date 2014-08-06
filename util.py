@@ -24,15 +24,18 @@ class exit_cleanup(DirectObject):
         the code following run() in the main thread
         will never execute
     """
-    def __init__(self, event_loop=None):
+    def __init__(self, event_loop = None, ppe = None):
         self.event_loop = event_loop
+        self.ppe = ppe
         self.accept("escape",self.exit)
 
     def exit(self):
         #we must call stop before sys.exit() or we can't stop the loop
         if self.event_loop:
             self.event_loop.call_soon_threadsafe(self.event_loop.stop)
-        sys.exit()
+        if self.ppe:
+            self.ppe.shutdown(wait=False)  # WE still have to wait
+        sys.exit()  # FIXME for some reason tasks seem to persist
 
 class ui_text(DirectObject):
     def __init__(self):

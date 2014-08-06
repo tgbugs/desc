@@ -271,15 +271,13 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         to_send = collect_pool(todo)
         print('trying to send data! len = ', len(to_send))
         #print(to_send[0].lsNamesRecurse())
-        for s in to_send:
-            pipe.send(s)
-        #pipe.send('STOP')
-        pipe.close()  #FIXME apparently this causes ALL sorts of problems
-        #del pipe
-        #sleep(.1)
-        #pipe.send('STOP')
-        #pipe.put(to_send)
-        #return None
+        try:
+            for s in to_send:
+                pipe.send(s)
+            #pipe.send('STOP')
+            pipe.close()
+        except (BrokenPipeError, FileNotFoundError) as e:  # FIXME not sure if FNFE actually happens here...
+            pipe.close()
     else:
         return collect_pool(todo)
 

@@ -6,7 +6,6 @@ import sys
 from asyncio import get_event_loop
 from uuid import uuid4
 from collections import defaultdict, deque
-from threading import Thread
 
 import numpy as np
 from IPython import embed
@@ -109,6 +108,7 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
 
 
 def main():
+    from threading import Thread
     from concurrent.futures import ProcessPoolExecutor
     from protocols import connectionServerProtocol, dataServerProtocol
     serverLoop = get_event_loop()

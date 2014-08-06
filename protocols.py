@@ -92,19 +92,30 @@ class connectionClientProtocol(asyncio.Protocol):  # this could just be made int
         #self.event_loop.run_until_complete(asyncio.wait_for(self.future_token, timeout))
 
 class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
-    #def __new__(cls, token):
-        #instance = super().__new__(cls)
-        #instance.token = token
-        #return lambda: instance  # this is vile, but it works
+    def __new__(cls, set_nodes, render_set_send_request, cache, event_loop):
+        cls.set_nodes = set_nodes
+        cls.render_set_send_request = render_set_send_request
+        cls.cache = cache
+        cls.event_loop = event_loop
+        cls.__new__ = super().__new__
+        return cls
+
+    def __init__(self):
+        self.transport = None
+        self.__to_send__ = b''
+        self.render_set_send_request(self.send_request)
+
+        self.__block__ = b''
+        self.__block_size__ = None
+        self.__block_tuple__ = None
+
 
     def connection_made(self, transport):
         transport.write(b'hello there')
         transport.write(self.token)
+        transport.write(self.__to_send__)
+        self.__to_send__ = b''
         self.transport = transport
-        self.render_set_send_request(self.send_request)
-        self.__block__ = b''
-        self.__block_size__ = None
-        self.__block_tuple__ = None
 
     def data_received(self, data):
         """ receive bam files that come back on request
@@ -125,28 +136,18 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
         if len(self.__block__) >= self.__block_size__:
             #print('total size expecte', self.__block_size__)
             #print('post split block',self.__block__[self.__block_size__:])
-            #embed()
             request_hash, data_tuple = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
             data_tuple = no_repr(data_tuple)
-            #print('yes we are trying to render stuff')
-            #self.event_loop.run_in_executor( None, self.set_nodes, request_hash, data_tuple )
-            #self.event_loop.call_soon_threadsafe(self.set_nodes, request_hash, data_tuple)  #still segfaults even if this is threadsafe
-            #sleep(.1)
-            #try:
-                #if not self.cache[request_hash]:
             self.set_nodes(request_hash, data_tuple)
-            #except KeyError:
-                #pass  # FIXME currently not caching anything to hunt down the lockup bug
-            #self.set_nodes(*output)
             self.__block__ = self.__block__[self.__block_size__:]
             self.__block_size__ = None
             self.__block_tuple__ = None
             self.data_received(b'')  # lots of little messages will bollox this
 
     def connection_lost(self, exc):  # somehow this never triggers...
+        self.transport = None  # FIXME race condition with send?
         if exc is None:
-            print('Data connection lost')
-            print('trying to reconnect')
+            print('Data connection lost trying to reconnect')
         if exc == 'START':
             print('connecting to data server')
         else:
@@ -171,7 +172,10 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
     def send_request(self, request):
         """ this is called BY renderManager.get_cache !!!!"""
         out = dumps(request)
-        self.transport.write(out)
+        if self.transport is None:
+            self.__to_send__ += out
+        else:
+            self.transport.write(out)
 
         # TODO add that hash to a 'waiting' list and then cross it off when we are done
             # could use that to quantify performance

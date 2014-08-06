@@ -68,12 +68,13 @@ def main():
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
 
-    datCli_base = type('dataClientProtocol',(dataClientProtocol,),
-                  {'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
-                   'render_set_send_request':rendMan.set_send_request,
-                   'cache':rendMan.cache,
-                   'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
+    #datCli_base = type('dataClientProtocol',(dataClientProtocol,),
+                  #{'set_nodes':rendMan.set_nodes,  # FIXME this needs to go through make_nodes
+                   #'render_set_send_request':rendMan.set_send_request,
+                   #'cache':rendMan.cache,
+                   #'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
+    datCli_base = dataClientProtocol(rendMan.set_nodes, rendMan.set_send_request, rendMan.cache, clientLoop)
     datCli = datCli_base()
     datCli.connection_lost('START')
 

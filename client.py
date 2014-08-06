@@ -55,7 +55,7 @@ def main():
     #asyncio and network setup
     clientLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
-    #clientLoop.set_default_executor(ppe)
+    clientLoop.set_default_executor(ppe)
 
     #make sure we can exit
     el = exit_cleanup(clientLoop, ppe)  #use this to call stop() on run_forever

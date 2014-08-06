@@ -270,6 +270,9 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     if pipe:
         print(pipe)
         to_send = collect_pool(todo)
+        for s in to_send:
+            pipe.send(s)
+        pipe.close()
         """
         try:
             #print('trying to send data! len = ', len(to_send))
@@ -293,7 +296,7 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             print(request_hash,e)
             print(len(to_send))
             pipe.close()
-        """
+        
         try:  # FIXME we shouldn't need this, pipe should close() on gc on error
             for s in to_send:
                 pipe.send(s)

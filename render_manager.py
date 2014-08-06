@@ -188,8 +188,9 @@ class renderManager(DirectObject):
                             self.coll_add_queue.extend(nodes)
                             if not taskMgr.hasTaskNamed('add_collision'):
                                 taskMgr.add(self.add_collision_task,'add_collision')
-                except EOFError:  # recv() raises this once the other end is closed
+                except (EOFError, OSError):  # recv() raises this once the other end is closed
                     done += 1
+                    recv.close()
                     #embed()
                     #print('processing done, closing the pipe')
                     #recv.close()
@@ -203,6 +204,7 @@ class renderManager(DirectObject):
                 #print('popped',tup)
             #pops = []
 
+            #print(done, len(self.pipes))
             if done == len(self.pipes):
             #if not self.pipes:
                 print('we are done')
@@ -258,7 +260,7 @@ class renderManager(DirectObject):
             #print(data.getData3f(),end='    ')
             #pass
         #print(coll_tup)
-        coll = self.makeColl(coll_tup)  #needs to return a node
+        coll = self.makeColl(request_hash, coll_tup)  #needs to return a node
         ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)
         node_tuple = (bam, coll, ui)  # FIXME we may want to have geom and collision on the same parent?
         #[n.setName(repr(request_hash)) for n in node_tuple]  # FIXME use eval to get the bytes back out yes I know this is not technically injective
@@ -273,12 +275,12 @@ class renderManager(DirectObject):
         return out
 
     #@profile_me
-    def makeColl(self, coll_tup):
+    def makeColl(self, request_hash, coll_tup):
         node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
         send, recv = mpp()
         pos, uuid, geom = coll_tup
         try:
-            self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, None, send)
+            self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
         except RuntimeError:
             return None  # happens at shutdown
         return recv

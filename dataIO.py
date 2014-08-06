@@ -275,16 +275,20 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             #pipe.send('STOP')
             pipe.send(to_send)
             pipe.close()
-            print('data sent from treeMe')
+            print(request_hash,'data sent from treeMe')
+            print(len(to_send))
         except BrokenPipeError:
             try:
                 pipe.send(to_send)
                 pipe.close()
-                print('data sent from treeMe')
+                print(request_hash,'second level','data sent from treeMe')
+                print(len(to_send))
             except BaseException as e:
-                print('second level',e)
+                print(request_hash,'second level',e)
+                print(len(to_send))
         except BaseException as e:
-            print(e)
+            print(request_hash,e)
+            print(len(to_send))
         """
         try:  # FIXME we shouldn't need this, pipe should close() on gc on error
             for s in to_send:

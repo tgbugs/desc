@@ -268,8 +268,10 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     todo = [treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
+        print(pipe)
+        to_send = collect_pool(todo)
+        """
         try:
-            to_send = collect_pool(todo)
             #print('trying to send data! len = ', len(to_send))
             #print(to_send[0].lsNamesRecurse())
             #pipe.send('STOP')
@@ -296,7 +298,10 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             for s in to_send:
                 pipe.send(s)
             pipe.close()
-        except (BrokenPipeError, FileNotFoundError) as e:  # FIXME not sure if FNFE actually happens here...
+            print('treeMe success!')
+        #except (BrokenPipeError, FileNotFoundError) as e:  # FIXME not sure if FNFE actually happens here...
+        except BaseException as e:
+            print('treeMe fail!',e)
             pipe.close()
         #"""
     else:

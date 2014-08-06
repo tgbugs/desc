@@ -384,7 +384,7 @@ class dataServerProtocol(asyncio.Protocol):
             if request is not None:
                 data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
                 if data_stream is None:
-                    send, recv = mpp()
+                    recv, send = mpp(False)
                     pipes.append(recv)
                     self.event_loop.run_in_executor( self.ppe, make_response, send, request, self.respMaker )
                     for_pred.append(request)

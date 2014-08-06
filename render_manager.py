@@ -170,11 +170,30 @@ class renderManager(DirectObject):
     def coll_task(self,task):
         with self.pipeLock:
             pops = []
-            recv_counter = 0
+            #recv_counter = 0
             #done = 0
+            #print('iterating through requests')
             for request_hash, (recv, bam, ui, render_) in self.pipes.items():  # TODO there is a way to listen to multiple pipes iirc
-                if recv_counter >= self.RECV_LIMIT:
-                    break
+                #if recv_counter >= self.RECV_LIMIT:
+                    #break
+                try:
+                    if recv.poll():  # can't use multiprocessing.connection.wait
+                        node = recv.recv()
+                        self.__inc_nodes__[request_hash].append(node)
+                        if render_:
+                            self.coll_add_queue.append(node)
+                            if not taskMgr.hasTaskNamed('add_collision'):
+                                taskMgr.add(self.add_collision_task,'add_collision')
+                except EOFError:
+                    print('got EOFError this pipe is done')
+                    recv.close()
+                    pops.append(request_hash)
+                    nodes = self.__inc_nodes__.pop(request_hash)
+                    self.cache[request_hash] = bam, nodes, ui
+                except BaseException as e:
+                    print('Coll task wat',e)
+
+                """
                 try:
                     if recv.poll():
                         nodes = recv.recv()
@@ -199,10 +218,12 @@ class renderManager(DirectObject):
                     #nodes = self.__inc_nodes__.pop(request_hash)
                     #self.cache[request_hash] = bam, nodes, ui
                     #nodes = self.__inc_nodes__[request_hash]
+                #"""
 
             for rh in pops:
                 tup = self.pipes.pop(rh)
                 print('popped',tup)
+                print('pipes left',len(self.pipes))
             pops = []
 
             #print(done, len(self.pipes))
@@ -223,13 +244,23 @@ class renderManager(DirectObject):
             if not self.cache[request_hash]:  # request expected
                 #self.render(*self.cache[request_hash])
                 #print(len(node_tuple))
-                node_tuple = self.make_nodes(request_hash, data_tuple)
-                self.make_nt_task(request_hash, *node_tuple, render_=True)
+                bam, coll, ui = node_tuple = self.make_nodes(request_hash, data_tuple)
+                if hasattr(coll, '__iter__'):
+                    self.bam_add_queue.append(bam)
+                    self.coll_add_queue.extend(coll)
+                    self.cache[request_hash] = bam, coll, ui
+                    if not taskMgr.hasTaskNamed('add_collision'):
+                        taskMgr.add(self.add_collision_task,'add_collision')
+                else:
+                    self.make_nt_task(request_hash, *node_tuple, render_=True)
 
         except KeyError:
             print("predicted data view cached")
-            node_tuple = self.make_nodes(request_hash, data_tuple)
-            self.make_nt_task(request_hash, *node_tuple)
+            bam, coll, ui = node_tuple = self.make_nodes(request_hash, data_tuple)
+            if hasattr(node_tuple[1], '__iter__'):
+                self.cache[request_hash] = bam, coll, ui
+            else:
+                self.make_nt_task(request_hash, *node_tuple)
             #self.cache[request_hash] = node_tuple
 
     def render(self, bam, coll, ui):  # XXX almost deprecated
@@ -278,13 +309,17 @@ class renderManager(DirectObject):
     #@profile_me
     def makeColl(self, request_hash, coll_tup):
         node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
-        send, recv = mpp()
         pos, uuid, geom = coll_tup
+        #return treeMe(node, pos, uuid, geom, None, None, None, request_hash)
+        recv, send = mpp(False)
         try:
             self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
         except RuntimeError:
             return None  # happens at shutdown
-        return recv
+        except:
+            embed()
+        finally:
+            return recv
 
 
         #nodes = treeMe(node, *coll_tup)

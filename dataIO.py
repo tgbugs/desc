@@ -271,15 +271,12 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     todo = [treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
-        print("wtf send")
-        try:
-            to_send = collect_pool(todo)
-            for s in to_send:
-                pipe.send(s)
-            pipe.close()
-            print("send done",pipe)
-        except BaseException as e:
-            print('send fail',e)
+        to_send = collect_pool(todo)
+        pipe.send(to_send)
+        pipe.close()
+        #for s in to_send:
+            #pipe.send(s)
+        #pipe.close()
         """
         try:
             #print('trying to send data! len = ', len(to_send))

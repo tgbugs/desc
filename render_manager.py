@@ -177,6 +177,7 @@ class renderManager(DirectObject):
             for request_hash, (recv, bam, ui, render_) in self.pipes.items():  # TODO there is a way to listen to multiple pipes iirc
                 #if recv_counter >= self.RECV_LIMIT:
                     #break
+                """
                 try:
                     if recv.poll():  # can't use multiprocessing.connection.wait
                         node = recv.recv()
@@ -195,21 +196,21 @@ class renderManager(DirectObject):
                     print('Coll task wat',e)
 
                 """
-                try:
-                    if recv.poll():
-                        nodes = recv.recv()
-                        self.cache[request_hash] = bam, nodes, ui
-                        recv.close()
-                        pops.append(request_hash)
+                #try:
+                if recv.poll():
+                    nodes = recv.recv()
+                    recv.close()
+                    pops.append(request_hash)
 
-                        #recv_counter += 1
-                        #self.__inc_nodes__[request_hash].append(node)
-                        if render_:  # render the l2 node!
-                            self.coll_add_queue.extend(nodes)
-                            if not taskMgr.hasTaskNamed('add_collision'):
-                                taskMgr.add(self.add_collision_task,'add_collision')
-                except EOFError:  # recv() raises this once the other end is closed
-                    pass
+                    #recv_counter += 1
+                    #self.__inc_nodes__[request_hash].append(node)
+                    if render_:  # render the l2 node!
+                        self.coll_add_queue.extend(nodes)
+                        if not taskMgr.hasTaskNamed('add_collision'):
+                            taskMgr.add(self.add_collision_task,'add_collision')
+                    self.cache[request_hash] = bam, nodes, ui
+                #except EOFError:  # recv() raises this once the other end is closed
+                    #pass
                     #done += 1
                     #recv.close()
                     #embed()

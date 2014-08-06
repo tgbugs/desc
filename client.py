@@ -63,9 +63,7 @@ def main():
     #asyncio and network setup
     clientLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
-    #startup = lambda: "STARTING"
     out = ppe.submit(startup)  # FIXME WAT WAT WAT mega bug with starting the process pool for the first time in run_in_executor, something with future state = running
-    print(out)
     #clientLoop.set_default_executor(ppe)
 
     #make sure we can exit

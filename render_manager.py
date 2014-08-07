@@ -27,7 +27,7 @@ from prof import profile_me
 
 
 class renderManager(DirectObject):
-    """ a class to manage, bam, coll, and ui (and more?) incoming data
+    """ a class to manage, geom, coll, and ui (and more?) incoming data
         all of those streams should be decompressed and reconstructed before
         showing up here so that there are just two or three nodes that can be
         attached to the scene graph if the call comes
@@ -50,7 +50,7 @@ class renderManager(DirectObject):
         self.__inc_nodes__ = {}
         self.pipes = {}
         self.coll_add_queue = deque()
-        self.bam_add_queue = deque()
+        self.geom_add_queue = deque()
         self.pipeLock = Lock()
 
         geomRoot = render.find('geomRoot')
@@ -120,11 +120,11 @@ class renderManager(DirectObject):
         #except KeyError:
             #pass
 
-    def render(self, bam, coll, ui):
-        if not bam.getNumParents():
-            self.geomRoot.attachNewNode(bam)
+    def render(self, geom, coll, ui):
+        if not geom.getNumParents():
+            self.geomRoot.attachNewNode(geom)
         else:
-            print('already being rendered', bam)
+            print('already being rendered', geom)
 
         # FIXME this will just reparent all the l2 nodes if already attached
         [n.reparentTo(self.collRoot) for n in coll]
@@ -136,15 +136,15 @@ class renderManager(DirectObject):
         #us if we have sent it out already... # TODO cache inv
         try:
             if not self.cache[request_hash]:  # request expected
-                bam, coll, ui = self.make_nodes(request_hash, data_tuple)
+                geom, coll, ui = self.make_nodes(request_hash, data_tuple)
                 if hasattr(coll, '__iter__'):  # not running in ppe
-                    self.bam_add_queue.append(bam)
+                    self.geom_add_queue.append(geom)
                     self.coll_add_queue.extend(coll)
-                    self.cache[request_hash] = bam, coll, ui
+                    self.cache[request_hash] = geom, coll, ui
                     if not taskMgr.hasTaskNamed('add_collision'):
                         taskMgr.add(self.add_collision_task,'add_collision')
                 else:
-                    self.make_nt_task(request_hash, bam, coll, ui, render_=True)
+                    self.make_nt_task(request_hash, geom, coll, ui, render_=True)
 
         except KeyError:
             print("predicted data view cached")
@@ -155,16 +155,16 @@ class renderManager(DirectObject):
                 self.make_nt_task(request_hash, *node_tuple)
 
     # tasks
-    def make_nt_task(self, request_hash, bam, coll, ui, render_ = False):
+    def make_nt_task(self, request_hash, geom, coll, ui, render_ = False):
         """ given a node tuple return a task that will render/cache it when finished """
         if render_:
-            if not bam.getNumParents():
-                self.bam_add_queue.append(bam)
+            if not geom.getNumParents():
+                self.geom_add_queue.append(geom)
             else:
-                print('already being rendered', bam)
+                print('already being rendered', geom)
 
         with self.pipeLock:
-            self.pipes[request_hash] = coll, bam, ui, render_
+            self.pipes[request_hash] = coll, geom, ui, render_
             if not taskMgr.hasTaskNamed('coll_task'):
                 taskMgr.add(self.coll_task,'coll_task')
 
@@ -172,7 +172,7 @@ class renderManager(DirectObject):
         with self.pipeLock:
             pops = []
             recv_counter = 0
-            for request_hash, (recv, bam, ui, render_) in self.pipes.items():  # TODO there is a way to listen to multiple pipes iirc
+            for request_hash, (recv, geom, ui, render_) in self.pipes.items():  # TODO there is a way to listen to multiple pipes iirc
                 if recv_counter >= self.RECV_LIMIT:
                     break
                 elif recv.poll():
@@ -184,7 +184,7 @@ class renderManager(DirectObject):
                         self.coll_add_queue.extend(nodes)
                         if not taskMgr.hasTaskNamed('add_collision'):
                             taskMgr.add(self.add_collision_task,'add_collision')
-                    self.cache[request_hash] = bam, nodes, ui
+                    self.cache[request_hash] = geom, nodes, ui
 
             for rh in pops:
                 tup = self.pipes.pop(rh)
@@ -198,18 +198,18 @@ class renderManager(DirectObject):
         return task.cont
                 
     def add_collision_task(self, task):
-        bamEmpty = False
+        geomEmpty = False
         try:
             for i in range(self.BAM_ADD_LIMIT):
-                self.geomRoot.attachNewNode(self.bam_add_queue.popleft())
+                self.geomRoot.attachNewNode(self.geom_add_queue.popleft())
         except IndexError:
-            bamEmpty = True
+            geomEmpty = True
 
         try:
             for i in range(self.COLL_ADD_LIMIT):
                 self.coll_add_queue.popleft().reparentTo(self.collRoot)
         except IndexError:
-            if bamEmpty:
+            if geomEmpty:
                 taskMgr.remove('add_collision')
         finally:
             return task.cont
@@ -217,17 +217,17 @@ class renderManager(DirectObject):
     # make nodes (or spawn processes that make nodes)
     def make_nodes(self, request_hash, data_tuple):
         """ fire and forget """
-        bam = self.makeBam(data_tuple[0])  #needs to return a node
-        bam.setName(repr(request_hash))
+        geom = self.makeGeom(data_tuple[0])  #needs to return a node
+        geom.setName(repr(request_hash))
         coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
         coll = self.makeColl(request_hash, coll_tup)  #returns a list or a recv pipe
         ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)
-        return bam, coll, ui
+        return geom, coll, ui
 
-    def makeBam(self, bam_data):
+    def makeGeom(self, geom_data):
         """ this is for Geoms or GeomNodes """
         node = GeomNode('')  # use attach new node...
-        out = node.decodeFromBamStream(bam_data)
+        out = node.decodeFromBamStream(geom_data)
         return out
 
     def makeColl(self, request_hash, coll_tup):

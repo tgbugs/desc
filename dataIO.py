@@ -179,22 +179,15 @@ def collect_pool(todo):
                 output.append(thing)
     return output
 
-def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pipe = None):  # TODO in theory this could be multiprocessed
+def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pipe = None):
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
         for some reason this massively improves performance even w/o the code
         for mouse over adding and removing subsets of nodes.
     """
-    #if pipe:
-        #pipe.send('START')  # this doesnt seem to help
-        #collRoot = NodePath(PandaNode(''))
-
-    if pipe:
-        print('yes we are trying to treeMe')
-
     num_points = len(positions)
 
-    if center == None:  # branch predictor should take care of this?
+    if center == None:
         center = np.mean(positions, axis=0)
         radius = np.max(np.linalg.norm(positions - center))
         side = ((4/3) * radius**2) ** .5
@@ -210,17 +203,16 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
     for i in range(num_points):
         index = octit(partition[i])
         bitmasks[index][i] = True
+
     next_leaves = []
     for i in range(8):
-        branch = bitmasks[i]  # this is where we can multiprocess
+        branch = bitmasks[i]
         new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
         subSet = positions[branch]
         next_leaves.append((collRoot, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
-        #yield collRoot, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5
+
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
-    if num_points < TREE_MAX_POINTS:  # this generates fewer nodes (faster) and the other vairant doesnt help w/ selection :(
-        #leaf_avg = np.mean([len(tup[1]) for tup in next_leaves if len(tup[1]) > 0])
-        #if leaf_avg > TREE_MAX_POINTS / 8:
+    if num_points < TREE_MAX_POINTS:
         leaf_max = np.max([len(tup[1]) for tup in next_leaves])
         if num_points < 4:
             c = np.mean(positions, axis=0)
@@ -231,27 +223,21 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
                         d = np.linalg.norm(np.array(p2) - np.array(p1))
                         dists.append(d)
             r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
-            #print(c, r)
             l2Node = collRoot.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
-            if pipe:
+            todo = [treeMe(*leaf) for leaf in next_leaves]
+            if pipe:  # extremely unlikely edge case
                 print("hit an early pip")
                 to_send = collect_pool(todo)
-                for s in to_send:
-                    pipe.send(s)
-                #pipe.send('STOP')
+                pipe.send(to_send)
                 pipe.close()
-                #sleep(.1)
-                #pipe.send('STOP')
                 return None
             else:
-                todo = [treeMe(*leaf) for leaf in next_leaves]
-            return collect_pool(todo)
+                return collect_pool(todo)
 
         else:
-            # go to the next level, if the average division performance across NON EMPTY leaves
             l2Node = collRoot.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
             l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
@@ -260,13 +246,8 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
             childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) # we do it this way because it keeps framerates WAY higher dont know why
             childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
-            #childNode.setPythonTag('uuid',uuid)
             childNode.setTag('uuid',uuid)
         return l2Node
-
-        #if num_points < 3:  # FIXME NOPE STILL get too deep recursion >_< and got it with a larger cutoff >_<
-            #print("detect a branch with 1")
-            #return nextLevel()
 
     todo = [treeMe(*leaf) for leaf in next_leaves]
 
@@ -274,43 +255,6 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         to_send = collect_pool(todo)
         pipe.send(to_send)
         pipe.close()
-        #for s in to_send:
-            #pipe.send(s)
-        #pipe.close()
-        """
-        try:
-            #print('trying to send data! len = ', len(to_send))
-            #print(to_send[0].lsNamesRecurse())
-            #pipe.send('STOP')
-            pipe.send(to_send)
-            pipe.close()
-            print(request_hash,'data sent from treeMe')
-            print(len(to_send))
-        except BrokenPipeError:
-            try:
-                pipe.send(to_send)
-                pipe.close()
-                print(request_hash,'second level','data sent from treeMe')
-                print(len(to_send))
-            except BaseException as e:
-                print(request_hash,'second level',e)
-                print(len(to_send))
-                pipe.close()
-        except BaseException as e:
-            print(request_hash,e)
-            print(len(to_send))
-            pipe.close()
-        
-        try:  # FIXME we shouldn't need this, pipe should close() on gc on error
-            for s in to_send:
-                pipe.send(s)
-            pipe.close()
-            print('treeMe success!')
-        #except (BrokenPipeError, FileNotFoundError) as e:  # FIXME not sure if FNFE actually happens here...
-        except BaseException as e:
-            print('treeMe fail!',e)
-            pipe.close()
-        #"""
     else:
         return collect_pool(todo)
 

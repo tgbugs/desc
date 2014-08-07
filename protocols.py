@@ -7,12 +7,17 @@
 import os  # for dealing with firewall stuff?
 import asyncio
 import pickle
+import struct
 from multiprocessing import Pipe as mpp
+from multiprocessing.reduction import ForkingPickler
 
 from numpy.random import bytes as make_bytes
 
+from panda3d.core import NodePath, PandaNode
+
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import DataByteStream
+from ipython import embed
 
 ###
 #   Utility or picklable functions
@@ -427,3 +432,56 @@ class dataServerProtocol(asyncio.Protocol):
             for request in for_pred:
                 self.process_requests(self.respMaker.make_predictions(request), pred + 1)
 
+###
+#   Pipes
+###
+
+class collPipeProtocol(asyncio.Protocol):
+    """ use with lambda: instance() """
+    def __new__(cls, cache, geom_add_queue, coll_add_queue, collRoot):
+        cls.cache = cache
+        cls.geom_add_queue = geom_add_queue
+        cls.coll_add_queue = coll_add_queue
+        cls.__new__ = cls._new_
+        cls.collRoot = collRoot
+        return cls
+    
+    @staticmethod
+    def _new_(cls, *args, **kwargs):
+        return super().__new__(cls)
+
+    def __init__(self, request_hash, geom, ui, render_ = False):
+        if render_:
+            self.geom_add_queue.append(geom)
+        self.request_hash = request_hash
+        self.geom = geom
+        self.nodes = []
+        self.ui = ui
+        self.render_ = render_
+        self._data = b''
+    
+    def connection_made(self, transport):
+        self.transport = transport
+
+    def data_received(self, data):  # I'm worried this will be slower...
+        data = self._data + data
+        while True:
+            size, = struct.unpack("!i", data[:4])
+            if len(data) < size:
+                self._data = data
+                break
+            node = ForkingPickler.loads(data[4:4+size])
+            if self.render_:
+                node.reparentTo(self.collRoot)
+                #self.coll_add_queue.append(node)
+            self.nodes.append(node)
+            data = data[4+size:]
+            if len(data) < 4:
+                self._data = data
+                break
+        
+    def eof_received(self):
+        # TODO is it silly to use a future in place of nodes?
+        self.cache[self.request_hash] = self.geom, self.nodes, self.ui
+        print('got eof')
+        return True

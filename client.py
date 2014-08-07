@@ -7,7 +7,6 @@ from asyncio import get_event_loop
 from threading import Thread
 
 from ipython import embed
-from IPython.terminal.embed import InteractiveShellEmbed
 
 #import rpdb2
 #rpdb2.start_embedded_debugger("asdf123")
@@ -16,8 +15,6 @@ from IPython.terminal.embed import InteractiveShellEmbed
 
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
     #that would vastly simplify life...? ehhhhh
-
-ipshell = InteractiveShellEmbed(banner1='')
 
 def main():
     import sys
@@ -50,7 +47,6 @@ def main():
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
-    con = console()
 
     # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
     # roots
@@ -88,13 +84,10 @@ def main():
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
 
-    #handle = clientLoop.call_soon_threadsafe(ipshell)
-    #consoleThread = Thread(target=run_console)
-    #consoleThread.start()
-
     #make sure we can exit
     el = exit_cleanup(clientLoop, ppe, datCli.transport)  #use this to call stop() on run_forever
 
+    con = console(locals(), True)
     run()  # this MUST be called last because we use sys.exit() to terminate
     assert False, 'Note how this never gets printed due to sys.exit()'
 

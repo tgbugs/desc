@@ -1,6 +1,7 @@
 import pickle
 import zlib
 import time
+import asyncio
 from collections import defaultdict, deque
 #from multiprocessing import Pool, Manager
 from multiprocessing import Pipe as mpp
@@ -17,6 +18,8 @@ from panda3d.core import GeomNode, NodePath, PandaNode
 
 from dataIO import treeMe
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
+from protocols import collPipeProtocol
+
 
 #import sys  # we shouldnt need to call this here
 #sys.modules['core'] = sys.modules['panda3d.core']
@@ -50,6 +53,8 @@ class renderManager(DirectObject):
     def __init__(self, event_loop = None, ppe = None):
         self.event_loop = event_loop
         self.ppe = ppe
+        self.cache = {}
+        #self.cache_age = deque()  # TODO implement this?
         self.__inc_nodes__ = defaultdict(list)
         self.pipes = {}
         self.coll_add_queue = deque()
@@ -72,8 +77,7 @@ class renderManager(DirectObject):
         self.collRoot = collideRoot
         self.uiRoot = uiRoot
 
-        self.cache = {}
-        #self.cache_age = deque()  # TODO implement this?
+        self.cpp = collPipeProtocol(self.cache, self.geom_add_queue, self.coll_add_queue, self.collRoot)
 
         self.accept('r', self.fake_request)
         self.accept('p', self.fake_predict)
@@ -82,6 +86,8 @@ class renderManager(DirectObject):
         self.accept('k', self.print_cache)
 
 
+        # TODO replace this with asyncio queue?
+        taskMgr.add(self.add_collision_task,'add_collision')
 
     def set_send_request(self, send_request:'function *args = (request,)'):
         self.__send_request__ = send_request
@@ -144,18 +150,23 @@ class renderManager(DirectObject):
                     self.geom_add_queue.append(geom)
                     self.coll_add_queue.extend(coll)
                     self.cache[request_hash] = geom, coll, ui
+                    # TODO new async task goes here
                     if not taskMgr.hasTaskNamed('add_collision'):
                         taskMgr.add(self.add_collision_task,'add_collision')
                 else:
-                    self.make_nt_task(request_hash, geom, coll, ui, render_=True)
+                    todo = self.event_loop.connect_read_pipe(lambda: self.cpp(request_hash, geom, ui, render_=True), coll)
+                    asyncio.Task(todo, loop=self.event_loop)
+                    #self.make_nt_task(request_hash, geom, coll, ui, render_=True)
 
         except KeyError:
             print("predicted data view cached")
-            node_tuple = self.make_nodes(request_hash, data_tuple)
+            geom, coll, ui = node_tuple = self.make_nodes(request_hash, data_tuple)
             if hasattr(node_tuple[1], '__iter__'):  # not running in ppe
                 self.cache[request_hash] = node_tuple
             else:
-                self.make_nt_task(request_hash, *node_tuple)
+                todo = self.event_loop.connect_read_pipe(lambda: self.cpp(request_hash, geom, ui), coll)
+                asyncio.Task(todo, loop=self.event_loop)
+                #self.make_nt_task(request_hash, *node_tuple)
 
     # tasks
     def make_nt_task(self, request_hash, geom, coll, ui, render_ = False):
@@ -170,6 +181,7 @@ class renderManager(DirectObject):
             self.pipes[request_hash] = coll, geom, ui, render_
             if not taskMgr.hasTaskNamed('coll_task'):
                 taskMgr.add(self.coll_task,'coll_task')
+
 
     def coll_task(self,task):
         with self.pipeLock:
@@ -212,10 +224,13 @@ class renderManager(DirectObject):
 
         try:
             for i in range(self.COLL_ADD_LIMIT):
+                #print(len(self.coll_add_queue))
                 self.coll_add_queue.popleft().reparentTo(self.collRoot)
+                #print('coll added!')
         except IndexError:
-            if geomEmpty:
-                taskMgr.remove('add_collision')
+            #if geomEmpty:
+                #taskMgr.remove('add_collision')
+            pass
         finally:
             return task.cont
 

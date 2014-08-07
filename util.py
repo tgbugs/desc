@@ -29,7 +29,7 @@ class console(DirectObject):
         self.running = True
         if self.locals_:
             locals().update(self.locals_)
-        embed()  # this works becasue you can access all the things via render :)
+        embed(banner1='')  # this works becasue you can access all the things via render :)
         self.running = False
 
 class exit_cleanup(DirectObject):
@@ -53,7 +53,7 @@ class exit_cleanup(DirectObject):
         if self.transport:
             self.transport.write_eof()
         if self.ppe:
-            self.ppe.shutdown(wait=False)  # WE still have to wait
+            self.ppe.shutdown(wait=True)  # WE still have to wait
         if self.event_loop:
             self.event_loop.call_soon_threadsafe(self.event_loop.stop)
 

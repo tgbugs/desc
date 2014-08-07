@@ -463,6 +463,7 @@ class collPipeProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
 
+    # XXX FIXME for some reason this causes libc related segfaults?
     def data_received(self, data):  # I'm worried this will be slower...
         data = self._data + data
         while True:
@@ -472,7 +473,9 @@ class collPipeProtocol(asyncio.Protocol):
                 break
             node = ForkingPickler.loads(data[4:4+size])
             if self.render_:
-                node.reparentTo(self.collRoot)
+                pass
+                # FIXME either of these cause panda related segfaults
+                #node.reparentTo(self.collRoot)
                 #self.coll_add_queue.append(node)
             self.nodes.append(node)
             data = data[4+size:]
@@ -483,5 +486,6 @@ class collPipeProtocol(asyncio.Protocol):
     def eof_received(self):
         # TODO is it silly to use a future in place of nodes?
         self.cache[self.request_hash] = self.geom, self.nodes, self.ui
-        print('got eof')
+        print('pipe got eof')
         return True
+

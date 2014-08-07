@@ -1,7 +1,7 @@
 import pickle
 import zlib
 import time
-from collections import deque
+from collections import defaultdict, deque
 #from multiprocessing import Pool, Manager
 from multiprocessing import Pipe as mpp
 #from multiprocessing import Queue as mpq
@@ -36,18 +36,15 @@ class renderManager(DirectObject):
         process pool?? it shouldn't affect framerates if I'm thinking about this the
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
-    #RECV_LIMIT = 50  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
-    #BAM_ADD_LIMIT = 3  # TODO
-    #COLL_ADD_LIMIT = 50  # in theory we could scale this based on load
 
-    RECV_LIMIT = 99999  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
-    BAM_ADD_LIMIT = 99999  # TODO
-    COLL_ADD_LIMIT = 99999  # in theory we could scale this based on load
+    RECV_LIMIT = 50  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
+    BAM_ADD_LIMIT = 5  # TODO
+    COLL_ADD_LIMIT = 50  # in theory we could scale this based on load
     
     def __init__(self, event_loop = None, ppe = None):
         self.event_loop = event_loop
         self.ppe = ppe
-        self.__inc_nodes__ = {}
+        self.__inc_nodes__ = defaultdict(list)
         self.pipes = {}
         self.coll_add_queue = deque()
         self.geom_add_queue = deque()
@@ -176,21 +173,23 @@ class renderManager(DirectObject):
                 if recv_counter >= self.RECV_LIMIT:
                     break
                 elif recv.poll():
-                    nodes = recv.recv()
-                    pops.append(request_hash)
-
-                    recv_counter += 1
-                    if render_:  # render the l2 node!
-                        self.coll_add_queue.extend(nodes)
-                        if not taskMgr.hasTaskNamed('add_collision'):
-                            taskMgr.add(self.add_collision_task,'add_collision')
-                    self.cache[request_hash] = geom, nodes, ui
+                    try:
+                        node = recv.recv()
+                        self.__inc_nodes__[request_hash].append(node)
+                        recv_counter += 1
+                        if render_:  # render the l2 node!
+                            self.coll_add_queue.append(node)
+                            if not taskMgr.hasTaskNamed('add_collision'):
+                                taskMgr.add(self.add_collision_task,'add_collision')
+                    except EOFError:  #all nodes in
+                        pops.append(request_hash)
+                        nodes = self.__inc_nodes__.pop(request_hash)
+                        self.cache[request_hash] = geom, nodes, ui
 
             for rh in pops:
                 tup = self.pipes.pop(rh)
                 print('popped',tup)
                 print('pipes left',len(self.pipes))
-            pops = []
 
             if not self.pipes:
                 print('we are done')
@@ -237,10 +236,9 @@ class renderManager(DirectObject):
         recv, send = mpp(False)
         try:
             future = self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
+            return recv
         except RuntimeError:
             return None  # happens at shutdown
-        print('yes we are running stuff')
-        return recv
 
     def makeUI(self, ui):  # FIXME this works inconsistently with other stuff
         """ we may not need this if we stick all the UI data in geom or coll nodes? """

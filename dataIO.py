@@ -231,7 +231,8 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
             if pipe:  # extremely unlikely edge case
                 print("hit an early pip")
                 to_send = collect_pool(todo)
-                pipe.send(to_send)
+                for s in to_send:
+                    pipe.send(s)
                 pipe.close()
                 return None
             else:
@@ -253,7 +254,8 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
 
     if pipe:
         to_send = collect_pool(todo)
-        pipe.send(to_send)
+        for s in to_send:
+            pipe.send(s)
         pipe.close()
     else:
         return collect_pool(todo)

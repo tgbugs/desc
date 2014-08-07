@@ -155,13 +155,14 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
     @asyncio.coroutine
     def connection_task(self):
         """ MAGIC :D """
-        while 1:
+        while True:
             coro_conClient = connectionClientProtocol('127.0.0.1', CONNECTION_PORT, event_loop=self.event_loop, ssl=None)
             try:
                 _, conProtocol = yield from asyncio.Task(coro_conClient, loop=self.event_loop)
                 self.token = yield from asyncio.wait_for(conProtocol.future_token, None, loop=self.event_loop)
                 coro_dataClient = self.event_loop.create_connection(lambda: self, '127.0.0.1', DATA_PORT, ssl=None)
                 yield from asyncio.Task(coro_dataClient, loop=self.event_loop)
+                print('Got connection to: ')  # TODO
                 break
             except ConnectionRefusedError:
                 yield from asyncio.sleep(5, loop=self.event_loop)
@@ -261,7 +262,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
 
     def data_received(self, data):  # data is a bytes object
         done = False
-        print(self.pprefix,data)
+        #print(self.pprefix,data)
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
             token = make_bytes(DataByteStream.LEN_TOKEN)  # FIXME
@@ -273,7 +274,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
                 #if we use client certs then honestly we dont really need the token at all
                 #so we do need the token, but really only as a "we're ready for you" message
             #open up the firewall to give that ip address access to that port
-            print('token stream',token_stream)
+            #print('token stream',token_stream)
             self.transport.write(token_stream)
         if done:
             self.transport.write_eof()
@@ -281,7 +282,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
     def eof_received(self):
         #clean up the connection and store stuff because the client has exited
         self.transport.close()
-        print(self.ip, 'got eof')
+        print('New data connection request from', self.ip, 'was successful.')
 
     def register_data_server_token_setter(self,function):
         self.send_ip_token_pair = function
@@ -305,7 +306,6 @@ class dataServerProtocol(asyncio.Protocol):
         cls.tm = tm
         cls.ppe = ppe  # process pool executor
         cls.__new__ = super().__new__
-        cls.sent = []
         return cls
         
 
@@ -313,11 +313,11 @@ class dataServerProtocol(asyncio.Protocol):
         self.token_received = False
         self.__block__ = b''
         self.__resp_done__ = False
-        self.respMaker = self.respMaker()  # FIXME if this fixes stuff then wtf
+        self.respMaker = self.respMaker()
+        self.requests_sent = set()
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
-        print("connection from:",peername)
         try:
             self.expected_tokens = self.tm.get_tokens_for_ip(peername[0])
             #self.get_tokesn_for_ip = None  # XXX will fail, reference to method persists
@@ -344,11 +344,11 @@ class dataServerProtocol(asyncio.Protocol):
                     #self.remove_token_for_ip = None  # done with it, remove it from this instance XXX will fail
                     self.expected_tokens = None  # we don't need access to those tokens anymore
                     del self.expected_tokens
-                    print(self.pprefix,'token auth successful')
+                    print("Data connection from:",self.pprefix,"token auth successful.")
                     self.__block__ = self.__block__[token_end:]  # nasty \x80 showing up
                     self.process_requests(self.process_data(b''))  # run this in case a request follows the token, this will reset block
                 else:
-                    print(self.pprefix,'token auth failed, received token not expected')
+                    print("Data connection from:",self.pprefix,"token auth failed, token not expected.")
                     self.__block__ = b''
                     # should probably send a fail message? where else are they going to get their token??
             except IndexError:
@@ -374,12 +374,13 @@ class dataServerProtocol(asyncio.Protocol):
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
             yield from DataByteStream.decodePickleStreams(split)
 
-    def process_requests(self, requests:'iterable', pred = 1):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
+    def process_requests(self, requests:'iterable', pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         #print(self.pprefix,'processing requests')
         pipes = []
         for_pred = []
         for request in requests:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
-            if request is not None:
+            if request is not None and request.hash_ not in self.requests_sent:  # FIXME and not rerequested
+                self.requests_sent.add(request.hash_)
                 data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
                 if data_stream is None:
                     recv, send = mpp(False)
@@ -388,7 +389,6 @@ class dataServerProtocol(asyncio.Protocol):
                     for_pred.append(request)
                 else:
                     self.transport.write(data_stream)
-                    self.sent.append(data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH])
                     #print('WHAT WE GOT THAT HERE')
                     #print('data stream tail',data_stream[-10:])
 
@@ -400,8 +400,8 @@ class dataServerProtocol(asyncio.Protocol):
                         if recv.poll():
                             _data_stream = recv.recv_bytes()  # this would raise EOF but we pop
                             self.transport.write(_data_stream)
-                            self.sent.append(_data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH])
-                            self.rcm.update_cache(request.hash_, _data_stream)
+                            _request_hash = _data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH]
+                            self.rcm.update_cache(_request_hash, _data_stream)
                             recv.close()
                             pops.append(i)
                     except EOFError:

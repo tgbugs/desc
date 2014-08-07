@@ -180,6 +180,8 @@ def makeCameraTarget():
 #   DirectObjects
 ###
 
+
+# FIXME a whole lot of this setup is massively redundant
 class HasKeybinds:
     def __init__(self,keybinds):
         self.keybinds = keybinds

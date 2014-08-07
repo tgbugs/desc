@@ -19,7 +19,6 @@ from IPython.terminal.embed import InteractiveShellEmbed
 
 ipshell = InteractiveShellEmbed(banner1='')
 
-
 def main():
     import sys
     from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor

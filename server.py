@@ -15,7 +15,6 @@ from defaults import CONNECTION_PORT, DATA_PORT
 from test_objects import makeSimpleGeom
 from request import FAKE_PREDICT
 
-from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
 
 #fix sys module reference
 sys.modules['core'] = sys.modules['panda3d.core']
@@ -40,7 +39,7 @@ class responseMaker:  # TODO we probably move this to its own file?
         uuids = np.array(['%s'%uuid4() for _ in range(n)])
         bounds = np.ones(n) * .5
         example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
-        print('making example bam')
+        #print('making example bam')
         example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
         #print('done making bam',example_bam)  # XXX if you want this use repr() ffs
 
@@ -78,20 +77,23 @@ class requestCacheManager:
             data_stream = self.cache[request_hash]
             self.cache_age.remove(request_hash)
             self.cache_age.append(request_hash)  # basically ranks cache by access frequency
-            print('server cache hit')
+            #print('server cache hit')
             return data_stream
         except KeyError:
-            print('server cache miss')
+            #print('server cache miss')
             return None
 
     def update_cache(self, request_hash, data_stream):  # TODO only call this if 
-        print('cache updated!')
-        print(request_hash)
+        #print('cache updated!')
+        #print(request_hash)
         self.cache[request_hash] = data_stream
         self.cache_age.append(request_hash)
         while len(self.cache_age) > self.cache_limit:
             self.cache.pop(self.cache_age.popleft())
         #print('server cache updated with', request_hash, data_stream)
+
+    def __repr__(self):
+        return "\n".join([repr(rh) for rh in self.cache_age])
 
 class tokenManager:  # TODO this thing could be its own protocol and run as a shared state server using lambda: instance
 #FIXME this may be suceptible to race conditions on remove_token!
@@ -103,13 +105,13 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
         self.tokenDict = defaultdict(set)
     def update_ip_token_pair(self, ip, token):
         self.tokenDict[ip].add(token)
-        print(self.tokenDict)
+        #print(self.tokenDict)
     def get_tokens_for_ip(self, ip):
-        print(self.tokenDict)
+        #print(self.tokenDict)
         return self.tokenDict[ip]
     def remove_token_for_ip(self, ip, token):
         self.tokenDict[ip].remove(token)
-        print(self.tokenDict)
+        #print(self.tokenDict)
 
 class make_shutdown:
     def __init__(self, serverLoop, serverThread, serverCon, serverData, ppe):
@@ -121,6 +123,9 @@ class make_shutdown:
 
         self.done = False
         self.exit = ExitAutocall()
+
+    def __call_(self):
+        repr(self)
 
     def __bool__(self):
         return self.done
@@ -142,6 +147,7 @@ class make_shutdown:
 def main():
     from threading import Thread
     from protocols import connectionServerProtocol, dataServerProtocol
+    from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
     serverLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
 
@@ -150,9 +156,6 @@ def main():
 
     tm = tokenManager()  # keep the shared state out here! magic if this works
 
-    # commence in utero monkey patching
-    conServ_ = type('connectionServerProtocol_', (connectionServerProtocol,),
-                   {'update_ip_token_pair':tm.update_ip_token_pair})
     conServ = connectionServerProtocol(tm)
 
     #shared state, in theory this stuff could become its own Protocol
@@ -177,12 +180,12 @@ def main():
     shutdown = make_shutdown(serverLoop, serverThread, serverCon, serverData, ppe)
 
     print('ready',end='')
-    while 1:
+    while True:
         embed(banner1='')
         if shutdown:
             break
         else:
-            print("To shutdown please call shutdown()",end='')
+            print("To exit please run shutdown",end='')
 
 
 if __name__ == "__main__":

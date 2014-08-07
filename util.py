@@ -13,10 +13,24 @@ def genLabelText(text, i): #FIXME
                       align = TextNode.ALeft, scale = .05)
 
 class console(DirectObject):
-    def __init__(self):
-        self.accept('i',self.ipython)
+    def __init__(self, locals_ = None, thread = False):
+        self.locals_ = locals_
+        self.running = False
+        if thread:
+            self.accept('i', self.thread_ipython)
+        else:
+            self.accept('i', self.ipython)
+    def thread_ipython(self):
+        if not self.running:
+            thread = Thread(target=self.ipython)
+            thread.start()
+
     def ipython(self):
+        self.running = True
+        if self.locals_:
+            locals().update(self.locals_)
         embed()  # this works becasue you can access all the things via render :)
+        self.running = False
 
 class exit_cleanup(DirectObject):
     """ in order to get everything to exit 'cleanly'
@@ -25,14 +39,17 @@ class exit_cleanup(DirectObject):
         the code following run() in the main thread
         will never execute
     """
-    def __init__(self, event_loop = None, ppe = None, transport = None):
+    def __init__(self, event_loop = None, ppe = None, transport = None, shutdown = None):
         self.event_loop = event_loop
         self.ppe = ppe
         self.transport = transport
+        self.shutdown = shutdown
         self.accept("escape",self.exit)
 
     def exit(self):
         #we must call stop before sys.exit() or we can't stop the loop
+        if self.shutdown:  # stop the server bits
+            self.shutdown()
         if self.transport:
             self.transport.write_eof()
         if self.ppe:

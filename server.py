@@ -9,10 +9,13 @@ from collections import defaultdict, deque
 
 import numpy as np
 from IPython import embed
+from IPython.core.autocall import ExitAutocall
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from test_objects import makeSimpleGeom
 from request import FAKE_PREDICT
+
+from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
 
 #fix sys module reference
 sys.modules['core'] = sys.modules['panda3d.core']
@@ -108,13 +111,43 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
         self.tokenDict[ip].remove(token)
         print(self.tokenDict)
 
+def startup():
+    return "starting"
+
+class make_shutdown:
+    def __init__(self, serverLoop, serverThread, serverCon, serverData, ppe):
+        self.serverLoop = serverLoop
+        self.serverThread = serverThread
+        self.serverCon = serverCon
+        self.serverData = serverData
+        self.ppe = ppe
+
+        self.done = False
+        self.exit = ExitAutocall()
+
+    def __bool__(self):
+        return self.done
+
+    def __repr__(self):
+        print('\nexiting...')
+        self.serverLoop.call_soon_threadsafe(self.serverLoop.stop)
+        self.serverThread.join()
+        self.serverCon.close()
+        self.serverData.close()
+        self.serverLoop.close()
+        self.ppe.shutdown(wait=True)
+        self.done = True
+        get_ipython().ask_exit()  # can only be called inside an interactive shell
+        return 'Shutdown successful.'
+
+        #return 'The server has already been shutdown!'
 
 def main():
     from threading import Thread
-    from concurrent.futures import ProcessPoolExecutor
     from protocols import connectionServerProtocol, dataServerProtocol
     serverLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
+    out = ppe.submit(startup)  # urg python bug
     #serverLoop.set_default_executor(ppe)  #guido says bad
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
@@ -145,19 +178,16 @@ def main():
 
     serverThread = Thread(target=serverLoop.run_forever)
     serverThread.start()
-    print('ready')
-    try:
-        embed()
-        serverThread.join()
-    except KeyboardInterrupt:
-        serverLoop.call_soon_threadsafe(serverLoop.stop)
-        print('\nexiting...')
-    finally:
-        serverCon.close()
-        serverData.close()
-        serverLoop.close()
-        ppe.shutdown(wait=True)
-        print('',end='')  # apparently this helps avoid a stuck lock
+
+    shutdown = make_shutdown(serverLoop, serverThread, serverCon, serverData, ppe)
+
+    print('ready',end='')
+    while 1:
+        embed(banner1='')
+        if shutdown:
+            break
+        else:
+            print("To shutdown please call shutdown()",end='')
 
 
 if __name__ == "__main__":

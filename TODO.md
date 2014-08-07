@@ -28,6 +28,19 @@ notes:
  bugs:
   1. turn on threading-mode Cull/Draw, do mouse collision with showCollisions(render) on the CollisionTraverser will segfault
   2.  Assertion failed: si != _state_map.end() at line 672 of panda/src/putil/bamWriter.cxx out of nowhere when piping back to main thread
+  3.
+New data connection request from 127.0.0.1 was successful.
+Exception in callback <bound method _SelectorSocketTransport._read_ready of <asyncio.selector_events._SelectorSocketTransport object at 0x7f83e528b1d0>>()
+handle: Handle(<bound method _SelectorSocketTransport._read_ready of <asyncio.selector_events._SelectorSocketTransport object at 0x7f83e528b1d0>>, ())
+Traceback (most recent call last):
+  File "/home/tgillesp/.local/lib/python3.4/asyncio/events.py", line 39, in _run
+    self._callback(\*self._args)
+  File "/home/tgillesp/.local/lib/python3.4/asyncio/selector_events.py", line 473, in _read_ready
+    self._protocol.data_received(data)
+  File "/netapp/cnl/home/tgillesp/git/desc/protocols.py", line 345, in data_received
+    token, token_end = DataByteStream.decodeToken(self.__block__)
+TypeError: 'NoneType' object is not iterable
+Data connection from: ('127.0.0.1', 44682) token auth successful.
 
 caching hierarchy
 =================

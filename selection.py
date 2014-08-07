@@ -39,10 +39,10 @@ RADIANS_PER_DEGREE = pi/180
 def projectNode(node, bounds, visualize):
     lX, uX, lZ, uZ = bounds
     point3d = node.getBounds().getApproxCenter()
-    p3 = base.cam.getRelativePoint(render, point3d)
+    p3 = camera.getRelativePoint(render, point3d)  # FIXME
     p2 = Point2()
 
-    if not base.camLens.project(p3,p2):
+    if not camLens.project(p3,p2):
         return False, None, None
 
     pX = p2[0]
@@ -71,29 +71,13 @@ def projectL2(args):
         tb = [repr(t) for t in inspect.trace()]
         return ['WHAT HAS SCIENCE DONE!?'], [e], None, None, None, tb
 
-def _projectL2(args):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
+def projectL2(args):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
     """ projec only the centers of l2 spehres, figure out how to get their radii """
-    node, centers, bounds, track_pos, cam_pos, lensFL, cfz, boxRadius, utilityNode, visualize = args
+    projectNode, point3d, point2projection, d1, r3, node, centers, bounds, track_pos, cam_pos, lensFL, cfz, boxRadius, visualize = args
     points = None
     l2hit = None
     l2miss = None
     add_projRoot = []  # call projRoot.attachNewNode out the output
-
-    point3d = node.getBounds().getApproxCenter()
-    p3 = camera.getRelativePoint(render, point3d)
-    p2 = Point2()
-
-    base.camLens.project(p3,p2)
-
-    point2projection = Point3(p2[0],0,p2[1])
-
-    r3 = node.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
-    utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
-    # this also works correctly with no apparent issues
-    d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
-    if not d1:
-        d1 = 1E-9
-
 
     camVec = track_pos - cam_pos
     pointVect = point3d - cam_pos
@@ -118,15 +102,17 @@ def _projectL2(args):  # FIXME so it turns out that if our aspect ratio is perfe
 
             # visualize the projected radius of l2 collision spheres
             radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
-            add_projRoot.append(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
+            a = radU,[0,0,1,1],GeomLinestrips
+            add_projRoot.append(a)
+            #add_projRoot.append(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
 
     nodes = []
     for boxCenter in centers:  # TODO there is a tradeoff here between number of box centers and mistargeting other nodes due to having a larger radius
         diff = point2projection - boxCenter  # FIXME aspect 2d??
         distance = diff.length()
 
-        dx = (boxCenter[0] - p2[0])
-        dz = (boxCenter[2] - p2[1]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
+        dx = (boxCenter[0] - point2projection[0])
+        dz = (boxCenter[2] - point2projection[2]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
         theta = arctan2(dz, dx)
         #print(theta/pi,"pi radians")
 
@@ -137,12 +123,16 @@ def _projectL2(args):  # FIXME so it turns out that if our aspect ratio is perfe
         if visualize >= BoxSel.VIS_ALL:
             # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
             #circleIntersect = self.projRoot.attachNewNode(
-            add_projRoot.append(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
+            a = [point2projection+Point3(x,0,z)],[0,1,0,1]
+            add_projRoot.append(a)
+            #add_projRoot.append(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
             #circleIntersect.setRenderModeThickness(4) #FIXME
 
             # a circle of the box radius
             boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
-            add_projRoot.append(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
+            a = boxRadU,[1,0,1,1],GeomLinestrips
+            add_projRoot.append(a)
+            #add_projRoot.append(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
 
             if visualize >= BoxSel.VIS_DEBUG_LINES:
                 line = [point2projection, boxCenter]
@@ -150,7 +140,7 @@ def _projectL2(args):  # FIXME so it turns out that if our aspect ratio is perfe
 
         if distance < boxRadius + rescaled:
             for c in node.getChildren():
-                isContained, point3, point = projectNode(c, bounds, visualize)
+                isContained, point3, point = projectNode(camera_, camLens, c, bounds, visualize)
                 if isContained:
                     nodes.append(c)
                     if point3:  # FIXME ick!
@@ -162,11 +152,15 @@ def _projectL2(args):  # FIXME so it turns out that if our aspect ratio is perfe
             if visualize >= BoxSel.VIS_L2:
                 l2hit = point3d
                 if visualize >= BoxSel.VIS_DEBUG_LINES:
-                    add_projRoot.append(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+                    a = line,[0,1,0,1],GeomLinestrips
+                    add_projRoot.append(a)
+                    #add_projRoot.append(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
             break
 
         elif visualize >= BoxSel.VIS_DEBUG_LINES:
-            add_projRoot.append(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
+            a = line,[1,0,0,1],GeomLinestrips
+            add_projRoot.append(a)
+            #add_projRoot.append(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
     return nodes, points3, points, l2hit, l2miss, add_projRoot
 
@@ -444,7 +438,7 @@ class BoxSel(HasSelectables,DirectObject):
         #embed()
         return task.cont
 
-    def _getEnclosedNodes(self):
+    def getEnclosedNodes(self):
         #cfx, cfz = base.camLens.getFilmSize()  # FIXME need this for a bunch of corrections
         cfx = 1
         cfz = base.camLens.getAspectRatio()
@@ -695,7 +689,7 @@ class BoxSel(HasSelectables,DirectObject):
             #taskMgr.add(self.show_task, 'show_task')
 
 
-    def getEnclosedNodes(self):
+    def _getEnclosedNodes(self):
         #cfx, cfz = base.camLens.getFilmSize()  # FIXME need this for a bunch of corrections
         cfx = 1
         cfz = base.camLens.getAspectRatio()
@@ -772,14 +766,34 @@ class BoxSel(HasSelectables,DirectObject):
         # actually do the projection
         def make_args(iterable):
             for child in iterable:
-                yield (child, centers, bounds, track_pos, cam_pos, lensFL, cfz, boxRadius, utilityNode, self.visualize)
+                point3d = child.getBounds().getApproxCenter()
+                p3 = camera.getRelativePoint(render, point3d)
+                p2 = Point2()
+
+                base.camLens.project(p3,p2)
+
+                point2projection = Point3(p2[0],0,p2[1])
+
+                r3 = child.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
+
+                utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
+                # this also works correctly with no apparent issues
+                d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
+                if not d1:
+                    d1 = 1E-9
+
+                #point3d, point2projection, d1, r3 = preprocess(child, utilityNode, render, camera, base)
+                #out.append((camera, base.camLens, point3d, point2projection, d1, r3, child, centers, bounds, track_pos, cam_pos, lensFL, cfz, boxRadius, self.visualize))
+                yield point3d, point2projection, d1, r3, child, centers, bounds, track_pos, cam_pos, lensFL, cfz, boxRadius, self.visualize
+
         args = make_args(self.collRoot.getChildren())
         out = self.ppe.map(projectL2, args)
         for nodes, points3_, points_, l2hit_, l2miss_, add_projRoot in out:
             for node in nodes:
+                print('got node',node)
                 self.processTarget(node)  # FIXME this should probably be done in the process?
-            for node in add_projRoot:
-                self.projRoot.attachNewNode(node)
+            for tup in add_projRoot:
+                self.projRoot.attachNewNode(makeSimpleGeom(*tup))
             if points3_:
                 points3.extend(points3_)
                 if points_:

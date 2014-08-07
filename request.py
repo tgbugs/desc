@@ -111,9 +111,11 @@ class DataByteStream:
             data = zlib.compress(b''.join(data_tuple))
 
         data_size = int.to_bytes(len(data), cls.LEN_CDATA, cls.BYTEORDER)
-        print('length data',len(data))
 
-        print("response stream is being made")
+        if cls.DEBUG:
+            print('length data',len(data))
+            print("response stream is being made")
+            print('compressed data tail',data[-100:])
 
 
         data_stream = cls.OP_DATA + request_hash + data_size + n_fields + offsets + data
@@ -128,7 +130,6 @@ class DataByteStream:
             #f.write(lines)
             #f.write('\n\n')
 
-        print('compressed data tail',data[-100:])
         return data_stream
 
     @classmethod
@@ -146,12 +147,14 @@ class DataByteStream:
         for bytes_ in split:
             pickleStart = 0
             if bytes_[pickleStart] != cls.OP_PICKLE_INT: #apparently indexing into bytes returns ints not bytes
-                print('what the heck kind of data is this!?')
-                print(bytes_)
-                print('')
+                if cls.DEBUG:
+                    print('what the heck kind of data is this!?')
+                    print(bytes_)
+                    print('')
                 pickleStart = bytes_.find(cls.OP_PICKLE)
                 if pickleStart == -1:
-                    print('What is this garbage? You have a stop but no start?!')
+                    if cls.DEBUG:
+                        print('What is this garbage? You have a stop but no start?!')
                     yield None
             try:
                 thing = pickle.loads(bytes_[pickleStart:]+cls.PICKLE_STOP)  # have to add the stop back in
@@ -160,8 +163,9 @@ class DataByteStream:
                 else:
                     yield thing
             except (ValueError, EOFError, pickle.UnpicklingError) as e:  # ValueError is for bad pickle protocol
-                print('What is this garbage?',bytes_[pickleStart:])
-                print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
+                if cls.DEBUG:
+                    print('What is this garbage?',bytes_[pickleStart:])
+                    print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
                 yield None  # we cannot raise here because we won't evaluate the rest of the loop
 
     @classmethod
@@ -232,7 +236,8 @@ class DataByteStream:
 
             offLen = cls.LEN_OFFSET * n_fields
             compressStart = offStart + offLen
-            print('header',bytes_[:compressStart])
+            if cls.DEBUG:
+                print('header',bytes_[:compressStart])
 
             offblock = bytes_[offStart:offStart + offLen]
             data = zlib.decompress(bytes_[compressStart:])

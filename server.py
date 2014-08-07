@@ -111,9 +111,6 @@ class tokenManager:  # TODO this thing could be its own protocol and run as a sh
         self.tokenDict[ip].remove(token)
         print(self.tokenDict)
 
-def startup():
-    return "starting"
-
 class make_shutdown:
     def __init__(self, serverLoop, serverThread, serverCon, serverData, ppe):
         self.serverLoop = serverLoop
@@ -147,8 +144,6 @@ def main():
     from protocols import connectionServerProtocol, dataServerProtocol
     serverLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
-    out = ppe.submit(startup)  # urg python bug
-    #serverLoop.set_default_executor(ppe)  #guido says bad
 
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cafile=None)
     dataContext = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)

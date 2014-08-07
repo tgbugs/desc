@@ -10,8 +10,16 @@ def _process_worker(call_queue, result_queue):
 
 _process_worker.__doc__ = _process_worker_base.__doc__ + _process_worker.__doc__
 
+def startup():  # super hack!
+    """ dummy function populate the process pool """
+    return "Starting."
+
 class ProcessPoolExecutor_fixed(ProcessPoolExecutor):
     """ A ProcessPoolExecutor that doesn't succumb to KeyboardInterrups """
+    def __init__(self, max_workers=None):
+        super().__init__(max_workers=max_workers)
+        self.submit(startup)
+
     def _adjust_process_count(self):
         for _ in range(len(self._processes), self._max_workers):
             p = Process(

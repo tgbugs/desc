@@ -1,4 +1,5 @@
 import sys
+from threading import Thread, Lock
 from direct.showbase.DirectObject import DirectObject
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode, Point3
@@ -24,19 +25,23 @@ class exit_cleanup(DirectObject):
         the code following run() in the main thread
         will never execute
     """
-    def __init__(self, event_loop = None, ppe = None):
+    def __init__(self, event_loop = None, ppe = None, transport = None):
         self.event_loop = event_loop
         self.ppe = ppe
+        self.transport = transport
         self.accept("escape",self.exit)
 
     def exit(self):
         #we must call stop before sys.exit() or we can't stop the loop
-        if self.event_loop:
-            self.event_loop.call_soon_threadsafe(self.event_loop.stop)
+        if self.transport:
+            self.transport.write_eof()
         if self.ppe:
             self.ppe.shutdown(wait=False)  # WE still have to wait
-            
+        if self.event_loop:
+            self.event_loop.call_soon_threadsafe(self.event_loop.stop)
+
         sys.exit()  # FIXME for some reason tasks seem to persist
+        taskMgr.stop() 
 
 class ui_text(DirectObject):
     def __init__(self):

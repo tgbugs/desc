@@ -37,9 +37,15 @@ class renderManager(DirectObject):
         right way... run_in_executor??? shouldnt there be a way to NOT use run_in_executor?
     """
 
-    RECV_LIMIT = 50  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
-    BAM_ADD_LIMIT = 5  # TODO
-    COLL_ADD_LIMIT = 50  # in theory we could scale this based on load
+    limit = False
+    if limit:
+        RECV_LIMIT = 50  # tweak to keep recv/frame sane, 2 is ~30fps (computer pending)
+        BAM_ADD_LIMIT = 5  # TODO
+        COLL_ADD_LIMIT = 50  # in theory we could scale this based on load
+    else:
+        RECV_LIMIT = 99999
+        BAM_ADD_LIMIT = 99999
+        COLL_ADD_LIMIT = 99999
     
     def __init__(self, event_loop = None, ppe = None):
         self.event_loop = event_loop

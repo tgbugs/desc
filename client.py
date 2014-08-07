@@ -6,7 +6,8 @@ import time
 from asyncio import get_event_loop
 from threading import Thread
 
-from IPython import embed
+from IPython import embed, get_ipython
+from IPython.terminal.embed import InteractiveShellEmbed
 
 #import rpdb2
 #rpdb2.start_embedded_debugger("asdf123")
@@ -16,12 +17,12 @@ from IPython import embed
 # XXX NOTE TODO: There are "DistributedObjects" that exist in panda3d that we might be able to use instead of this???
     #that would vastly simplify life...? ehhhhh
 
-def startup():
-    return "starting"
+ipshell = InteractiveShellEmbed(banner1='')
+
 
 def main():
     import sys
-    from concurrent.futures import ProcessPoolExecutor
+    from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
 
     # render setup
     from direct.showbase.ShowBase import ShowBase
@@ -63,11 +64,8 @@ def main():
     #asyncio and network setup
     clientLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
-    out = ppe.submit(startup)  # FIXME WAT WAT WAT mega bug with starting the process pool for the first time in run_in_executor, something with future state = running
     #clientLoop.set_default_executor(ppe)
 
-    #make sure we can exit
-    el = exit_cleanup(clientLoop, ppe)  #use this to call stop() on run_forever
 
     rendMan = renderManager(clientLoop, ppe)
 
@@ -87,8 +85,17 @@ def main():
     datCli = datCli_base()
     datCli.connection_lost('START')
 
+
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()
+
+    #handle = clientLoop.call_soon_threadsafe(ipshell)
+    #consoleThread = Thread(target=run_console)
+    #consoleThread.start()
+
+    #make sure we can exit
+    el = exit_cleanup(clientLoop, ppe, datCli.transport)  #use this to call stop() on run_forever
+
     run()  # this MUST be called last because we use sys.exit() to terminate
     assert False, 'Note how this never gets printed due to sys.exit()'
 

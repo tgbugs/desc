@@ -31,11 +31,8 @@ def make_response(pipe, request, respMaker):
     rh =  request.hash_
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
     data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
-    print('sending data stream')
     pipe.send_bytes(data_stream)
-    print('sent data stream')
     pipe.close()
-    print('closed pipe')
     del pipe
 
 
@@ -68,7 +65,7 @@ class connectionClientProtocol(asyncio.Protocol):  # this could just be made int
         #print('token?',data)
         if token_start != -1:
             #token_start += DataByteStream.LEN_OPCODE
-            print('__',self,'token_start',token_start,'__')
+            #print('__',self,'token_start',token_start,'__')
             token_data = data[token_start:token_start+DataByteStream.LEN_OPCODE+DataByteStream.LEN_TOKEN]
         if token_data:
             self.future_token.set_result(token_data)
@@ -76,7 +73,8 @@ class connectionClientProtocol(asyncio.Protocol):  # this could just be made int
 
     def connection_lost(self, exc):
         if exc is None:
-            print("New connection transport closed.")
+            pass
+            #print("New connection transport closed.")
 
     @asyncio.coroutine
     def get_data_token(self, timeout = None):
@@ -412,17 +410,17 @@ class dataServerProtocol(asyncio.Protocol):
                 if pops:
                     pops.sort()
                     pops.reverse()  # so that the index doesn't change
-                    print(pipes)
-                    print('things to pop',pops)
+                    #print(pipes)
+                    #print('things to pop',pops)
                     for index in pops:
-                        print("popping:",index)
+                        #print("popping:",index)
                         pipes.pop(index)
                 if not pipes:
                     break
 
-            print(self.pprefix, 'finished processing requests')
-        else:
-            print(self.pprefix, 'there were no requests')
+            #print(self.pprefix, 'finished processing requests')
+        #else:
+            #print(self.pprefix, 'there were no requests')
         
         #do prediction
         if pred < 1:

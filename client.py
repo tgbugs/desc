@@ -64,7 +64,7 @@ def main():
 
     rendMan = renderManager(clientLoop, ppe)
 
-    bs = BoxSel(frames)
+    bs = BoxSel(frames, ppe)
 
     # TODO ssl contexts
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...

@@ -30,18 +30,20 @@ from defaults import *
 from util import genLabelText
 from test_objects import makeSimpleGeom
 
+import inspect
 
 RADIANS_PER_DEGREE = pi/180
 
 
 
-def projectNode(node, points3, points, visualize):
+def projectNode(node, bounds, visualize):
+    lX, uX, lZ, uZ = bounds
     point3d = node.getBounds().getApproxCenter()
     p3 = base.cam.getRelativePoint(render, point3d)
     p2 = Point2()
 
     if not base.camLens.project(p3,p2):
-        return False
+        return False, None, None
 
     pX = p2[0]
     pZ = p2[1]
@@ -53,16 +55,25 @@ def projectNode(node, points3, points, visualize):
                 #points3.append(point3d)
                 if visualize >= BoxSel.VIS_ALL:
                     #points.append([pX, 0, pZ])
-                    return True, point3d, [px, 0, pZ]
+                    return True, point3d, [pX, 0, pZ]
                 else:
                     return True, point3d, None
             else:
                 return True, None, None
 
+    return False, None, None  # base case
 
-def projectL2(node, centers, track_pos, cam_pos, utilityNode, visualize):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
+def projectL2(args):
+    try:
+        return _projectL2(args)
+    except BaseException as e:
+        print(e)
+        tb = [repr(t) for t in inspect.trace()]
+        return ['WHAT HAS SCIENCE DONE!?'], [e], None, None, None, tb
+
+def _projectL2(args):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
     """ projec only the centers of l2 spehres, figure out how to get their radii """
-    
+    node, centers, bounds, track_pos, cam_pos, lensFL, cfz, boxRadius, utilityNode, visualize = args
     points = None
     l2hit = None
     l2miss = None
@@ -109,6 +120,7 @@ def projectL2(node, centers, track_pos, cam_pos, utilityNode, visualize):  # FIX
             radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
             add_projRoot.append(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
 
+    nodes = []
     for boxCenter in centers:  # TODO there is a tradeoff here between number of box centers and mistargeting other nodes due to having a larger radius
         diff = point2projection - boxCenter  # FIXME aspect 2d??
         distance = diff.length()
@@ -124,8 +136,9 @@ def projectL2(node, centers, track_pos, cam_pos, utilityNode, visualize):  # FIX
 
         if visualize >= BoxSel.VIS_ALL:
             # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
-            circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
-            circleIntersect.setRenderModeThickness(4)
+            #circleIntersect = self.projRoot.attachNewNode(
+            add_projRoot.append(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
+            #circleIntersect.setRenderModeThickness(4) #FIXME
 
             # a circle of the box radius
             boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
@@ -137,10 +150,16 @@ def projectL2(node, centers, track_pos, cam_pos, utilityNode, visualize):  # FIX
 
         if distance < boxRadius + rescaled:
             for c in node.getChildren():
-                if projectNode(c, points3, points, visualize):
-                    pass
-                    #TODO process target!
-            if self.visualize >= BoxSel.VIS_L2:
+                isContained, point3, point = projectNode(c, bounds, visualize)
+                if isContained:
+                    nodes.append(c)
+                    if point3:  # FIXME ick!
+                        points3.append(point3)
+                        if point:
+                            points.append(point)
+
+                
+            if visualize >= BoxSel.VIS_L2:
                 l2hit = point3d
                 if visualize >= BoxSel.VIS_DEBUG_LINES:
                     add_projRoot.append(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
@@ -149,7 +168,7 @@ def projectL2(node, centers, track_pos, cam_pos, utilityNode, visualize):  # FIX
         elif visualize >= BoxSel.VIS_DEBUG_LINES:
             add_projRoot.append(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
-    return points3, points, l2hit, l2miss, add_projRoot
+    return nodes, points3, points, l2hit, l2miss, add_projRoot
 
 
 def fixAsp(point):  # FIXME broken
@@ -280,9 +299,10 @@ class BoxSel(HasSelectables,DirectObject):
     VIS_ALL = 3
     VIS_DEBUG = 4
     VIS_DEBUG_LINES = 5
-    def __init__(self, frames = None, visualize = VIS_POINTS):
+    def __init__(self, frames = None, ppe = None, visualize = VIS_POINTS):
         super().__init__()
         self.visualize = visualize
+        self.ppe = ppe
 
         self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
@@ -738,17 +758,37 @@ class BoxSel(HasSelectables,DirectObject):
             if self.visualize >= self.VIS_ALL:
                 l2all = []
 
+        l2points = []
+        l2all = []
+        points3 = []
+        points = []
 
+
+        bounds = lX, uX, lZ, uZ
         track = camera.find('track')
         track_pos = render.getRelativePoint(track, track.getPos())
         cam_pos = render.getRelativePoint(camera, camera.getPos())
         utilityNode = render.attachNewNode('utilityNode')
         # actually do the projection
-        for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
-            points3, points, l2hit, l2miss, add_projRoot = projectL2(c, centers, track_pos, cam_pos, utilityNode, self.visualize)
+        def make_args(iterable):
+            for child in iterable:
+                yield (child, centers, bounds, track_pos, cam_pos, lensFL, cfz, boxRadius, utilityNode, self.visualize)
+        args = make_args(self.collRoot.getChildren())
+        out = self.ppe.map(projectL2, args)
+        for nodes, points3_, points_, l2hit_, l2miss_, add_projRoot in out:
+            for node in nodes:
+                self.processTarget(node)  # FIXME this should probably be done in the process?
+            for node in add_projRoot:
+                self.projRoot.attachNewNode(node)
+            if points3_:
+                points3.extend(points3_)
+                if points_:
+                    points.extend(points_)
+            if l2hit_:
+                l2points.append(l2hit_)
+            elif l2miss_:
+                l2all.append(l2mis_)
 
-        print(len(self.curSelShown))
-        #someday we thread this ;_;
         if self.visualize:
             pts3 = makeSimpleGeom(points3, [1,1,1,1])
             p3n = self.selRoot.attachNewNode(pts3)
@@ -767,6 +807,8 @@ class BoxSel(HasSelectables,DirectObject):
                     pts = makeSimpleGeom(points,[1,1,1,1])
                     self.projRoot.attachNewNode(pts)
 
+        #for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
+            #nodes, points3, points, l2hit, l2miss, add_projRoot = projectL2(c, centers, bounds, track_pos, cam_pos, utilityNode, self.visualize)
 
         # set up the task to add entries to the data frame TODO own function?
         stop = len(self.frames['data'].items) - 1

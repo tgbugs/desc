@@ -6,7 +6,7 @@ import time
 from asyncio import get_event_loop
 from threading import Thread
 
-from IPython import embed, get_ipython
+from ipython import embed
 from IPython.terminal.embed import InteractiveShellEmbed
 
 #import rpdb2

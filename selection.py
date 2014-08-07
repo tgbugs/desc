@@ -24,7 +24,7 @@ from numpy import pi, arange, sin, cos, tan, arctan2 #, arccos, arcsin, arctan2,
 
 import sys
 from threading import Thread
-from IPython import embed
+from ipython import embed
 
 from defaults import *
 from util import genLabelText

@@ -3,7 +3,7 @@ from threading import Thread, Lock
 from direct.showbase.DirectObject import DirectObject
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode, Point3
-from IPython import embed
+from ipython import embed
 
 from monitor import getMaxPixelsPerMM
 

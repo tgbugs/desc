@@ -7,7 +7,7 @@ import zlib
 from uuid import uuid4
 
 #from numpy import cumsum
-from IPython import embed
+from ipython import embed
 
 class Request:  # testing only since this will need to be in its own module to keep python happy
     """ the serializable object used for transporting the requested data
@@ -260,7 +260,7 @@ RAND_REQUEST = lambda: Request('random','%s'%uuid4(),(0,0,0),None)
 
 def main():
     from enum import Enum
-    from IPython import embed
+    from ipython import embed
 
     class REQUEST_TYPES(Enum):
         # for some reason I think we really do not want to hard code this since request types seem likely to ... grow?

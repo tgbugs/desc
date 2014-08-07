@@ -8,8 +8,7 @@ from uuid import uuid4
 from collections import defaultdict, deque
 
 import numpy as np
-from IPython import embed
-from IPython.core.autocall import ExitAutocall
+from ipython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from test_objects import makeSimpleGeom
@@ -122,7 +121,6 @@ class make_shutdown:
         self.ppe = ppe
 
         self.done = False
-        self.exit = ExitAutocall()
 
     def __call_(self):
         repr(self)

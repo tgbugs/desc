@@ -7,7 +7,7 @@ from time import sleep
 from uuid import uuid4
 
 import numpy as np
-from IPython import embed
+from ipython import embed
 
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode, PandaNode, NodePath

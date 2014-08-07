@@ -33,6 +33,125 @@ from test_objects import makeSimpleGeom
 
 RADIANS_PER_DEGREE = pi/180
 
+
+
+def projectNode(node, points3, points, visualize):
+    point3d = node.getBounds().getApproxCenter()
+    p3 = base.cam.getRelativePoint(render, point3d)
+    p2 = Point2()
+
+    if not base.camLens.project(p3,p2):
+        return False
+
+    pX = p2[0]
+    pZ = p2[1]
+    # check if the points are inside the box
+    if lX <= pX and pX <= uX:
+        if lZ <= pZ and pZ <= uZ: 
+            #self.processTarget(node)  #TODO, this is the big one
+            if visualize:
+                #points3.append(point3d)
+                if visualize >= BoxSel.VIS_ALL:
+                    #points.append([pX, 0, pZ])
+                    return True, point3d, [px, 0, pZ]
+                else:
+                    return True, point3d, None
+            else:
+                return True, None, None
+
+
+def projectL2(node, centers, track_pos, cam_pos, utilityNode, visualize):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
+    """ projec only the centers of l2 spehres, figure out how to get their radii """
+    
+    points = None
+    l2hit = None
+    l2miss = None
+    add_projRoot = []  # call projRoot.attachNewNode out the output
+
+    point3d = node.getBounds().getApproxCenter()
+    p3 = camera.getRelativePoint(render, point3d)
+    p2 = Point2()
+
+    base.camLens.project(p3,p2)
+
+    point2projection = Point3(p2[0],0,p2[1])
+
+    r3 = node.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
+    utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
+    # this also works correctly with no apparent issues
+    d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
+    if not d1:
+        d1 = 1E-9
+
+
+    camVec = track_pos - cam_pos
+    pointVect = point3d - cam_pos
+
+    theta = abs(camVec.relativeAngleRad(pointVect))
+
+    #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
+    radius_correction = 2  #no idea if this is correct...
+    eccen_corr = theta
+    eccen_corr = 1
+    projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)  # need to compensate for distance effect on theta
+
+    points3 = None
+    points = None
+    if visualize:
+        points3 = []
+        if visualize >= BoxSel.VIS_ALL:
+            points = []
+
+            # centers of all l2 points
+            l2miss = point3d
+
+            # visualize the projected radius of l2 collision spheres
+            radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+            add_projRoot.append(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
+
+    for boxCenter in centers:  # TODO there is a tradeoff here between number of box centers and mistargeting other nodes due to having a larger radius
+        diff = point2projection - boxCenter  # FIXME aspect 2d??
+        distance = diff.length()
+
+        dx = (boxCenter[0] - p2[0])
+        dz = (boxCenter[2] - p2[1]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
+        theta = arctan2(dz, dx)
+        #print(theta/pi,"pi radians")
+
+        x = cos(theta) * projNodeRadius
+        z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
+        rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
+
+        if visualize >= BoxSel.VIS_ALL:
+            # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
+            circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
+            circleIntersect.setRenderModeThickness(4)
+
+            # a circle of the box radius
+            boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
+            add_projRoot.append(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
+
+            if visualize >= BoxSel.VIS_DEBUG_LINES:
+                line = [point2projection, boxCenter]
+
+
+        if distance < boxRadius + rescaled:
+            for c in node.getChildren():
+                if projectNode(c, points3, points, visualize):
+                    pass
+                    #TODO process target!
+            if self.visualize >= BoxSel.VIS_L2:
+                l2hit = point3d
+                if visualize >= BoxSel.VIS_DEBUG_LINES:
+                    add_projRoot.append(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+            break
+
+        elif visualize >= BoxSel.VIS_DEBUG_LINES:
+            add_projRoot.append(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
+
+    return points3, points, l2hit, l2miss, add_projRoot
+
+
 def fixAsp(point):  # FIXME broken
     return render2d.getRelativePoint(aspect2d,point)
     #return aspect2d.getRelativePoint(render2d,point)  # no...
@@ -305,7 +424,7 @@ class BoxSel(HasSelectables,DirectObject):
         #embed()
         return task.cont
 
-    def getEnclosedNodes(self):
+    def _getEnclosedNodes(self):
         #cfx, cfz = base.camLens.getFilmSize()  # FIXME need this for a bunch of corrections
         cfx = 1
         cfz = base.camLens.getAspectRatio()
@@ -407,8 +526,6 @@ class BoxSel(HasSelectables,DirectObject):
             d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
             if not d1:
                 d1 = 1E-9
-
-            
 
             #h, p, r = camera.getParent().getHpr() * RADIANS_PER_DEGREE
             #camF = LPoint3f()
@@ -523,7 +640,7 @@ class BoxSel(HasSelectables,DirectObject):
                     self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
         # actually do the projection
-        for c in self.collRoot.getChildren():  # FIXME this is linear and doesnt use the pseudo oct tree
+        for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
             projectL2(c)
 
         print(len(self.curSelShown))
@@ -557,6 +674,110 @@ class BoxSel(HasSelectables,DirectObject):
         #if self.show_stop:
             #taskMgr.add(self.show_task, 'show_task')
 
+
+    def getEnclosedNodes(self):
+        #cfx, cfz = base.camLens.getFilmSize()  # FIXME need this for a bunch of corrections
+        cfx = 1
+        cfz = base.camLens.getAspectRatio()
+        cx,cy,cz = self.__baseBox__.getPos()
+        sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
+        self.selRoot.removeChildren()
+        self.projRoot.removeChildren()
+
+        x2 = cx + sx
+        if cx > x2:
+            uX = cx
+            lX = x2
+        else:
+            uX = x2
+            lX = cx
+
+        z2 = cz + sz
+        if cz > z2:
+            uZ = cz
+            lZ = z2
+        else:
+            uZ = z2
+            lZ = cz
+
+        #boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5  # TODO we could make it so that every 2x change in raidus used 2 circles instead of 1 to prevent overshoot we can't just divide the radius by 2 though :/
+        #boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
+
+        def calcSelectionBoxRC(major, minor):
+            if not minor:
+                return 0, [0]
+            ratio = abs(major / minor)
+            if ratio > 5:  # prevent combinatorial nightmares TODO tune me!
+                ratio = 5
+            elif ratio < 1.25:
+                ratio = 1
+            else:
+                ratio = int(ratio)
+
+            split = major / ratio
+            radius = ((split * .5)**2 + (minor * .5)**2)**.5
+            majCents = [(split * .5) + i*(split) for i in range(ratio)]
+            return radius, majCents
+
+        if abs(sx) > abs(sz):
+            boxRadius, majCents = calcSelectionBoxRC(sx, sz)
+            centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
+        else:
+            boxRadius, majCents = calcSelectionBoxRC(sz, sx)
+            centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
+
+        lensFL = base.camLens.getFocalLength()
+        fov = max(base.camLens.getFov()) * RADIANS_PER_DEGREE
+        #print("focal length",lensFL)
+        #print("fov", base.camLens.getFov())
+
+
+
+        if self.visualize >= self.VIS_L2:
+            l2points = []
+            if self.visualize >= self.VIS_ALL:
+                l2all = []
+
+
+        track = camera.find('track')
+        track_pos = render.getRelativePoint(track, track.getPos())
+        cam_pos = render.getRelativePoint(camera, camera.getPos())
+        utilityNode = render.attachNewNode('utilityNode')
+        # actually do the projection
+        for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
+            points3, points, l2hit, l2miss, add_projRoot = projectL2(c, centers, track_pos, cam_pos, utilityNode, self.visualize)
+
+        print(len(self.curSelShown))
+        #someday we thread this ;_;
+        if self.visualize:
+            pts3 = makeSimpleGeom(points3, [1,1,1,1])
+            p3n = self.selRoot.attachNewNode(pts3)
+            p3n.setRenderModeThickness(3)  # render order >_<
+
+            if self.visualize >= self.VIS_L2:
+                l2s = makeSimpleGeom(l2points,[0,1,0,1])
+                l2n = self.selRoot.attachNewNode(l2s)
+                l2n.setRenderModeThickness(8)
+
+                if self.visualize >= self.VIS_ALL:
+                    l2as = makeSimpleGeom(l2all,[1,0,0,1])
+                    l2an = self.selRoot.attachNewNode(l2as)
+                    l2an.setRenderModeThickness(8)
+
+                    pts = makeSimpleGeom(points,[1,1,1,1])
+                    self.projRoot.attachNewNode(pts)
+
+
+        # set up the task to add entries to the data frame TODO own function?
+        stop = len(self.frames['data'].items) - 1
+        for into in self.curSelShown[:stop]:
+            uuid = into.getTag('uuid')
+            self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )
+        #self.show_stop = len(self.curSelShown[:stop])
+        #self.show_count = 0
+        #if self.show_stop:
+            #taskMgr.add(self.show_task, 'show_task')
+    
     def show_task(self, task):
         if self.show_count >= self.show_stop:
             taskMgr.remove(task.getName())

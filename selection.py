@@ -163,10 +163,9 @@ class BoxSel(HasSelectables,DirectObject):
     VIS_ALL = 3
     VIS_DEBUG = 4
     VIS_DEBUG_LINES = 5
-    def __init__(self, frames = None, ppe = None, visualize = VIS_POINTS):
+    def __init__(self, frames = None, visualize = VIS_POINTS):
         super().__init__()
         self.visualize = visualize
-        self.ppe = ppe
 
         self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
@@ -499,14 +498,18 @@ class BoxSel(HasSelectables,DirectObject):
             split = major / ratio
             radius = ((split * .5)**2 + (minor * .5)**2)**.5
             majCents = [(split * .5) + i*(split) for i in range(ratio)]
-            return radius, majCents
+            #distFuncs = [lambda theta: radius for i in range(ratio)]
+            #print(distFuncs)
+            return radius, majCents #, distFuncs
 
         if abs(sx) > abs(sz):
             boxRadius, majCents = calcSelectionBoxRC(sx, sz)
             centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
+            #centers = zip(centers_, distFuncs)
         else:
             boxRadius, majCents = calcSelectionBoxRC(sz, sx)
             centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
+            #centers = zip(centers_, distFuncs)
 
         lensFL = base.camLens.getFocalLength()
         fov = max(base.camLens.getFov()) * RADIANS_PER_DEGREE
@@ -607,7 +610,8 @@ class BoxSel(HasSelectables,DirectObject):
                     if self.visualize >= self.VIS_DEBUG_LINES:
                         line = [point2projection, boxCenter]
 
-
+                #print(boxRadius, boxDist(theta))
+                #b = boxDist(theta)
                 if distance < boxRadius + rescaled:
                     for c in node.getChildren():
                         if c.getNumChildren():

@@ -20,7 +20,7 @@ from panda3d.core import LPoint2f, LPoint3f, LVector3f
 from panda3d.core import CollisionTraverser,CollisionNode
 from panda3d.core import CollisionHandlerQueue,CollisionRay,CollisionLine
 
-from numpy import pi, arange, sin, cos, tan, arctan2 #, arccos, arcsin, arctan2, arccos2, arcsin2
+from numpy import pi, arange, argmin, sin, cos, tan, arctan2 #, arccos, arcsin, arctan2, arccos2, arcsin2
 
 import sys
 from threading import Thread
@@ -38,6 +38,20 @@ RADIANS_PER_DEGREE = pi/180
 def fixAsp(point):  # FIXME broken
     return render2d.getRelativePoint(aspect2d,point)
     #return aspect2d.getRelativePoint(render2d,point)  # no...
+
+def norm(x, y):
+    return (x**2 + y**2)**.5
+
+def rescale(p2p, corner, radius, cfz):
+    """ aspect ratio fix for radii >_< """
+    dx = (corner[0] - p2p[0])
+    dz = (corner[2] - p2p[2]) / cfz
+    theta = arctan2(dz, dx)
+
+    x = cos(theta) * radius
+    z = sin(theta) * radius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
+    return (x**2 + z**2)**.5  #
+
 
 class HasSelectables: #mixin see chessboard example
     def __init__(self):
@@ -519,6 +533,7 @@ class BoxSel(HasSelectables,DirectObject):
             if self.visualize >= self.VIS_ALL:
                 points = []
 
+
         def projectNode(node):
             point3d = node.getBounds().getApproxCenter()
             p3 = base.cam.getRelativePoint(render, point3d)
@@ -600,19 +615,21 @@ class BoxSel(HasSelectables,DirectObject):
 
                 if self.visualize >= self.VIS_ALL:
                     # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
-                    circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
-                    circleIntersect.setRenderModeThickness(4)
+                    #circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
+                    #circleIntersect.setRenderModeThickness(4)
 
                     # a circle of the box radius
-                    boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
-                    self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
+                    #boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
+                    #self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
 
                     if self.visualize >= self.VIS_DEBUG_LINES:
                         line = [point2projection, boxCenter]
 
                 #print(boxRadius, boxDist(theta))
                 #b = boxDist(theta)
-                if distance < boxRadius + rescaled:
+                
+                if tests(d1, r3, projNodeRadius, point2projection[0], point2projection[2] , lX, uX, lZ, uZ, cfz):
+                #if distance < boxRadius + rescaled:
                     for c in node.getChildren():
                         if c.getNumChildren():
                             projectL2(c)
@@ -626,6 +643,67 @@ class BoxSel(HasSelectables,DirectObject):
 
                 elif self.visualize >= self.VIS_DEBUG_LINES:
                     self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
+
+        def tests(d1, r3, radius, pX, pZ, lX, uX, lZ, uZ, cfz):
+            if d1 < r3:
+                return True
+
+            Xin = lX <= pX and pX <= uX
+            Zin = lZ <= pZ and pZ <= uZ
+
+            if Xin and Zin:
+                print("Xin and Zin")
+                return True
+
+            dxl = pX - lX
+            dxu = pX - uX
+            dzl = pZ - lZ
+            dzu = pZ - uZ
+
+            corners = (
+                Point3(lX, 0, lZ),
+                Point3(lX, 0, uZ),
+                Point3(uX, 0, lZ),
+                Point3(uX, 0, uZ),
+            )
+
+            corner_vectors = (
+                (dxl, dzl),
+                (dxl, dzu),
+                (dxu, dzl),
+                (dxu, dzu),
+            )
+
+            #dists = [norm(*cv) for cv in corner_vectors]
+            p2p = Point3(pX, 0, pZ)
+            radii = [rescale(p2p, c, radius, cfz) for c in corners]
+            dists = [(c - p2p).length() for c in corners]
+            diffs = [ d - r for d,r in zip(dists, radii)]
+
+            #if min(dists) <= radius:
+            if any([d < 0 for d in diffs]):
+                #lines = [(Point3(x, 0, z), Point3(pX, 0, pZ)) for x,z in corner_vectors]
+                #for line in lines:
+                    #self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+                corner = corners[argmin(dists)]
+                line = (corner, (pX, 0, pZ))
+                self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+                print("min of norms")
+                return True
+
+            min_dxs = min(abs(dxl), abs(dxu))
+            min_dzs = min(abs(dzl), abs(dzu))
+
+            if min_dxs <= radius and Zin:
+                print('dx < r and Zin')
+                return True
+            elif min_dzs <= radius and Xin:
+                print('dz < r and Xin')
+                return True
+            else:
+                return False
+
+
 
         # actually do the projection
         for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree

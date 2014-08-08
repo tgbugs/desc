@@ -404,57 +404,68 @@ class BoxSel(HasSelectables,DirectObject):
         camVec = track_pos - cam_pos
         radius_correction = 2  #no idea if this is correct...
         p2 = Point2()
-        def projectL2(node):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
+        def projectL2(node, contained = False):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
             """ projec only the centers of l2 spehres, figure out how to get their radii """
-            point3d = node.getBounds().getApproxCenter()
-            #p3 = base.cam.getRelativePoint(render, point3d)
-            p3 = camera.getRelativePoint(render, point3d)
 
-            base.camLens.project(p3,p2)
+            if contained:
+                test = True
+            else:
+                point3d = node.getBounds().getApproxCenter()
+                p3 = camera.getRelativePoint(render, point3d)
+                base.camLens.project(p3,p2)
+                point2projection = Point3(p2[0],0,p2[1])
 
-            point2projection = Point3(p2[0],0,p2[1])
+                r3 = node.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
+                utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
+                # this also works correctly with no apparent issues
+                d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
+                if not d1:
+                    d1 = 1E-9
 
-            r3 = node.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
-            utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
-            # this also works correctly with no apparent issues
-            d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
-            if not d1:
-                d1 = 1E-9
+                pointVect = point3d - cam_pos
 
-            pointVect = point3d - cam_pos
+                pos_theta = abs(camVec.relativeAngleRad(pointVect))
 
-            pos_theta = abs(camVec.relativeAngleRad(pointVect))
+                #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
+                eccen_corr = pos_theta
+                eccen_corr = 1
+                # XXX the magic happens here
+                projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)  # need to compensate for distance effect on theta
 
-            #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
-            eccen_corr = pos_theta
-            eccen_corr = 1
-            # XXX the magic happens here
-            projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)  # need to compensate for distance effect on theta
 
-            if self.visualize >= self.VIS_ALL:
-                # centers of all l2 points
-                l2all.append(point3d)
+                test = tests(d1, r3, projNodeRadius, point2projection, lX, uX, lZ, uZ, cfz)
+                if test == -1
+                    contained = True
 
-                # visualize the projected radius of l2 collision spheres
-                radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
-                self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
 
-            if tests(d1, r3, projNodeRadius, point2projection, lX, uX, lZ, uZ, cfz):
+                if self.visualize >= self.VIS_ALL:
+                    # centers of all l2 points
+                    l2all.append(point3d)
+
+                    if contained:
+                        color = [0,1,0,1]
+                    else:
+                        color = [0,0,1,1]
+
+                    # visualize the projected radius of l2 collision spheres
+                    radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+                    self.projRoot.attachNewNode(makeSimpleGeom(radU,color,GeomLinestrips))
+            if test:
                 for c in node.getChildren():
                     if c.getNumChildren():
-                        projectL2(c)
+                        projectL2(c, contained)
                     else:
                         projectNode(c)
 
-                if self.visualize >= self.VIS_L2:
-                    l2points.append(point3d)
-                    if self.visualize >= self.VIS_ALL:
-                        radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
-                        n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
-                        n.setBin('unsorted',0)
-                        if self.visualize >= self.VIS_DEBUG_LINES:
-                            self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
-                return None  # return as soon as any one of the centers gets a hit
+                if not contained:
+                    if self.visualize >= self.VIS_L2:
+                        l2points.append(point3d)
+                        if self.visualize >= self.VIS_ALL:
+                            radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+                            n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
+                            n.setBin('unsorted',0)
+                            if self.visualize >= self.VIS_DEBUG_LINES:
+                                self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
 
             elif self.visualize >= self.VIS_DEBUG_LINES:
                 self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
@@ -468,6 +479,10 @@ class BoxSel(HasSelectables,DirectObject):
             pX, _, pZ = p2p
             Xin = lX <= pX and pX <= uX
             Zin = lZ <= pZ and pZ <= uZ
+
+            if lX <= pX - radius and pX + radius <= uX and lZ <= pZ - radius and pZ + radius <= uZ:
+                print("circle in box")
+                return -1
 
             if Xin and Zin:
                 #print("Xin and Zin")

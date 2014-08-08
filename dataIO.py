@@ -188,8 +188,6 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
     num_points = len(positions)
 
     if num_points <= 0:
-        if center != None:
-            parent.removeNode()  # FIXME fixt this by actually treating the parent as a parent >_<
         return None
 
     if center is None:
@@ -198,9 +196,11 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         side = ((4/3) * radius**2) ** .5
         radius += 2
         if parent is None:
-            parent = NodePath(CollisionNode('Root for THIS batch of positions 0'))
+            l2Node = NodePath(CollisionNode('Root for THIS batch of positions 0'))
         else:
-            parent = parent.attachNewNode(CollisionNode('Root for THIS batch of positions 0'))
+            l2Node = parent.attachNewNode(CollisionNode('Root for THIS batch of positions 0'))
+    else:
+        l2Node = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
 
     bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
     partition = positions > center
@@ -215,8 +215,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         branch = bitmasks[i]
         new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
         subSet = positions[branch]
-        new_parent = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
-        next_leaves.append((new_parent, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
+        next_leaves.append((l2Node, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
 
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:
@@ -230,7 +229,8 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
                         d = np.linalg.norm(np.array(p2) - np.array(p1))
                         dists.append(d)
             r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
-            l2Node = parent.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
+            #l2Node = parent.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
+            l2Node.setName('leaf %s.%s. %s'%(request_hash, c, int(parent.getName()[-2:]) + 1))
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
@@ -243,11 +243,11 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
                 pipe.close()
                 return None
             else:
-                return parent  # just for kicks even though all this is in place
+                return l2Node  # just for kicks even though all this is in place
 
         else:
-            l2Node = parent
             #l2Node = parent.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
+            l2Node.setName('leaf '+l2Node.getName())
             l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
 
@@ -259,8 +259,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         return l2Node
     else:  # we are a containing node
         #l2Node = parent.attachNewNode(CollisionNode("%s.%s.empty_parent"%(request_hash,center)))
-        parent.setName(parent.getName()+'empty_parent')
-        l2Node = parent
+        l2Node.setName('branch '+l2Node.getName())
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))  # this does not collide
 
@@ -272,7 +271,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
             pipe.send(s)
         pipe.close()
     else:
-        return parent  # just for kicks even though all this is in place
+        return l2Node  # just for kicks even though all this is in place
 
 def treeMeMap(leaf):
     return treeMe(*leaf)

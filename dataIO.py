@@ -190,15 +190,15 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
     if num_points <= 0:
         return None
 
-    if center is None:
+    if center == None:  # must use equality due to id changing across interpreters
         center = np.mean(positions, axis=0)
-        radius = np.max(np.linalg.norm(positions - center))
+        norms = np.linalg.norm(positions - center, axis = 1)
+        radius = np.max(norms) * .5
         side = ((4/3) * radius**2) ** .5
-        radius += 2
-        if parent is None:
-            l2Node = NodePath(CollisionNode('Root for THIS batch of positions 0'))
+        if parent == None:
+            l2Node = NodePath(CollisionNode('Root for %s 0'%request_hash))
         else:
-            l2Node = parent.attachNewNode(CollisionNode('Root for THIS batch of positions 0'))
+            l2Node = parent.attachNewNode(CollisionNode('Root for %s 0'%request_hash))
     else:
         l2Node = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
 
@@ -215,7 +215,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         branch = bitmasks[i]
         new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
         subSet = positions[branch]
-        next_leaves.append((l2Node, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
+        next_leaves.append((l2Node, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5, request_hash))
 
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:
@@ -235,11 +235,15 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
             [treeMe(*leaf) for leaf in next_leaves]
+            l2Node.setName('branch '+l2Node.getName())
+            l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
+            l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))  # this does not collide
             if pipe:  # extremely unlikely edge case
                 print("hit an early pip")
-                to_send = parent
-                for s in to_send:
-                    pipe.send(s)
+                to_send = l2Node
+                pipe.send(to_send)
+                #for s in to_send:
+                    #pipe.send(s)
                 pipe.close()
                 return None
             else:
@@ -266,9 +270,10 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
     [treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
-        to_send = parent
-        for s in to_send:
-            pipe.send(s)
+        to_send = l2Node
+        pipe.send(to_send)
+        #for s in to_send:
+            #pipe.send(s)
         pipe.close()
     else:
         return l2Node  # just for kicks even though all this is in place

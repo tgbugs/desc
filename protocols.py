@@ -473,7 +473,6 @@ class collPipeProtocol(asyncio.Protocol):
                 break
             node = ForkingPickler.loads(data[4:4+size])
             if self.render_:
-                pass
                 # FIXME either of these cause panda related segfaults  # only on athena >_<
                 # on the other hand, doesn't exit as fast on luz
                 node.reparentTo(self.collRoot)

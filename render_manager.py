@@ -146,27 +146,27 @@ class renderManager(DirectObject):
         try:
             if not self.cache[request_hash]:  # request expected
                 geom, coll, ui = self.make_nodes(request_hash, data_tuple)
-                if hasattr(coll, '__iter__'):  # not running in ppe
+                if hasattr(coll, 'recv'):  # not running in ppe
+                    todo = self.event_loop.connect_read_pipe(lambda: self.cpp(request_hash, geom, ui, render_=True), coll)
+                    asyncio.Task(todo, loop=self.event_loop)
+                    #self.make_nt_task(request_hash, geom, coll, ui, render_=True)
+                else:
                     self.geom_add_queue.append(geom)
-                    self.coll_add_queue.extend(coll)
+                    self.coll_add_queue.append(coll)
                     self.cache[request_hash] = geom, coll, ui
                     # TODO new async task goes here
                     if not taskMgr.hasTaskNamed('add_collision'):
                         taskMgr.add(self.add_collision_task,'add_collision')
-                else:
-                    todo = self.event_loop.connect_read_pipe(lambda: self.cpp(request_hash, geom, ui, render_=True), coll)
-                    asyncio.Task(todo, loop=self.event_loop)
-                    #self.make_nt_task(request_hash, geom, coll, ui, render_=True)
 
         except KeyError:
             print("predicted data view cached")
             geom, coll, ui = node_tuple = self.make_nodes(request_hash, data_tuple)
-            if hasattr(node_tuple[1], '__iter__'):  # not running in ppe
-                self.cache[request_hash] = node_tuple
-            else:
+            if hasattr(node_tuple[1], 'recv'):  # not running in ppe
                 todo = self.event_loop.connect_read_pipe(lambda: self.cpp(request_hash, geom, ui), coll)
                 asyncio.Task(todo, loop=self.event_loop)
                 #self.make_nt_task(request_hash, *node_tuple)
+            else:
+                self.cache[request_hash] = node_tuple
 
     # tasks
     def make_nt_task(self, request_hash, geom, coll, ui, render_ = False):
@@ -251,12 +251,12 @@ class renderManager(DirectObject):
         return out
 
     def makeColl(self, request_hash, coll_tup):
-        node = NodePath(PandaNode(''))  # use reparent to? XXX yes because of caching you tard
+        #node = NodePath(CollisionNode(''))  # use reparent to? XXX yes because of caching you tard
         pos, uuid, geom = coll_tup
-        #return treeMe(node, pos, uuid, geom, None, None, None, request_hash)
+        #return treeMe(None, pos, uuid, geom, None, None, None, request_hash)
         recv, send = mpp(False)
         try:
-            future = self.event_loop.run_in_executor(self.ppe, treeMe, node, pos, uuid, geom, None, None, None, request_hash, send)
+            future = self.event_loop.run_in_executor(self.ppe, treeMe, None, pos, uuid, geom, None, None, None, request_hash, send)
             return recv
         except RuntimeError:
             return None  # happens at shutdown
@@ -274,7 +274,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(10):
+        for _ in range(1):
             r = RAND_REQUEST()
             self.submit_request(r)
 

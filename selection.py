@@ -208,13 +208,26 @@ class BoxSel(HasSelectables,DirectObject):
         self.curSelPoints = []
 
     def toggle_vis(self):
+        def do_show(node):
+            #if node.getName().count('leaf'):  # apparently ALL parents must be visible?!
+            node.show()
+            for child in node.getChildren():
+                if child.getNumChildren():
+                    do_show(child)
+
+        def do_hide(node):
+            #if node.getName().count('leaf'):
+            node.hide()
+            for child in node.getChildren():
+                if child.getNumChildren():
+                    do_hide(child)
+
+
         self.visualize = (self.visualize + 1) % 6  # rotate through 4 levels
         if self.visualize == self.VIS_DEBUG:
-            for child in self.collRoot.getChildren():
-                child.show()
+            do_show(self.collRoot)
         elif not self.visualize:
-            for child in self.collRoot.getChildren():
-                child.hide()
+            do_hide(self.collRoot)
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
         #taskMgr.remove('show_task')
@@ -298,6 +311,9 @@ class BoxSel(HasSelectables,DirectObject):
                 self.__baseBox__.hide()
             #if abs(self.__baseBox__.getScale()[0]) > .005:
             if abs(self.__baseBox__.getScale()[0]) > .0001:
+                #if self.visualize > 1:
+                    #self.getEnclosedNodes_viz()
+                #else:
                 self.getEnclosedNodes()
             taskMgr.remove('boxTask')
 
@@ -310,7 +326,7 @@ class BoxSel(HasSelectables,DirectObject):
         #embed()
         return task.cont
 
-    def getEnclosedNodes(self):
+    def _getEnclosedNodes(self):
         cfx = 1
         cfz = base.camLens.getAspectRatio()
         cx,cy,cz = self.__baseBox__.getPos()
@@ -442,7 +458,7 @@ class BoxSel(HasSelectables,DirectObject):
             uuid = into.getTag('uuid')
             self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )
 
-    def getEnclosedNodes_viz(self):
+    def getEnclosedNodes(self):
         cfx = 1
         cfz = base.camLens.getAspectRatio()
         cx,cy,cz = self.__baseBox__.getPos()
@@ -523,13 +539,19 @@ class BoxSel(HasSelectables,DirectObject):
             l2points = []
             if self.visualize >= self.VIS_ALL:
                 l2all = []
+        # things we don't need to do every bloody time
         utilityNode = render.attachNewNode('utilityNode')
+        track = camera.find('track')
+        track_pos = render.getRelativePoint(track, track.getPos())
+        cam_pos = render.getRelativePoint(camera, camera.getPos())
+        camVec = track_pos - cam_pos
+        radius_correction = 2  #no idea if this is correct...
+        p2 = Point2()
         def projectL2(node):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
             """ projec only the centers of l2 spehres, figure out how to get their radii """
             point3d = node.getBounds().getApproxCenter()
             #p3 = base.cam.getRelativePoint(render, point3d)
             p3 = camera.getRelativePoint(render, point3d)
-            p2 = Point2()
 
             base.camLens.project(p3,p2)
 
@@ -542,18 +564,12 @@ class BoxSel(HasSelectables,DirectObject):
             if not d1:
                 d1 = 1E-9
 
-            track = camera.find('track')
-            t = render.getRelativePoint(track, track.getPos())
-            c = render.getRelativePoint(camera, camera.getPos())
+            pointVect = point3d - cam_pos
 
-            camVec = t - c
-            pointVect = point3d - c
-
-            theta = abs(camVec.relativeAngleRad(pointVect))
+            pos_theta = abs(camVec.relativeAngleRad(pointVect))
 
             #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
-            radius_correction = 2  #no idea if this is correct...
-            eccen_corr = theta
+            eccen_corr = pos_theta
             eccen_corr = 1
             # XXX the magic happens here
             projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)  # need to compensate for distance effect on theta
@@ -570,8 +586,8 @@ class BoxSel(HasSelectables,DirectObject):
                 diff = point2projection - boxCenter  # FIXME aspect 2d??
                 distance = diff.length()
 
-                dx = (boxCenter[0] - p2[0])
-                dz = (boxCenter[2] - p2[1]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
+                dx = (boxCenter[0] - point2projection[0])
+                dz = (boxCenter[2] - point2projection[2]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
                 theta = arctan2(dz, dx)
                 #print(theta/pi,"pi radians")
 
@@ -594,7 +610,10 @@ class BoxSel(HasSelectables,DirectObject):
 
                 if distance < boxRadius + rescaled:
                     for c in node.getChildren():
-                        projectNode(c)
+                        if c.getNumChildren():
+                            projectL2(c)
+                        else:
+                            projectNode(c)
                     if self.visualize >= self.VIS_L2:
                         l2points.append(point3d)
                         if self.visualize >= self.VIS_DEBUG_LINES:

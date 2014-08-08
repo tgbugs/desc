@@ -163,9 +163,10 @@ class BoxSel(HasSelectables,DirectObject):
     VIS_ALL = 3
     VIS_DEBUG = 4
     VIS_DEBUG_LINES = 5
-    def __init__(self, frames = None, visualize = VIS_POINTS):
+    def __init__(self, frames = None, ppe = None, visualize = VIS_POINTS):
         super().__init__()
         self.visualize = visualize
+        self.ppe = ppe
 
         self.uiRoot = render.find('uiRoot')
         self.projRoot = render2d.attachNewNode('projRoot')
@@ -484,8 +485,6 @@ class BoxSel(HasSelectables,DirectObject):
         #boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5  # TODO we could make it so that every 2x change in raidus used 2 circles instead of 1 to prevent overshoot we can't just divide the radius by 2 though :/
         #boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
 
-
-        """
         def calcSelectionBoxRC(major, minor):
             if not minor:
                 return 0, [0]
@@ -508,51 +507,6 @@ class BoxSel(HasSelectables,DirectObject):
         else:
             boxRadius, majCents = calcSelectionBoxRC(sz, sx)
             centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
-        #"""
-
-        Xh = sx * .5
-        Zh = sz * .5
-        aXh = abs(Xh)
-        aZh = abs(Zh)
-        boxCenter = Point3(cx + Xh, 0, cz + Zh)
-
-        corners = [
-            Point3(uX, 0, uZ),
-            Point3(uX, 0, lZ),
-            Point3(lX, 0, uZ),
-            Point3(lX, 0, lZ),
-            boxCenter
-        ]
-
-        pi4 = pi * .25
-        pi2 = pi * .5
-        def getBoxDist(theta):  # FIXME this is all wrong, we have to account for a non-square box :/
-            a_theta = abs(theta)
-            if a_theta > pi2:
-                a_theta = pi - a_theta
-
-            if a_theta < pi4:
-                #adj = aXh
-                #dist = adj / cos(a_theta)
-                #y = sin(a_theta) * dist * cfz
-                x =  aXh
-                z = x * tan(a_theta) * cfz
-            else:
-                print(a_theta)
-                z = aZh
-                x = z / tan(a_theta)
-                #x = aZh / tan(a_theta)
-                #z = aZh * cfz
-                #adj = aZh
-                #dist = adj / cos(pi2 - a_theta)
-
-
-            #x = cos(a_theta) * dist
-            #z = sin(a_theta) * dist * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
-            rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
-
-            return rescaled
-            #return abs(dist)
 
         lensFL = base.camLens.getFocalLength()
         fov = max(base.camLens.getFov()) * RADIANS_PER_DEGREE
@@ -628,64 +582,47 @@ class BoxSel(HasSelectables,DirectObject):
                 radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                 self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
 
-            #for boxCenter in centers:  # TODO there is a tradeoff here between number of box centers and mistargeting other nodes due to having a larger radius
-            diff = point2projection - boxCenter  # FIXME aspect 2d??
-            distance = diff.length()
+            for boxCenter in centers:  # TODO there is a tradeoff here between number of box centers and mistargeting other nodes due to having a larger radius
+                diff = point2projection - boxCenter  # FIXME aspect 2d??
+                distance = diff.length()
 
-            dx = (boxCenter[0] - point2projection[0])
-            dz = (boxCenter[2] - point2projection[2]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
-            theta = arctan2(dz, dx)
-            print(theta/pi,"pi radians")
+                dx = (boxCenter[0] - point2projection[0])
+                dz = (boxCenter[2] - point2projection[2]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
+                theta = arctan2(dz, dx)
+                #print(theta/pi,"pi radians")
 
-            #instead of using the box radius, we just use the distance to the edge :)
-            boxDist = getBoxDist(theta)
+                x = cos(theta) * projNodeRadius
+                z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
+                rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
 
-            x = cos(theta) * projNodeRadius
-            z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
-            rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
+                if self.visualize >= self.VIS_ALL:
+                    # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
+                    circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
+                    circleIntersect.setRenderModeThickness(4)
 
-            if self.visualize >= self.VIS_ALL:
-                # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
-                circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
-                circleIntersect.setRenderModeThickness(4)
+                    # a circle of the box radius
+                    boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
+                    self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
 
-                # a circle a the box distance
-                boxRadU = [ boxCenter + (Point3( cos(theta)*boxDist, 0.0, sin(theta)*boxDist )) for theta in arange(0,pi*2.126,pi/16) ]
-                self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
-
-                if self.visualize >= self.VIS_DEBUG_LINES:
-                    line = [point2projection, boxCenter]
-
-            dists = [ (point2projection - test).length() for test in corners]
-            
-            cent = dists[-1]
-
-            t = [ d - cent > 0 for d in dists[:-1]]
-
-            
-
-            #if the distance to the center is less than the distance to any corner
-
-            print(dists)
-            print(t)
-
-            #if distance < boxDist + rescaled:
-            if all(t):
-                for c in node.getChildren():
-                    if c.getNumChildren():
-                        projectL2(c)
-                    else:
-                        projectNode(c)
-                if self.visualize >= self.VIS_L2:
-                    l2points.append(point3d)
                     if self.visualize >= self.VIS_DEBUG_LINES:
-                        self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
-                return None  # return as soon as any one of the centers gets a hit
+                        line = [point2projection, boxCenter]
 
-            elif self.visualize >= self.VIS_DEBUG_LINES:
-                self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
-        ###
+                if distance < boxRadius + rescaled:
+                    for c in node.getChildren():
+                        if c.getNumChildren():
+                            projectL2(c)
+                        else:
+                            projectNode(c)
+                    if self.visualize >= self.VIS_L2:
+                        l2points.append(point3d)
+                        if self.visualize >= self.VIS_DEBUG_LINES:
+                            self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+                    return None  # return as soon as any one of the centers gets a hit
+
+                elif self.visualize >= self.VIS_DEBUG_LINES:
+                    self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
+
         # actually do the projection
         for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
             projectL2(c)

@@ -22,6 +22,7 @@ sys.modules['core'] = sys.modules['panda3d.core']
 #TODO logging...
 
 class responseMaker:  # TODO we probably move this to its own file?
+    npoints = 9999
     def __init__(self):
         #setup at connection to whatever database we are going to use
         pass
@@ -32,7 +33,7 @@ class responseMaker:  # TODO we probably move this to its own file?
         # yes, the size of the bam serialization is absolutely massive, easily 3x the size in memory
         # also if we send it already in tree form... so that the child node positions are just nested
         # it might be pretty quick to generate the collision nodes
-        n = 9999
+        n = self.npoints
         np.random.seed()  # XXX MUST do this otherwise the same numbers pop out over and over, good case for cache invalidation though...
         positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
         uuids = np.array(['%s'%uuid4() for _ in range(n)])

@@ -434,7 +434,7 @@ class BoxSel(HasSelectables,DirectObject):
 
 
                 test = tests(d1, r3, projNodeRadius, point2projection, lX, uX, lZ, uZ, cfz)
-                if test == -1
+                if test == -1:
                     contained = True
 
 

@@ -169,7 +169,7 @@ TREE_LOGIC = np.array([
 TREE_MAX_POINTS = 512  # super conventient due to 8 ** 3 = 512 :D basically at the 3rd level we will completely cover our minimum set, so what we do is go back 3 levels ? doesnt seem to work that way really...
 #TREE_MAX_POINTS = 1024
 
-def collect_pool(todo):
+def _collect_pool(todo):
     output = []
     for thing in todo:
         if thing:
@@ -179,7 +179,105 @@ def collect_pool(todo):
                 output.append(thing)
     return output
 
-def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pipe = None):
+def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pipe = None):
+    """ Divide the space covered by all the objects into an oct tree and then
+        replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
+        for some reason this massively improves performance even w/o the code
+        for mouse over adding and removing subsets of nodes.
+    """
+    num_points = len(positions)
+
+    if num_points <= 0:
+        if center != None:
+            parent.removeNode()  # FIXME fixt this by actually treating the parent as a parent >_<
+        return None
+
+    if center is None:
+        center = np.mean(positions, axis=0)
+        radius = np.max(np.linalg.norm(positions - center))
+        side = ((4/3) * radius**2) ** .5
+        radius += 2
+        if parent is None:
+            parent = NodePath(CollisionNode('Root for THIS batch of positions 0'))
+        else:
+            parent = parent.attachNewNode(CollisionNode('Root for THIS batch of positions 0'))
+
+    bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+    partition = positions > center
+    
+    #the 8 conbinatorial cases
+    for i in range(num_points):
+        index = octit(partition[i])
+        bitmasks[index][i] = True
+
+    next_leaves = []
+    for i in range(8):
+        branch = bitmasks[i]
+        new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
+        subSet = positions[branch]
+        new_parent = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
+        next_leaves.append((new_parent, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5))
+
+    #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
+    if num_points < TREE_MAX_POINTS:
+        leaf_max = np.max([len(tup[1]) for tup in next_leaves])
+        if num_points < 4:
+            c = np.mean(positions, axis=0)
+            dists = []
+            for p1 in positions:
+                for p2 in positions:
+                    if p1 is not p2:
+                        d = np.linalg.norm(np.array(p2) - np.array(p1))
+                        dists.append(d)
+            r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
+            l2Node = parent.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
+            l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
+            l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+        elif leaf_max > num_points * .90:  # if any leaf has > half the points
+            [treeMe(*leaf) for leaf in next_leaves]
+            if pipe:  # extremely unlikely edge case
+                print("hit an early pip")
+                to_send = parent
+                for s in to_send:
+                    pipe.send(s)
+                pipe.close()
+                return None
+            else:
+                return parent  # just for kicks even though all this is in place
+
+        else:
+            l2Node = parent
+            #l2Node = parent.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
+            l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
+            l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
+
+        for p,uuid,geom in zip(positions,uuids,geomCollide):
+            childNode = l2Node.attachNewNode(CollisionNode("%s"%uuid))  #XXX TODO
+            childNode.node().addSolid(CollisionSphere(p[0],p[1],p[2],geom)) # we do it this way because it keeps framerates WAY higher dont know why
+            childNode.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_CLICK))
+            childNode.setTag('uuid',uuid)
+        return l2Node
+    else:  # we are a containing node
+        #l2Node = parent.attachNewNode(CollisionNode("%s.%s.empty_parent"%(request_hash,center)))
+        parent.setName(parent.getName()+'empty_parent')
+        l2Node = parent
+        l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
+        l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))  # this does not collide
+
+    [treeMe(*leaf) for leaf in next_leaves]
+
+    if pipe:
+        to_send = parent
+        for s in to_send:
+            pipe.send(s)
+        pipe.close()
+    else:
+        return parent  # just for kicks even though all this is in place
+
+def treeMeMap(leaf):
+    return treeMe(*leaf)
+
+def __treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake', pipe = None):
     """ Divide the space covered by all the objects into an oct tree and then
         replace cubes with 512 objects with spheres radius = (side**2 / 2)**.5
         for some reason this massively improves performance even w/o the code
@@ -259,9 +357,6 @@ def treeMe(collRoot, positions, uuids, geomCollide, center = None, side = None, 
         pipe.close()
     else:
         return collect_pool(todo)
-
-def treeMeMap(leaf):
-    return treeMe(*leaf)
 
 def _treeMe(level2Root, positions, uuids, geomCollide, center = None, side = None, radius = None, request_hash = b'Fake'):  # TODO in theory this could be multiprocessed
     """ Divide the space covered by all the objects into an oct tree and then
@@ -347,19 +442,20 @@ def octit(position):  # use this not entirely sure why it is better, maybe fewer
             else:
                 return 7
 
-_octit = {
-    (False,False,False):0,
-    (False,False,True):1,
-    (False,True,False):2,
-    (False,True,True):3,
-    (True,False,False):4,
-    (True,False,True):5,
-    (True,True,False):6,
-    (True,True,True):7,
-}
-
 def profileOctit():
     from prof import profile_me
+
+    _octit = {
+        (False,False,False):0,
+        (False,False,True):1,
+        (False,True,False):2,
+        (False,True,True):3,
+        (True,False,False):4,
+        (True,False,True):5,
+        (True,True,False):6,
+        (True,True,True):7,
+    }
+
 
     data = np.random.rand(1000000,3) - .5 > 0
 

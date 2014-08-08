@@ -253,7 +253,8 @@ class renderManager(DirectObject):
     def makeColl(self, request_hash, coll_tup):
         #node = NodePath(CollisionNode(''))  # use reparent to? XXX yes because of caching you tard
         pos, uuid, geom = coll_tup
-        #return treeMe(None, pos, uuid, geom, None, None, None, request_hash)
+        if self.ppe is False:
+            return treeMe(None, pos, uuid, geom, None, None, None, request_hash)
         recv, send = mpp(False)
         try:
             future = self.event_loop.run_in_executor(self.ppe, treeMe, None, pos, uuid, geom, None, None, None, request_hash, send)

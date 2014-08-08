@@ -55,16 +55,18 @@ def main():
     frames = {
         'data':GuiFrame('Data view')
     }
+    frames['data'].toggle_vis()
 
     #asyncio and network setup
     clientLoop = get_event_loop()
-    ppe = ProcessPoolExecutor(4)  # not sure if 4 is better...
-    #clientLoop.set_default_executor(ppe)
+    #ppe = ProcessPoolExecutor(4)  # not sure if 4 is better...
+    ppe = False
 
+    #clientLoop.set_default_executor(ppe)
 
     rendMan = renderManager(clientLoop, ppe)
 
-    bs = BoxSel(frames, ppe)
+    bs = BoxSel(frames, BoxSel.VIS_DEBUG_LINES)
 
     # TODO ssl contexts
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...
@@ -80,6 +82,7 @@ def main():
     datCli = datCli_base()
     datCli.connection_lost('START')
 
+    rendMan.fake_request()
 
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()

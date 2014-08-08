@@ -59,14 +59,14 @@ def main():
 
     #asyncio and network setup
     clientLoop = get_event_loop()
-    #ppe = ProcessPoolExecutor(4)  # not sure if 4 is better...
-    ppe = False
+    ppe = ProcessPoolExecutor(4)  # not sure if 4 is better...
+    #ppe = False
 
     #clientLoop.set_default_executor(ppe)
 
     rendMan = renderManager(clientLoop, ppe)
 
-    bs = BoxSel(frames, BoxSel.VIS_ALL)
+    bs = BoxSel(frames)#, BoxSel.VIS_ALL)
 
     # TODO ssl contexts
     conContext = ssl.create_default_context(purpose=ssl.Purpose.SERVER_AUTH, cadata=None)  # TODO cadata should allow ONLY our self signed, severly annoying to develop...

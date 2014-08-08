@@ -275,7 +275,7 @@ class renderManager(DirectObject):
         self.submit_request(r)
 
     def rand_request(self):
-        for _ in range(1):
+        for _ in range(10):
             r = RAND_REQUEST()
             self.submit_request(r)
 

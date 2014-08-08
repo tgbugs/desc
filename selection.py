@@ -339,138 +339,6 @@ class BoxSel(HasSelectables,DirectObject):
         #embed()
         return task.cont
 
-    def _getEnclosedNodes(self):
-        cfx = 1
-        cfz = base.camLens.getAspectRatio()
-        cx,cy,cz = self.__baseBox__.getPos()
-        sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
-        self.selRoot.removeChildren()
-        self.projRoot.removeChildren()
-
-        x2 = cx + sx
-        if cx > x2:
-            uX = cx
-            lX = x2
-        else:
-            uX = x2
-            lX = cx
-
-        z2 = cz + sz
-        if cz > z2:
-            uZ = cz
-            lZ = z2
-        else:
-            uZ = z2
-            lZ = cz
-
-        def calcSelectionBoxRC(major, minor):
-            if not minor:
-                return 0, [0]
-            ratio = abs(major / minor)
-            if ratio > 5:  # prevent combinatorial nightmares TODO tune me!
-                ratio = 5
-            elif ratio < 1.25:
-                ratio = 1
-            else:
-                ratio = int(ratio)
-
-            split = major / ratio
-            radius = ((split * .5)**2 + (minor * .5)**2)**.5
-            majCents = [(split * .5) + i*(split) for i in range(ratio)]
-            return radius, majCents
-
-        if abs(sx) > abs(sz):
-            boxRadius, majCents = calcSelectionBoxRC(sx, sz)
-            centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
-        else:
-            boxRadius, majCents = calcSelectionBoxRC(sz, sx)
-            centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
-
-        lensFL = base.camLens.getFocalLength()
-        fov = max(base.camLens.getFov()) * RADIANS_PER_DEGREE
-
-        points3 = []
-        def projectNode(node):
-            point3d = node.getBounds().getApproxCenter()
-            p3 = base.cam.getRelativePoint(render, point3d)
-            p2 = Point2()
-
-            if not base.camLens.project(p3,p2):
-                return False
-
-            pX = p2[0]
-            pZ = p2[1]
-            # check if the points are inside the box
-            if lX <= pX and pX <= uX:
-                if lZ <= pZ and pZ <= uZ: 
-                    self.processTarget(node)
-                    points3.append(point3d)
-
-        def projectL2(node):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
-            """ projec only the centers of l2 spehres, figure out how to get their radii """
-            point3d = node.getBounds().getApproxCenter()
-            p3 = camera.getRelativePoint(render, point3d)
-            p2 = Point2()
-
-            base.camLens.project(p3,p2)
-
-            point2projection = Point3(p2[0],0,p2[1])
-
-            r3 = node.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
-            self.utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
-            # this also works correctly with no apparent issues
-            d1 = camera.getDistance(self.utilityNode)  # FIXME make sure we get the correct camera
-            if not d1:
-                d1 = 1E-9
-
-            track = camera.find('track')
-            t = render.getRelativePoint(track, track.getPos())
-            c = render.getRelativePoint(camera, camera.getPos())
-
-            camVec = t - c
-            pointVect = point3d - c
-
-            theta = abs(camVec.relativeAngleRad(pointVect))
-
-            #naieve approach with similar triangles, only seems to give the correct distance when d1 is very close to zero (wat)
-            radius_correction = 2  #no idea if this is correct...
-            eccen_corr = theta
-            eccen_corr = 1
-            # XXX the magic happens here
-            projNodeRadius = (r3 * lensFL) / d1 * radius_correction * eccen_corr # % fov)  # need to compensate for distance effect on theta
-
-            for boxCenter in centers:  # TODO there is a tradeoff here between number of box centers and mistargeting other nodes due to having a larger radius
-                diff = point2projection - boxCenter  # FIXME aspect 2d??
-                distance = diff.length()
-
-                dx = (boxCenter[0] - p2[0])
-                dz = (boxCenter[2] - p2[1]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
-                theta = arctan2(dz, dx)
-                #print(theta/pi,"pi radians")
-
-                x = cos(theta) * projNodeRadius
-                z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
-                rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
-
-                if distance < boxRadius + rescaled:
-                    for c in node.getChildren():
-                        projectNode(c)
-                    return None  # return as soon as any one of the centers gets a hit
-
-        # actually do the projection
-        for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
-            projectL2(c)
-
-        print(len(self.curSelShown))
-        pts3 = makeSimpleGeom(points3, [1,1,1,1])
-        p3n = self.selRoot.attachNewNode(pts3)
-        p3n.setRenderModeThickness(3)  # render order >_<
-
-        stop = len(self.frames['data'].items) - 1
-        for into in self.curSelShown[:stop]:
-            uuid = into.getTag('uuid')
-            self.frames['data'].add_item(uuid, command=self.highlight, args=(uuid, into, True) )
-
     def getEnclosedNodes(self):
         cfx = 1
         cfz = base.camLens.getAspectRatio()
@@ -494,36 +362,6 @@ class BoxSel(HasSelectables,DirectObject):
         else:
             uZ = z2
             lZ = cz
-
-        #boxRadius = ( (sx * .5)**2 + (sz * .5)**2 ) ** .5  # TODO we could make it so that every 2x change in raidus used 2 circles instead of 1 to prevent overshoot we can't just divide the radius by 2 though :/
-        #boxCenter = Point3(cx + (sx * .5), 0, cz + (sz * .5))  # profile vs just using the points we get out
-
-        def calcSelectionBoxRC(major, minor):
-            if not minor:
-                return 0, [0]
-            ratio = abs(major / minor)
-            if ratio > 5:  # prevent combinatorial nightmares TODO tune me!
-                ratio = 5
-            elif ratio < 1.25:
-                ratio = 1
-            else:
-                ratio = int(ratio)
-
-            split = major / ratio
-            radius = ((split * .5)**2 + (minor * .5)**2)**.5
-            majCents = [(split * .5) + i*(split) for i in range(ratio)]
-            #distFuncs = [lambda theta: radius for i in range(ratio)]
-            #print(distFuncs)
-            return radius, majCents #, distFuncs
-
-        if abs(sx) > abs(sz):
-            boxRadius, majCents = calcSelectionBoxRC(sx, sz)
-            centers = [Point3(cx + c, 0, cz + (sz * .5)) for c in majCents]
-            #centers = zip(centers_, distFuncs)
-        else:
-            boxRadius, majCents = calcSelectionBoxRC(sz, sx)
-            centers = [Point3(cx + (sx * .5), 0, cz + c) for c in majCents]
-            #centers = zip(centers_, distFuncs)
 
         lensFL = base.camLens.getFocalLength()
         fov = max(base.camLens.getFov()) * RADIANS_PER_DEGREE
@@ -557,6 +395,7 @@ class BoxSel(HasSelectables,DirectObject):
             l2points = []
             if self.visualize >= self.VIS_ALL:
                 l2all = []
+
         # things we don't need to do every bloody time
         utilityNode = render.attachNewNode('utilityNode')
         track = camera.find('track')
@@ -600,65 +439,39 @@ class BoxSel(HasSelectables,DirectObject):
                 radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                 self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,0,1,1],GeomLinestrips))
 
-            for boxCenter in centers:  # TODO there is a tradeoff here between number of box centers and mistargeting other nodes due to having a larger radius
-                diff = point2projection - boxCenter  # FIXME aspect 2d??
-                distance = diff.length()
+            if tests(d1, r3, projNodeRadius, point2projection, lX, uX, lZ, uZ, cfz):
+                for c in node.getChildren():
+                    if c.getNumChildren():
+                        projectL2(c)
+                    else:
+                        projectNode(c)
 
-                dx = (boxCenter[0] - point2projection[0])
-                dz = (boxCenter[2] - point2projection[2]) / cfz  # division here maps the 2d aspected theta to the (more or less) orthogonal theta needed to map collision spheres
-                theta = arctan2(dz, dx)
-                #print(theta/pi,"pi radians")
-
-                x = cos(theta) * projNodeRadius
-                z = sin(theta) * projNodeRadius * cfz # multiplication here givs the actual distance the 3d projection covers in 2d
-                rescaled = (x**2 + z**2)**.5  # the actual distance give the rescaling to render2d 
-
-                if self.visualize >= self.VIS_ALL:
-                    # the point at which the lines from the center of the box circles to the centers of l2 nodes intersect
-                    #circleIntersect = self.projRoot.attachNewNode(makeSimpleGeom([point2projection+Point3(x,0,z)],[0,1,0,1]))
-                    #circleIntersect.setRenderModeThickness(4)
-
-                    # a circle of the box radius
-                    #boxRadU = [ boxCenter + (Point3( cos(theta)*boxRadius, 0.0, sin(theta)*boxRadius )) for theta in arange(0,pi*2.126,pi/16) ]
-                    #self.projRoot.attachNewNode(makeSimpleGeom(boxRadU,[1,0,1,1],GeomLinestrips))
-
-                    if self.visualize >= self.VIS_DEBUG_LINES:
-                        line = [point2projection, boxCenter]
-
-                #print(boxRadius, boxDist(theta))
-                #b = boxDist(theta)
-                
-                if tests(d1, r3, projNodeRadius, point2projection[0], point2projection[2] , lX, uX, lZ, uZ, cfz):
-                #if distance < boxRadius + rescaled:
-                    for c in node.getChildren():
-                        if c.getNumChildren():
-                            projectL2(c)
-                        else:
-                            projectNode(c)
-                    if self.visualize >= self.VIS_L2:
-                        l2points.append(point3d)
+                if self.visualize >= self.VIS_L2:
+                    l2points.append(point3d)
+                    if self.visualize >= self.VIS_ALL:
+                        radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+                        n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
+                        n.setBin('unsorted',0)
                         if self.visualize >= self.VIS_DEBUG_LINES:
                             self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
-                    return None  # return as soon as any one of the centers gets a hit
+                return None  # return as soon as any one of the centers gets a hit
 
-                elif self.visualize >= self.VIS_DEBUG_LINES:
-                    self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
+            elif self.visualize >= self.VIS_DEBUG_LINES:
+                self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
 
-        def tests(d1, r3, radius, pX, pZ, lX, uX, lZ, uZ, cfz):
+        def tests(d1, r3, radius, p2p, lX, uX, lZ, uZ, cfz):
+            """ see if boxes and circles overlap """
             if d1 < r3:
+                #print('Inside the sphere')
                 return True
 
+            pX, _, pZ = p2p
             Xin = lX <= pX and pX <= uX
             Zin = lZ <= pZ and pZ <= uZ
 
             if Xin and Zin:
-                print("Xin and Zin")
+                #print("Xin and Zin")
                 return True
-
-            dxl = pX - lX
-            dxu = pX - uX
-            dzl = pZ - lZ
-            dzu = pZ - uZ
 
             corners = (
                 Point3(lX, 0, lZ),
@@ -667,43 +480,29 @@ class BoxSel(HasSelectables,DirectObject):
                 Point3(uX, 0, uZ),
             )
 
-            corner_vectors = (
-                (dxl, dzl),
-                (dxl, dzu),
-                (dxu, dzl),
-                (dxu, dzu),
-            )
+            for c in corners:
+                if (c - p2p).length() < rescale(p2p, c, radius, cfz):
+                    if self.visualize >= self.VIS_ALL:
+                        line = (c, (pX, 0, pZ))
+                        self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
+                    #print("min of norms")
+                    return True
 
-            #dists = [norm(*cv) for cv in corner_vectors]
-            p2p = Point3(pX, 0, pZ)
-            radii = [rescale(p2p, c, radius, cfz) for c in corners]
-            dists = [(c - p2p).length() for c in corners]
-            diffs = [ d - r for d,r in zip(dists, radii)]
-
-            #if min(dists) <= radius:
-            if any([d < 0 for d in diffs]):
-                #lines = [(Point3(x, 0, z), Point3(pX, 0, pZ)) for x,z in corner_vectors]
-                #for line in lines:
-                    #self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
-                corner = corners[argmin(dists)]
-                line = (corner, (pX, 0, pZ))
-                self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
-                print("min of norms")
-                return True
-
+            dxl = pX - lX
+            dxu = pX - uX
+            dzl = pZ - lZ
+            dzu = pZ - uZ
             min_dxs = min(abs(dxl), abs(dxu))
             min_dzs = min(abs(dzl), abs(dzu))
 
             if min_dxs <= radius and Zin:
-                print('dx < r and Zin')
+                #print('dx < r and Zin')
                 return True
             elif min_dzs <= radius and Xin:
-                print('dz < r and Xin')
+                #print('dz < r and Xin')
                 return True
             else:
                 return False
-
-
 
         # actually do the projection
         for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree

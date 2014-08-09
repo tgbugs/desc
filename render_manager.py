@@ -154,12 +154,18 @@ class renderManager(DirectObject, HasKeybinds):
                     asyncio.Task(todo, loop=self.event_loop)
                     #self.make_nt_task(request_hash, geom, coll, ui, render_=True)
                 else:
-                    self.geom_add_queue.append(geom)
-                    self.coll_add_queue.append(coll)
+                    #self.geom_add_queue.append(geom)
+                    self.geomRoot.attachNewNode(geom)
+                    coll.reparentTo(self.collRoot)
+
+                    
+                    #self.makeColl(request_hash, coll)  #returns a list or a recv pipe
+                    #self.coll_add_queue.append(coll)
+                    #coll.reparentTo(self.collRoot)
                     self.cache[request_hash] = geom, coll, ui
                     # TODO new async task goes here
-                    if not taskMgr.hasTaskNamed('add_collision'):
-                        taskMgr.add(self.add_collision_task,'add_collision')
+                    #if not taskMgr.hasTaskNamed('add_collision'):
+                    #    taskMgr.add(self.add_collision_task,'add_collision')
 
         except KeyError:
             print("predicted data view cached")
@@ -259,6 +265,7 @@ class renderManager(DirectObject, HasKeybinds):
         pos, uuid, geom = coll_tup
         if self.ppe is False:
             return treeMe(None, pos, uuid, geom, None, None, None, request_hash)
+            
         recv, send = mpp(False)
         try:
             future = self.event_loop.run_in_executor(self.ppe, treeMe, None, pos, uuid, geom, None, None, None, request_hash, send)

@@ -7,6 +7,7 @@ from panda3d.core import NodePath, CollisionNode, CollisionSphere, BitMask32
 from defaults import BITMASK_COLL_MOUSE
 from defaults import BITMASK_COLL_CLICK
 from prof import profile_me
+from ipython import embed
 
 TREE_MAX_POINTS = 512
 
@@ -131,7 +132,8 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         else:
             l2Node = parent.attachNewNode(CollisionNode('Root for %s 0'%request_hash))
     else:
-        l2Node = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
+        #l2Node = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
+        l2Node = parent.attachNewNode(CollisionNode(' %s'%(int(parent.getName()[-2:]) + 1)))
 
     bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
     partition = positions > center
@@ -161,15 +163,14 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
                         d = np.linalg.norm(np.array(p2) - np.array(p1))
                         dists.append(d)
             r = np.max(dists) + np.mean(geomCollide) * 2  #max dists is the diameter so this is safe
-            #l2Node = parent.attachNewNode(CollisionNode("%s.%s"%(request_hash,c)))
-            l2Node.setName('leaf %s.%s. %s'%(request_hash, c, int(parent.getName()[-2:]) + 1))
+            #l2Node.setName('leaf %s.%s. %s'%(request_hash, c, int(parent.getName()[-2:]) + 1))
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
             for leaf in next_leaves:
                 treeMe(*leaf)
             #[treeMe(*leaf) for leaf in next_leaves]
-            l2Node.setName('branch '+l2Node.getName())
+            #l2Node.setName('branch '+l2Node.getName())
             l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))  # this does not collide
             if pipe:  # extremely unlikely edge case
@@ -181,8 +182,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
                 return l2Node  # just for kicks even though all this is in place
 
         else:
-            #l2Node = parent.attachNewNode(CollisionNode("%s.%s"%(request_hash,center)))
-            l2Node.setName('leaf '+l2Node.getName())
+            #l2Node.setName('leaf '+l2Node.getName())
             l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
 
@@ -193,8 +193,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
             childNode.setTag('uuid',uuid)
         return l2Node
     else:  # we are a containing node
-        #l2Node = parent.attachNewNode(CollisionNode("%s.%s.empty_parent"%(request_hash,center)))
-        l2Node.setName('branch '+l2Node.getName())
+        #l2Node.setName('branch '+l2Node.getName())
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))  # this does not collide
 
@@ -203,11 +202,19 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
     #[treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
-        pipe.send(l2Node)
+        pipe.send(l2Node)  # TODO we are going to solve this by sending childs? no, NODE GRRR
+        #for c in l2Node.getChildren():
+            #pipe.send(c)
+            #l2Node.removeChild(c)
+        #l2Node.removeAllChildren()
+        #pipe.send(l2Node)
+
+        
         #for s in to_send:
             #pipe.send(s)
         pipe.close()
     else:
+        #embed()
         return l2Node  # just for kicks even though all this is in place
 
 def main():

@@ -29,6 +29,7 @@ from ipython import embed
 from defaults import *
 from util import genLabelText
 from test_objects import makeSimpleGeom
+from keys import event_callback
 
 import inspect
 
@@ -118,9 +119,11 @@ class HasSelectables: #mixin see chessboard example
     def shiftOff(self):
         self.__shift__ = False
 
+    @event_callback
     def clickHandler(self):
         pass
 
+    @event_callback
     def releaseHandler(self):
         pass
 
@@ -220,6 +223,7 @@ class BoxSel(HasSelectables,DirectObject):
         self.curSelShown = []
         self.curSelPoints = []
 
+    @event_callback('v')
     def toggle_vis(self):
         def do_show(node):
             #if node.getName().count('leaf'):  # apparently ALL parents must be visible?!
@@ -290,6 +294,7 @@ class BoxSel(HasSelectables,DirectObject):
 
         return None
 
+    @event_callback
     def gotClick(self):  # TODO rename this to inherit from HasSelectables
         target = self.getClickTarget()
         if target:
@@ -317,6 +322,7 @@ class BoxSel(HasSelectables,DirectObject):
         #this may take a bit more finagling ie: we may need to create a collision sphere around every vertex
         return super(BoxSel,self).getClickTarget() #TODO damn it python 2
 
+    @event_callback
     def gotRelease(self):
         #self.__mouseDown__ = False
         if taskMgr.hasTaskNamed('boxTask'):

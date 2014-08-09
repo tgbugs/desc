@@ -12,7 +12,7 @@ from panda3d.core import TextNode, LineSegs, Point3, Point2
 
 from ipython import embed
 
-from keys import ui_callback
+from keys import event_callback
 
 
 keybinds = {
@@ -356,13 +356,13 @@ class CameraControl(DirectObject):
 
             return cross * norm
 
-    @ui_callback
+    @event_callback
     def home(self, task):
         self.camera.lookAt(self.cameraBase)
         taskMgr.remove(task.getName())
         return task.cont
 
-    @ui_callback
+    @event_callback
     def pan(self, task):
         """ I don't like it, it's weird! """
         invert = -1
@@ -383,36 +383,36 @@ class CameraControl(DirectObject):
             #self.cameraTarget.setPos(self.cameraBase,dx2,dy2,dz2) #a hack to move cameraBase as if it were the camera
         return task.cont
 
-    @ui_callback
+    @event_callback
     def zoom_in_slow(self, task, speed = 10):
         return self.zoom_in(task, speed) #hehe this will work because it just passes the task :)
 
-    @ui_callback
+    @event_callback
     def zoom_out_slow(self, task, speed = 10):
         return self.zoom_out(task, speed)
 
-    @ui_callback
+    @event_callback
     def zoom_in_fast(self, task, speed = 1000):
         return self.zoom_in(task, speed) #hehe this will work because it just passes the task :)
 
-    @ui_callback
+    @event_callback
     def zoom_out_fast(self, task, speed = 1000):
         return self.zoom_out(task, speed)
 
 
-    @ui_callback
+    @event_callback
     def zoom_in(self, task, speed = 100): #FIXME zoom_in and zoom_out still get custom xys even thought they don't use them!
         self.camera.setPos(self.camera,0,speed,0)
         taskMgr.remove(task.getName())
         return task.cont
 
-    @ui_callback
+    @event_callback
     def zoom_out(self, task, speed = 100):
         self.camera.setPos(self.camera,0,-speed,0)
         taskMgr.remove(task.getName()) #we do it this way instead of addOnce because we want to add all the tasks in one go
         return task.cont
 
-    @ui_callback
+    @event_callback
     def rotate(self, task): #FIXME disregard orientation acqurie proper mouse movements!
         dx,dy = self.getMouseDdDf(task.getName())
         if self.__cth__ == None:
@@ -424,13 +424,13 @@ class CameraControl(DirectObject):
         return task.cont
 
     #if we are in camera mode
-    @ui_callback
+    @event_callback
     def pitch(self, task):
         dx,dy = self.getMouseDdDf(task.getName())
         print('got pitch',dy)
         return task.cont
 
-    @ui_callback
+    @event_callback
     def look(self, task): #AKA heading in hpr
         dx,dy = self.getMouseDdDf(task.getName())
         if self.__ch__ == None:
@@ -441,7 +441,7 @@ class CameraControl(DirectObject):
         self.camera.setP(self.__cp__ + dy) #FIXME when we're clicking this might should be inverted?
         return task.cont
 
-    @ui_callback
+    @event_callback
     def roll(self, task):
         """ ALWAYS roll with respect to axis of rotation"""
         if self.__cr__ == None:
@@ -790,7 +790,7 @@ class GuiFrame(DirectObject):
     def getMaxItems(self):
         return int(abs(self.height / self.text_h) - 1)
 
-    @ui_callback
+    @event_callback
     def toggle_vis(self):
         if self.frame_bg.isHidden():
             self.frame_bg.show()

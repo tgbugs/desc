@@ -18,6 +18,7 @@ from ipython import embed
 
 def main():
     import sys
+    import inspect
     from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
 
     # render setup
@@ -30,6 +31,8 @@ def main():
     from util import ui_text, console, exit_cleanup, frame_rate, startup_data
     from ui import CameraControl, Axis3d, Grid3d, GuiFrame
     from protocols import dataClientProtocol
+
+    from keys import AcceptKeys, callbacks
 
     # fix sys module reference
     sys.modules['core'] = sys.modules['panda3d.core']
@@ -91,6 +94,7 @@ def main():
     el = exit_cleanup(clientLoop, ppe, datCli.transport)  #use this to call stop() on run_forever
 
     con = console(locals(), True)
+    ak = AcceptKeys()  # this needs to go last after all the classes init
     run()  # this MUST be called last because we use sys.exit() to terminate
     assert False, 'Note how this never gets printed due to sys.exit()'
 

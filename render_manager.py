@@ -19,6 +19,7 @@ from panda3d.core import GeomNode, NodePath, PandaNode
 from dataIO import treeMe
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 from protocols import collPipeProtocol
+from keys import event_callback, KeybindObject
 
 
 #import sys  # we shouldnt need to call this here
@@ -29,7 +30,7 @@ from prof import profile_me
 #import rpdb2
 
 
-class renderManager(DirectObject):
+class renderManager(KeybindObject):
     """ a class to manage, geom, coll, and ui (and more?) incoming data
         all of those streams should be decompressed and reconstructed before
         showing up here so that there are just two or three nodes that can be
@@ -266,22 +267,27 @@ class renderManager(DirectObject):
         """ we may not need this if we stick all the UI data in geom or coll nodes? """
 
     # key callbacks
+    @event_callback('r')
     def fake_request(self):
         r = FAKE_REQUEST
         self.submit_request(r)
 
+    @event_callback('p')
     def fake_predict(self):
         r = FAKE_PREDICT
         self.submit_request(r)
 
+    @event_callback('n')
     def rand_request(self):
         for _ in range(10):
             r = RAND_REQUEST()
             self.submit_request(r)
 
+    @event_callback('c')
     def embed(self):
         embed()
 
+    @event_callback
     def print_cache(self):
         print([repr(k) for k in self.cache.keys()])
 

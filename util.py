@@ -4,6 +4,7 @@ from direct.showbase.DirectObject import DirectObject
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode, Point3
 from ipython import embed
+from keys import event_callback
 
 from monitor import getMaxPixelsPerMM
 
@@ -20,11 +21,13 @@ class console(DirectObject):
             self.accept('i', self.thread_ipython)
         else:
             self.accept('i', self.ipython)
+    @event_callback('i')  #FIXME conditions?
     def thread_ipython(self):
         if not self.running:
             thread = Thread(target=self.ipython)
             thread.start()
 
+    @event_callback
     def ipython(self):
         self.running = True
         if self.locals_:
@@ -46,6 +49,7 @@ class exit_cleanup(DirectObject):
         self.shutdown = shutdown
         self.accept("escape",self.exit)
 
+    @event_callback('escape')
     def exit(self):
         #we must call stop before sys.exit() or we can't stop the loop
         if self.shutdown:  # stop the server bits

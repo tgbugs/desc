@@ -6,25 +6,27 @@ from direct.showbase.DirectObject import DirectObject
 
 from ipython import embed
 
+# TODO we will need a good way to replace the default keybinds with ones from a config, probably based on qualname
+    # possibly we can store the default binds and the just fill in overwritten binds and just always use qualname in the decorator
+
 callbacks = defaultdict(dict)
 callbacks['TO BIND']
 callbacks['default']  # needs to exist before making it the default factory
 callbacks.default_factory = lambda: {k:v for k,v in callbacks['default'].items()}
 
-# FIXME need a way to pass in self...
-
-class KeybindObject(DirectObject):
-    def __new__(cls, *args, **kwargs):  # replace functions with methods
+class HasKeybinds:  # FIXME should this inherit from direct object?? I don't think so...
+    """ a mixin that is requred when using the event_callback
+        decorator, it automatically populates the callbacks with methods at init
+    """
+    def __new__(cls, *args, **kwargs):
         def __init__(self, *args, **kwargs):
-            print('Yes this gets called')
-            embed()
-            for name in self.__dir__():  # FIXME there must be a better way...
+            for name in self.__dir__():
                 method = getattr(self, name)
                 if hasattr(method,'__event_callbacks__'):
                     for mode_dict, keyname in method.__event_callbacks__:
-                        print(mode_dict, keyname, mode_dict[keyname], method)
                         mode_dict[keyname] = method
             cls._init_(self, *args,**kwargs)
+            cls.__init__ = cls._init_  # this way __new__ keeps working
 
         cls._init_ = cls.__init__
         cls.__init__ = __init__

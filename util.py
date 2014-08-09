@@ -4,7 +4,7 @@ from direct.showbase.DirectObject import DirectObject
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode, Point3
 from ipython import embed
-from keys import event_callback
+from keys import event_callback, HasKeybinds
 
 from monitor import getMaxPixelsPerMM
 
@@ -13,14 +13,14 @@ def genLabelText(text, i): #FIXME
   return OnscreenText(text = text, pos = (.025, -.05*i), fg=(1,1,1,1),
                       align = TextNode.ALeft, scale = .05)
 
-class console(DirectObject):
+class console(HasKeybinds):
     def __init__(self, locals_ = None, thread = False):
         self.locals_ = locals_
         self.running = False
-        if thread:
-            self.accept('i', self.thread_ipython)
-        else:
-            self.accept('i', self.ipython)
+        #if thread:
+            #self.accept('i', self.thread_ipython)
+        #else:
+            #self.accept('i', self.ipython)
     @event_callback('i')  #FIXME conditions?
     def thread_ipython(self):
         if not self.running:
@@ -35,7 +35,7 @@ class console(DirectObject):
         embed(banner1='')  # this works becasue you can access all the things via render :)
         self.running = False
 
-class exit_cleanup(DirectObject):
+class exit_cleanup(HasKeybinds):
     """ in order to get everything to exit 'cleanly'
         we need to close the asyncio loop before we
         call sys.exit() to terminate run() otherwise
@@ -47,7 +47,8 @@ class exit_cleanup(DirectObject):
         self.ppe = ppe
         self.transport = transport
         self.shutdown = shutdown
-        self.accept("escape",self.exit)
+        
+        #self.accept('escape', self.exit)
 
     @event_callback('escape')
     def exit(self):

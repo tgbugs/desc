@@ -19,7 +19,7 @@ from panda3d.core import GeomNode, NodePath, PandaNode
 from dataIO import treeMe
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 from protocols import collPipeProtocol
-from keys import event_callback, KeybindObject
+from keys import event_callback, HasKeybinds
 
 
 #import sys  # we shouldnt need to call this here
@@ -30,7 +30,7 @@ from prof import profile_me
 #import rpdb2
 
 
-class renderManager(KeybindObject):
+class renderManager(DirectObject, HasKeybinds):
     """ a class to manage, geom, coll, and ui (and more?) incoming data
         all of those streams should be decompressed and reconstructed before
         showing up here so that there are just two or three nodes that can be
@@ -80,11 +80,11 @@ class renderManager(KeybindObject):
 
         self.cpp = collPipeProtocol(self.cache, self.geom_add_queue, self.coll_add_queue, self.collRoot)
 
-        self.accept('r', self.fake_request)
-        self.accept('p', self.fake_predict)
-        self.accept('n', self.rand_request)
-        self.accept('c', self.embed)
-        self.accept('k', self.print_cache)
+        #self.accept('r', self.fake_request)
+        #self.accept('p', self.fake_predict)
+        #self.accept('n', self.rand_request)
+        #self.accept('c', self.embed)
+        #self.accept('k', self.print_cache)
 
 
         # TODO replace this with asyncio queue?

@@ -29,7 +29,7 @@ from ipython import embed
 from defaults import *
 from util import genLabelText
 from test_objects import makeSimpleGeom
-from keys import event_callback
+from keys import event_callback, HasKeybinds
 
 import inspect
 
@@ -54,7 +54,7 @@ def rescale(p2p, corner, radius, cfz):
     return (x**2 + z**2)**.5  #
 
 
-class HasSelectables: #mixin see chessboard example
+class HasSelectables(HasKeybinds): #mixin see chessboard example
     def __init__(self):
         #selection detection
         self.picker = CollisionTraverser()
@@ -176,10 +176,8 @@ class BoxSel(HasSelectables,DirectObject):
     #visualization levels
     VIS_OFF = 0
     VIS_POINTS = 1
-    VIS_L2 = 2
-    VIS_ALL = 3
-    VIS_DEBUG = 4
-    VIS_DEBUG_LINES = 5
+    VIS_ALL = 2
+    VIS_DEBUG = 3
     def __init__(self, frames = None, visualize = VIS_POINTS):
         super().__init__()
         self.visualize = visualize
@@ -217,7 +215,7 @@ class BoxSel(HasSelectables,DirectObject):
         self.accept('mouse1',self.gotClick)  # TODO keybinds
         self.accept('shift-mouse1',self.gotClick)
         self.accept('mouse1-up',self.gotRelease)
-        self.accept('v', self.toggle_vis)
+        #self.accept('v', self.toggle_vis)
         #self.accept("escape", sys.exit)  #no, exit_cleanup does this
 
         self.curSelShown = []
@@ -240,7 +238,7 @@ class BoxSel(HasSelectables,DirectObject):
                     do_hide(child)
 
 
-        self.visualize = (self.visualize + 1) % 6  # rotate through 4 levels
+        self.visualize = (self.visualize + 1) % 4  # rotate through 4 levels
         if self.visualize == self.VIS_DEBUG:
             do_show(self.collRoot)
         elif not self.visualize:
@@ -348,8 +346,8 @@ class BoxSel(HasSelectables,DirectObject):
     def getEnclosedNodes(self):
         cfx = 1
         cfz = base.camLens.getAspectRatio()
-        cx,cy,cz = self.__baseBox__.getPos()
-        sx,sy,sz = self.__baseBox__.getScale()  # gives us L/W of the box
+        cx, _, cz = self.__baseBox__.getPos()
+        sx, _, sz = self.__baseBox__.getScale()  # gives us L/W of the box
         self.selRoot.removeChildren()
         self.projRoot.removeChildren()
 
@@ -397,10 +395,9 @@ class BoxSel(HasSelectables,DirectObject):
                         if self.visualize >= self.VIS_ALL:
                             points.append([pX, 0, pZ])
 
-        if self.visualize >= self.VIS_L2:
+        if self.visualize >= self.VIS_ALL:
             l2points = []
-            if self.visualize >= self.VIS_ALL:
-                l2all = []
+            l2all = []
 
         # things we don't need to do every bloody time
         utilityNode = render.attachNewNode('utilityNode')
@@ -446,16 +443,16 @@ class BoxSel(HasSelectables,DirectObject):
 
                 if self.visualize >= self.VIS_ALL:
                     # centers of all l2 points
-                    l2all.append(point3d)
-
-                    if contained:
+                    if test:
+                        l2points.append(point3d)
                         color = [0,1,0,1]
                     else:
+                        l2all.append(point3d)
                         color = [0,0,1,1]
-
                     # visualize the projected radius of l2 collision spheres
                     radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                     self.projRoot.attachNewNode(makeSimpleGeom(radU,color,GeomLinestrips))
+
             if test:
                 for c in node.getChildren():
                     if c.getNumChildren():
@@ -463,18 +460,13 @@ class BoxSel(HasSelectables,DirectObject):
                     else:
                         projectNode(c)
 
-                if not contained:
-                    if self.visualize >= self.VIS_L2:
+                #if not contained:
+                if 0:
+                    if self.visualize >= self.VIS_ALL:
                         l2points.append(point3d)
-                        if self.visualize >= self.VIS_ALL:
-                            radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
-                            n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
-                            n.setBin('unsorted',0)
-                            if self.visualize >= self.VIS_DEBUG_LINES:
-                                self.projRoot.attachNewNode(makeSimpleGeom(line,[0,1,0,1],GeomLinestrips))
-
-            elif self.visualize >= self.VIS_DEBUG_LINES:
-                self.projRoot.attachNewNode(makeSimpleGeom(line,[1,0,0,1],GeomLinestrips))
+                        radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+                        n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
+                        n.setBin('unsorted',0)
 
         def tests(d1, r3, radius, p2p, lX, uX, lZ, uZ, cfz):
             """ see if boxes and circles overlap """
@@ -483,16 +475,22 @@ class BoxSel(HasSelectables,DirectObject):
                 return True
 
             pX, _, pZ = p2p
-            Xin = lX <= pX and pX <= uX
-            Zin = lZ <= pZ and pZ <= uZ
 
             if lX <= pX - radius and pX + radius <= uX and lZ <= pZ - radius and pZ + radius <= uZ:
-                print("circle in box")
+                #print("circle in box")
                 return -1
+
+            Xin = lX <= pX and pX <= uX
+            Zin = lZ <= pZ and pZ <= uZ
 
             if Xin and Zin:
                 #print("Xin and Zin")
                 return True
+
+            #if Xin:
+                #print('Xin')
+            #elif Zin:
+                #print('Zin')
 
             corners = (
                 Point3(lX, 0, lZ),
@@ -516,13 +514,19 @@ class BoxSel(HasSelectables,DirectObject):
             min_dxs = min(abs(dxl), abs(dxu))
             min_dzs = min(abs(dzl), abs(dzu))
 
+            #if min_dxs <= radius:
+                #print('min dxs passed')
+            #if min_dzs <= radius * cfz:
+                #print('min dzs passed')
+
             if min_dxs <= radius and Zin:
                 #print('dx < r and Zin')
                 return True
-            elif min_dzs <= radius and Xin:
+            elif min_dzs <= radius * cfz and Xin:
                 #print('dz < r and Xin')
                 return True
             else:
+                #print('fail')
                 return False
 
         # actually do the projection
@@ -536,16 +540,16 @@ class BoxSel(HasSelectables,DirectObject):
             p3n = self.selRoot.attachNewNode(pts3)
             p3n.setRenderModeThickness(3)  # render order >_<
 
-            if self.visualize >= self.VIS_L2:
+            if self.visualize >= self.VIS_ALL:
                 l2s = makeSimpleGeom(l2points,[0,1,0,1])
                 l2n = self.selRoot.attachNewNode(l2s)
                 l2n.setRenderModeThickness(8)
 
-                if self.visualize >= self.VIS_ALL:
-                    l2as = makeSimpleGeom(l2all,[1,0,0,1])
-                    l2an = self.selRoot.attachNewNode(l2as)
-                    l2an.setRenderModeThickness(8)
+                l2as = makeSimpleGeom(l2all,[1,0,0,1])
+                l2an = self.selRoot.attachNewNode(l2as)
+                l2an.setRenderModeThickness(8)
 
+                if self.visualize >= self.VIS_DEBUG:
                     pts = makeSimpleGeom(points,[1,1,1,1])
                     self.projRoot.attachNewNode(pts)
 

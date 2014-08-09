@@ -12,7 +12,7 @@ from panda3d.core import TextNode, LineSegs, Point3, Point2
 
 from ipython import embed
 
-from keys import event_callback
+from keys import event_callback, HasKeybinds
 
 
 keybinds = {
@@ -204,7 +204,7 @@ class Axis3d(DirectObject): #FIXME not the best way to do this, making all these
         axis.setScale(scale,scale,scale)
         axis.setRenderModeThickness(2)
 
-class CameraControl(DirectObject):
+class CameraControl(DirectObject, HasKeybinds):
     """ adds controls to a given camera, usually base.camera"""
     def __init__(self,camera=None):
         #camera setup
@@ -457,7 +457,7 @@ class CameraControl(DirectObject):
 #   Menus and frames
 ###
 
-class GuiFrame(DirectObject):
+class GuiFrame(DirectObject, HasKeybinds):
     #should be able to show/hide, do conditional show hide
     #position where you want
     #parent to other frames

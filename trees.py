@@ -2,6 +2,12 @@
 
 import numpy as np
 
+from panda3d.core import NodePath, CollisionNode, CollisionSphere, BitMask32
+
+from defaults import BITMASK_COLL_MOUSE
+from defaults import BITMASK_COLL_CLICK
+from prof import profile_me
+
 TREE_MAX_POINTS = 512
 
 TREE_LOGIC = np.array([
@@ -160,16 +166,15 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
         elif leaf_max > num_points * .90:  # if any leaf has > half the points
-            [treeMe(*leaf) for leaf in next_leaves]
+            for leaf in next_leaves:
+                treeMe(*leaf)
+            #[treeMe(*leaf) for leaf in next_leaves]
             l2Node.setName('branch '+l2Node.getName())
             l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))  # this does not collide
             if pipe:  # extremely unlikely edge case
                 print("hit an early pip")
-                to_send = l2Node
-                pipe.send(to_send)
-                #for s in to_send:
-                    #pipe.send(s)
+                pipe.send(l2Node)
                 pipe.close()
                 return None
             else:
@@ -193,11 +198,12 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         l2Node.node().addSolid(CollisionSphere(center[0],center[1],center[2],radius * 2))
         l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))  # this does not collide
 
-    [treeMe(*leaf) for leaf in next_leaves]
+    for leaf in next_leaves:
+        treeMe(*leaf)
+    #[treeMe(*leaf) for leaf in next_leaves]
 
     if pipe:
-        to_send = l2Node
-        pipe.send(to_send)
+        pipe.send(l2Node)
         #for s in to_send:
             #pipe.send(s)
         pipe.close()
@@ -208,7 +214,7 @@ def main():
     n = 9999
     positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
     out = octTree(positions)
-    [print(n) for n in out]
+    #[print(n) for n in out]
 
 if __name__ == "__main__":
     main()

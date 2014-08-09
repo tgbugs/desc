@@ -187,7 +187,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
     """
     num_points = len(positions)
 
-    if num_points <= 0:
+    if not num_points:
         return None
 
     if center == None:  # must use equality due to id changing across interpreters
@@ -215,7 +215,8 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         branch = bitmasks[i]
         new_center = center + TREE_LOGIC[i] * side * .5  #FIXME we pay a price here when we calculate the center of an empty node
         subSet = positions[branch]
-        next_leaves.append((l2Node, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5, request_hash))
+        if len(subSet):
+            next_leaves.append((l2Node, subSet, uuids[branch], geomCollide[branch], new_center, side * .5, radius * .5, request_hash))
 
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:

@@ -629,7 +629,7 @@ def main():
 
     from test_objects import makeSimpleGeom
     import numpy as np
-    from dataIO import treeMe
+    from trees import treeMe
     from uuid import uuid4
     from panda3d.core import GeomLinestrips
     n = 1000

@@ -81,7 +81,7 @@ def main():
                    #'cache':rendMan.cache,
                    #'event_loop':clientLoop })  # FIXME we could move event_loop to __new__? 
 
-    datCli_base = dataClientProtocol(rendMan.set_nodes, rendMan.set_send_request, rendMan.cache, clientLoop)
+    datCli_base = dataClientProtocol(rendMan.render_callback, rendMan.set_send_request, rendMan.cache, clientLoop)
     datCli = datCli_base()
     datCli.connection_lost('START')
 

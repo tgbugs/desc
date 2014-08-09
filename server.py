@@ -71,6 +71,7 @@ class requestCacheManager:
         self.cache_limit = cache_limit
         self.cache = {}
         self.cache_age = deque()  # this is a nasty hack, probably need a real tree here at some point
+        self.passout = []  # HOW DO SERVER PROTOCOLS WORK!?
 
     def get_cache(self, request_hash):
         try:

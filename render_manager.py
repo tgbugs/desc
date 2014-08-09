@@ -16,7 +16,7 @@ from ipython import embed
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import GeomNode, NodePath, PandaNode
 
-from dataIO import treeMe
+from trees import treeMe
 from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 from protocols import collPipeProtocol
 from keys import event_callback, HasKeybinds
@@ -136,10 +136,12 @@ class renderManager(DirectObject, HasKeybinds):
         else:
             print('already being rendered', geom)
 
-        # FIXME this will just reparent all the l2 nodes if already attached
-        [n.reparentTo(self.collRoot) for n in coll]
+        coll.reparentTo(self.collRoot)
 
-    def set_nodes(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
+        # FIXME this will just reparent all the l2 nodes if already attached
+        #[n.reparentTo(self.collRoot) for n in coll]
+
+    def render_callback(self, request_hash, data_tuple):  # TODO is there any way to make sure we prioritize direct requests so they render fast?
         """ this is the callback used by the data protocol """
         #if request_hash in self.cache:  # FIXME what to do if we already have
         #the data?! knowing that a prediction is in server cache doesn't tell
@@ -161,13 +163,14 @@ class renderManager(DirectObject, HasKeybinds):
 
         except KeyError:
             print("predicted data view cached")
-            geom, coll, ui = node_tuple = self.make_nodes(request_hash, data_tuple)
-            if hasattr(node_tuple[1], 'recv'):  # not running in ppe
+            geom, coll, ui = self.make_nodes(request_hash, data_tuple)
+            print('caching collision node?',coll)
+            if hasattr(coll, 'recv'):  # not running in ppe
                 todo = self.event_loop.connect_read_pipe(lambda: self.cpp(request_hash, geom, ui), coll)
                 asyncio.Task(todo, loop=self.event_loop)
                 #self.make_nt_task(request_hash, *node_tuple)
             else:
-                self.cache[request_hash] = node_tuple
+                self.cache[request_hash] = geom, coll, ui
 
     # tasks
     def make_nt_task(self, request_hash, geom, coll, ui, render_ = False):

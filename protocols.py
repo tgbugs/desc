@@ -8,6 +8,7 @@ import os  # for dealing with firewall stuff?
 import asyncio
 import pickle
 import struct
+from time import sleep
 from multiprocessing import Pipe as mpp
 from multiprocessing.reduction import ForkingPickler
 
@@ -18,6 +19,8 @@ from panda3d.core import NodePath, PandaNode
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import DataByteStream
 from ipython import embed
+
+from prof import profile_me
 
 ###
 #   Utility or picklable functions
@@ -95,8 +98,8 @@ class connectionClientProtocol(asyncio.Protocol):  # this could just be made int
         #self.event_loop.run_until_complete(asyncio.wait_for(self.future_token, timeout))
 
 class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of these per interpreter... so could init ourselves with the token
-    def __new__(cls, set_nodes, render_set_send_request, cache, event_loop):
-        cls.set_nodes = set_nodes
+    def __new__(cls, render_callback, render_set_send_request, cache, event_loop):
+        cls.render_callback = render_callback
         cls.render_set_send_request = render_set_send_request
         #cls.cache = cache
         cls.event_loop = event_loop
@@ -140,7 +143,7 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
             #print('post split block',self.__block__[self.__block_size__:])
             request_hash, data_tuple = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
             data_tuple = no_repr(data_tuple)
-            self.set_nodes(request_hash, data_tuple)
+            self.render_callback(request_hash, data_tuple)
             self.__block__ = self.__block__[self.__block_size__:]
             self.__block_size__ = None
             self.__block_tuple__ = None
@@ -188,10 +191,10 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
         # TODO this should be implemented in a subclass specific to panda, same w/ the server
         for request_hash, data_tuple in response_generator:
             #print('yes we are trying to render stuff')
-            #self.event_loop.run_in_executor( None , lambda: self.set_nodes(request_hash, data_tuple) )  # amazingly this works!
-            self.set_nodes(request_hash, data_tuple)
+            #self.event_loop.run_in_executor( None , lambda: self.render_callback(request_hash, data_tuple) )  # amazingly this works!
+            self.render_callback(request_hash, data_tuple)
 
-    def set_nodes(self, request_hash, data_tuple):
+    def render_callback(self, request_hash, data_tuple):
         raise NotImplementedError('patch this function with the shared stated version in renderManager')
 
     def render_set_send_request(self, send_request:'function'):
@@ -320,6 +323,7 @@ class dataServerProtocol(asyncio.Protocol):
         self.__resp_done__ = False
         self.respMaker = self.respMaker()
         self.requests_sent = set()
+        self.rcm.passout.append(self)
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -367,6 +371,8 @@ class dataServerProtocol(asyncio.Protocol):
         self.transport.close()
         os.system("echo 'firewall is now DRAGONS!'")  # TODO actually close
         print(self.pprefix,'data server got eof')
+        self.requests_sent = set()
+        self.rcm.passout.remove(self)
 
     def process_data(self,data):  # XXX is this actually a coroutine?
         self.__block__ += data
@@ -384,6 +390,7 @@ class dataServerProtocol(asyncio.Protocol):
         pipes = []
         for_pred = []
         for request in requests:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
+            print(pred, request.hash_, self.requests_sent)
             if request is not None and request.hash_ not in self.requests_sent:  # FIXME and not rerequested
                 self.requests_sent.add(request.hash_)
                 data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
@@ -391,9 +398,10 @@ class dataServerProtocol(asyncio.Protocol):
                     recv, send = mpp(False)
                     pipes.append(recv)
                     self.event_loop.run_in_executor( self.ppe, make_response, send, request, self.respMaker )
-                    for_pred.append(request)
                 else:
                     self.transport.write(data_stream)
+
+                for_pred.append(request)  # TODO, prediction needs to keep a list of associated request hashes, which is interesting in and of itself
                     #print('WHAT WE GOT THAT HERE')
                     #print('data stream tail',data_stream[-10:])
 
@@ -459,33 +467,84 @@ class collPipeProtocol(asyncio.Protocol):
         self.ui = ui
         self.render_ = render_
         self._data = b''
+        self.__data = b''
+        self.recv_task = None
+        self.done = False
     
     def connection_made(self, transport):
         self.transport = transport
 
+
     # XXX FIXME for some reason this causes libc related segfaults?
+    @profile_me
     def data_received(self, data):  # I'm worried this will be slower...
         data = self._data + data
         while True:
             size, = struct.unpack("!i", data[:4])
             if len(data) < size:
                 self._data = data
+                print('breaking')
                 break
-            node = ForkingPickler.loads(data[4:4+size])
+            node = ForkingPickler.loads(data[4:4+size])  # ARE YOU SERIOUS
+            if self.render_:
+                # FIXME either of these cause panda related segfaults  # only on athena >_<
+                # on the other hand, doesn't exit as fast on luz
+                #node.reparentTo(self.collRoot)
+                self.coll_add_queue.append(node)
+            #self.nodes.append(node)
+            self.cache[self.request_hash] = self.geom, node, self.ui
+            data = data[4+size:]
+            if not data:
+                break
+            #if len(data) < 4:
+                #self._data = data
+                #break
+
+    def _data_received(self, data):  # XXX argh slow!
+        self.__data += data
+        if not self.recv_task:
+            self.recv_task = asyncio.Task(self.process_data(), loop=self.event_loop)
+        #elif self.recv_task.done():
+            #self.recv_task = asyncio.Task(self.process_data(), loop=self.event_loop)
+
+
+        #for block in self.process_data(data):
+            #if type(block) is bytes:
+                #node = ForkingPickler.loads(block)
+                #if self.render_:
+                    #node.reparentTo(self.collRoot)
+                #self.nodes.append(node)
+
+    @asyncio.coroutine
+    def process_data(self):
+        while True:
+            size, = struct.unpack("!i", self.__data[:4])
+            if len(self.__data) < size:
+                print('yielding')
+                yield from asyncio.sleep(1, loop=self.event_loop)
+                continue
+            #yield self.__data[4:4+size]
+            node = ForkingPickler.loads(self.__data[4:4+size])
+            self.cache[self.request_hash] = self.geom, node, self.ui
+            print(node)
             if self.render_:
                 # FIXME either of these cause panda related segfaults  # only on athena >_<
                 # on the other hand, doesn't exit as fast on luz
                 node.reparentTo(self.collRoot)
                 #self.coll_add_queue.append(node)
-            self.nodes.append(node)
-            data = data[4+size:]
-            if len(data) < 4:
-                self._data = data
+            #self.nodes.append(node)
+            self.__data = self.__data[4+size:]
+            if not self.__data:
+                print('I only get here once!')
                 break
+            elif len(self.__data) < 4:
+                #self._data = data
+                continue
+
         
     def eof_received(self):
         # TODO is it silly to use a future in place of nodes?
-        self.cache[self.request_hash] = self.geom, self.nodes, self.ui
+        #self.cache[self.request_hash] = self.geom, self.nodes, self.ui
         print('pipe got eof')
         return True
 

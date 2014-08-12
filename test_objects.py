@@ -5,7 +5,7 @@ from direct.gui.DirectButton import DirectButton
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
-#from panda3d.core import PandaNode,NodePath
+#from panda3d.core import PandaNode#, NodePath
 from panda3d.core import TextNode
 from panda3d.core import GeomVertexFormat, GeomVertexData
 from panda3d.core import Geom, GeomVertexWriter
@@ -22,10 +22,11 @@ from panda3d.core import CollisionNode, CollisionSphere
 #loadPrcFileData("", "want-tk #t")
 
 import sys
-from IPython import embed
+from ipython import embed
 
 from monoDict import MonoDict as md
 from defaults import *
+from keys import HasKeybinds, event_callback, AcceptKeys
 
 import multiprocessing as mp
 from multiprocessing import Pipe
@@ -134,6 +135,7 @@ def makeSimpleGeom(array,ctup,geomType=GeomPoints):
     cloudNode.addGeom(cloudGeom) #TODO figure out if it is faster to add and subtract Geoms from geom nodes...
 
     return cloudNode
+
  
 
 def _makeGeom(array,ctup,i,pipe, geomType=GeomPoints): #XXX testing multiple Geom version ... for perf seems like it will be super slow
@@ -500,14 +502,93 @@ def _main():
     ft = FullTest(999,bins)
     run() #looks like this is the slow case... probably should look into non blocking model loading?
 
+def make4d(array4, ctup, geomType = GeomPoints):
+    """
+        array4 should be indexed as follows:
+        (time steps, number of points, xyz)
+    """
+    if len(ctup) < len(array4):
+        ctup_ = ctup
+        def itc():
+            for _ in range(len(array4)):
+                yield ctup_
+        ctup = itc()
+    out = []
+    for array3, ctup__ in zip(array4,ctup):  # FIXME ppe?
+    #for array3 in array4:
+        g = makeSimpleGeom(array3, ctup__, geomType)  # FIXME fmt slow
+        out.append(g)
+    return out
+
+class fourObject:  # should probably inherit from our base object class
+    def __init__(self, geomList, collList = None):
+        #self.geomList = geomList
+        print(geomList)
+        self.collList = collList
+        geomRoot = render.find('geomRoot')
+        self.parent = geomRoot.attachNewNode(GeomNode(''))
+        self.__geom_list__ = []
+        for geomNode in geomList:
+            nodepath = self.parent.attachNewNode(geomNode)
+            nodepath.stash()
+            self.__geom_list__.append(nodepath)
+        #print(self.__geom_list__)
+        self.__geom__ = None
+        self.__set_index__(0)
+
+    def __set_index__(self, index):
+        if self.__geom__:
+            self.__geom__.stash()
+        self.__geom__ = self.__geom_list__[index]
+        self.__geom__.unstash()
+        self.__index__ = index
+        print('set index to', index)
+
+    def next_index(self):
+        next_ = (self.__index__ + 1) % len(self.__geom_list__)
+        self.__set_index__(next_)
+
+    def prev_index(self):
+        prev_ = (self.__index__ - 1) % len(self.__geom_list__)
+        self.__set_index__(prev_)
+
+    def goto_index(self, index):
+        try:
+            self.__set_index__(index)
+        except IndexError:
+            print('Invalid index.')
+
+class do4d(DirectObject, HasKeybinds):
+    def __init__(self):
+        tsteps = 100
+        data = np.cumsum(np.random.randint(-1,2,(tsteps,999,3)), axis=1)
+        ctup = np.random.rand(tsteps, 4)
+        self.selected = fourObject(make4d(data,ctup))
+
+    def set_selected(self, fourObject):  # TODO type check?
+        self.selected = fourObject
+
+
+    @event_callback('[-repeat')
+    def t_up(self):
+        self.selected.next_index()
+
+    @event_callback(']')
+    @event_callback(']-repeat')
+    def t_down(self):
+        self.selected.prev_index()
+
+
 def main():
-    from util import ui_text
+    from util import ui_text, frame_rate
     from ui import CameraControl, Axis3d, Grid3d
     from panda3d.core import loadPrcFileData
     from time import time
     from panda3d.core import PStatClient
 
-    from dragsel import BoxSel
+    from selection import BoxSel
+    from render_manager import renderManager
+
 
     PStatClient.connect()
     loadPrcFileData('','view-frustum-cull 0')
@@ -517,13 +598,19 @@ def main():
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
-    bs = BoxSel() #TODO
+    #bs = BoxSel() #TODO
     base.disableMouse()
+    frame_rate()
 
     #render something
-    ct = CollTest(2000)
+    #ct = CollTest(2000)
     #ft = FullTest(99,1)
 
+    renderManager()
+
+    d4d = do4d()
+
+    ac = AcceptKeys()
     run() # we don't need threading for this since panda has a builtin events interface
 
 

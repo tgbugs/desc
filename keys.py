@@ -34,7 +34,7 @@ class HasKeybinds:  # FIXME should this inherit from direct object?? I don't thi
         return self
 
 
-def event_callback(keybind, modes = ('default',)):  # something something changing the bind between modes a bad idea, accept a dict for
+def event_callback(keybinds, modes = ('default',)):  # something something changing the bind between modes a bad idea, accept a dict for
     """
         decorator that acceps:
         direct use -> register the function but no keys
@@ -42,9 +42,17 @@ def event_callback(keybind, modes = ('default',)):  # something something changi
         den string, mode tuple -> single key bind across these modes
         den string mode dict -> key, mode pairs to set bind for each mode
     """
-    if type(keybind) is dict:
-        print(type(keybind))
-        modes = keybind
+    #print(type(keybinds) is not tuple)
+    if inspect.isfunction(keybinds):
+        pass
+
+    elif type(keybinds) is dict:
+        modes = keybinds
+
+    elif type(keybinds) is not tuple:
+        # TODO need a way to bind multiple event names to the same callback!
+        # double decorator?
+        keybinds = (keybinds,)
 
     def register_callback(func):
         """ wrapper the collects all possible keyboard/mouse callbacks """
@@ -52,16 +60,17 @@ def event_callback(keybind, modes = ('default',)):  # something something changi
         for mode in modes:
             if mode not in callbacks:  # FIXME dangerous possible for bad names to get in
                 raise NameError('There is no mode with that name')
-            if keybind is func:
+            if keybinds is func:
                 callbacks['TO BIND'][func.__qualname__] = func
                 indexes.append((callbacks['TO BIND'], func.__qualname__))
             else:
-                callbacks[mode][keybind] = func  # FIXME namespace collisions
-                indexes.append((callbacks[mode], keybind))
+                for keybind in keybinds:
+                    callbacks[mode][keybind] = func  # FIXME namespace collisions and failed calls
+                    indexes.append((callbacks[mode], keybind))
         return func
 
-    if inspect.isfunction(keybind):
-        return register_callback(keybind)
+    if inspect.isfunction(keybinds):
+        return register_callback(keybinds)
     else:
         return register_callback
 
@@ -91,6 +100,7 @@ class AcceptKeys(DirectObject):
     def __init__(self):
         for name, mode in callbacks.items():
             if name != 'TO BIND':
+                # TODO make sure we can actually call it, otherwise don't set it or raise an error?
                 self.set_mode(mode)
 
     def set_mode(self, mode):

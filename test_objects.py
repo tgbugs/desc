@@ -40,8 +40,11 @@ from multiprocessing import Pipe
 
 #could use a queue for threadsafe object gen, not that we will really need it :/
 
-import numpy as np
 
+import numpy as np
+import zlib
+
+sys.modules['core'] = sys.modules['panda3d.core']
 
 NCORES = 8 #TODO get this live?
 
@@ -113,7 +116,7 @@ def makeGeom(index_counter, array,ctup,i,pipe, geomType=GeomPoints):
     #return cloudNode
 
 
-def makeSimpleGeom(array,ctup,geomType=GeomPoints):
+def makeSimpleGeom(array, ctup, geomType = GeomPoints, fix = False):
     fmt = GeomVertexFormat.getV3c4()
 
     vertexData = GeomVertexData('points', fmt, Geom.UHDynamic) #FIXME use the index for these too? with setPythonTag, will have to 'reserve' some
@@ -123,9 +126,14 @@ def makeSimpleGeom(array,ctup,geomType=GeomPoints):
     verts = GeomVertexWriter(vertexData, 'vertex')
     color = GeomVertexWriter(vertexData, 'color')
 
-    for point in array:
-        verts.addData3f(*point)
-        color.addData4f(*ctup)
+    if fix:
+        for point,c in zip(array, ctup):
+            verts.addData3f(*point)
+            color.addData4f(*c)
+    else:
+        for point in array:
+            verts.addData3f(*point)
+            color.addData4f(*ctup)
 
     points = geomType(Geom.UHDynamic)
     points.addConsecutiveVertices(0,len(array))
@@ -134,7 +142,10 @@ def makeSimpleGeom(array,ctup,geomType=GeomPoints):
     cloudGeom.addPrimitive(points)
     cloudNode.addGeom(cloudGeom) #TODO figure out if it is faster to add and subtract Geoms from geom nodes...
 
-    return cloudNode
+    if fix:
+        return cloudNode.__reduce__()
+    else:
+        return cloudNode  # decoding fails becuase ForkingPickler is called for reasons beyond comprehension
 
  
 
@@ -502,22 +513,43 @@ def _main():
     ft = FullTest(999,bins)
     run() #looks like this is the slow case... probably should look into non blocking model loading?
 
+def WRAP_PROC(asdf):
+    return makeSimpleGeom(*asdf)
+
+from multiprocessing import Pool
+from process_fixed import ProcessPoolExecutor 
+pool = ProcessPoolExecutor()
+#pool = Pool()
+
+
 def make4d(array4, ctup, geomType = GeomPoints):
     """
         array4 should be indexed as follows:
         (time steps, number of points, xyz)
     """
-    if len(ctup) < len(array4):
-        ctup_ = ctup
-        def itc():
-            for _ in range(len(array4)):
-                yield ctup_
-        ctup = itc()
-    out = []
+    def make_iter():
+        #if hasattr(ctup,'__iter__'):
+            #for array3, ctup_ in zip(array4, ctup):
+                #yield array3, ctup_, GeomPoints, True
+        #else:
+        for array3 in array4:
+            yield array3, ctup, geomType, True
+
+    zipped = make_iter()
+    #out = []
+    a = pool.map(WRAP_PROC, zipped)
+    #out = [i[0](i[1][0],i[1][1]) for i in a]  # for whatever reason this thinks pickle...
+    out = [i for i in a]
+    out = [nt.decodeFromBamStream(data) for f,(nt,data) in out]
+    
+    #embed()
+    
+    """
     for array3, ctup__ in zip(array4,ctup):  # FIXME ppe?
     #for array3 in array4:
         g = makeSimpleGeom(array3, ctup__, geomType)  # FIXME fmt slow
         out.append(g)
+    #"""
     return out
 
 class fourObject:  # should probably inherit from our base object class
@@ -537,9 +569,10 @@ class fourObject:  # should probably inherit from our base object class
         self.__set_index__(0)
 
     def __set_index__(self, index):
+        geom = self.__geom_list__[index]  # error check first
         if self.__geom__:
             self.__geom__.stash()
-        self.__geom__ = self.__geom_list__[index]
+        self.__geom__ = geom
         self.__geom__.unstash()
         self.__index__ = index
         print('set index to', index)
@@ -558,29 +591,45 @@ class fourObject:  # should probably inherit from our base object class
         except IndexError:
             print('Invalid index.')
 
+    def __len__(self):
+        return len(self.__geom_list__)
+
+from direct.gui.DirectGui import DirectSlider
 class do4d(DirectObject, HasKeybinds):
     def __init__(self):
-        tsteps = 100
-        data = np.cumsum(np.random.randint(-1,2,(tsteps,999,3)), axis=1)
+        tsteps = 99  # this is really molecules
+        npoints = 9999  # this is realy timesteps
+        data = np.cumsum(np.random.randint(-1,2,(tsteps,npoints,3)), axis=1)
+        data = [data[:,i,:] for i in range(len(data[0]))]
+        #embed()
         ctup = np.random.rand(tsteps, 4)
         self.selected = fourObject(make4d(data,ctup))
+
+        self.slider = DirectSlider(range=(0,tsteps-1), value=0, pageSize=1, thumb_frameSize=(0,.04,-.02,.02), command=self.t_set)
+        self.slider.setPos((0,0,-.9))
+        # TODO make clicking not on the button set the slider position?
 
     def set_selected(self, fourObject):  # TODO type check?
         self.selected = fourObject
 
+    def t_set(self):
+        value = int(self.slider['value'])
+        if value != self.selected.__index__:
+            self.selected.goto_index(value)
 
-    @event_callback('[-repeat')
+    @event_callback((']',']-repeat'))
     def t_up(self):
-        self.selected.next_index()
+        #self.selected.next_index()
+        self.slider['value'] = (self.slider['value'] + 1) % len(self.selected)
 
-    @event_callback(']')
-    @event_callback(']-repeat')
+    @event_callback(('[','[-repeat'))
     def t_down(self):
-        self.selected.prev_index()
+        #self.selected.prev_index()
+        self.slider['value'] = (self.slider['value'] - 1) % len(self.selected)
 
 
 def main():
-    from util import ui_text, frame_rate
+    from util import ui_text, frame_rate, exit_cleanup
     from ui import CameraControl, Axis3d, Grid3d
     from panda3d.core import loadPrcFileData
     from time import time
@@ -610,6 +659,7 @@ def main():
 
     d4d = do4d()
 
+    ec = exit_cleanup()
     ac = AcceptKeys()
     run() # we don't need threading for this since panda has a builtin events interface
 

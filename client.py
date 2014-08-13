@@ -63,7 +63,7 @@ def main():
     #asyncio and network setup
     clientLoop = get_event_loop()
     ppe = ProcessPoolExecutor(4)  # not sure if 4 is better...
-    ppe = False
+    #ppe = False
 
     #clientLoop.set_default_executor(ppe)
 

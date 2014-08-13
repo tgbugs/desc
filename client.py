@@ -56,7 +56,7 @@ def main():
 
     # frames XXX FIXME TODO this is a terrible way to pass this around...
     frames = {
-        'data':GuiFrame('Data view')
+        'data':GuiFrame('Data view','f')
     }
     frames['data'].toggle_vis()
 

@@ -131,9 +131,14 @@ def makeSimpleGeom(array, ctup, geomType = GeomPoints, fix = False):
     color = GeomVertexWriter(vertexData, 'color')
 
     if fix:
-        for point,c in zip(array, ctup):
-            verts.addData3f(*point)
-            color.addData4f(*c)
+        if len(ctup) == len(array):
+            for point,c in zip(array, ctup):
+                verts.addData3f(*point)
+                color.addData4f(*c)
+        else:
+            for point in array:
+                verts.addData3f(*point)
+                color.addData4f(*ctup)
     else:
         for point in array:
             verts.addData3f(*point)
@@ -536,8 +541,12 @@ def make4d(array4, ctup, geomType = GeomPoints):
             #for array3, ctup_ in zip(array4, ctup):
                 #yield array3, ctup_, GeomPoints, True
         #else:
-        for array3 in array4:
-            yield array3, ctup, geomType, True
+        if len(ctup) == len(array4[0]):
+            for array3 in array4:
+                yield array3, ctup, geomType, True
+        else:
+            for array3,c in zip(array4,ctup):
+                yield array3, c, geomType, True
 
     zipped = make_iter()
     #out = []
@@ -571,6 +580,10 @@ class fourObject:  # should probably inherit from our base object class
         #print(self.__geom_list__)
         self.__geom__ = None
         self.__set_index__(0)
+        self._all = False
+
+    def set_size(self, size):
+        self.parent.setRenderModeThickness(size)
 
     def __set_index__(self, index):
         geom = self.__geom_list__[index]  # error check first
@@ -594,6 +607,19 @@ class fourObject:  # should probably inherit from our base object class
             self.__set_index__(index)
         except IndexError:
             print('Invalid index.')
+
+    def show_all(self):
+        if not self._all:
+            for n in self.__geom_list__:
+                n.unstash()
+            self._all = True
+
+    def hide_all(self):
+        if self._all:
+            for n in self.__geom_list__:
+                n.stash()
+            #self.goto_index(self.__index__)
+            self._all = False
 
     def __len__(self):
         return len(self.__geom_list__)
@@ -662,7 +688,8 @@ class nObject:
 
         # collision stuff  slow :(
         in_ = np.array([list(a) for a in zip(*out)])
-        uui = np.array([ ' ' for _ in range(len(in_))])
+        uui = np.array([ '%s'%uuid4() for _ in range(len(in_))]) # in this context these are token uuids?
+        # TODO want to be able to keep those points hilighted even when we change the view
         gc = np.ones(len(in_))
 
         node = treeMe(None, in_, uui, gc)
@@ -697,13 +724,15 @@ class dond(DirectObject, HasKeybinds):
     def __init__(self):
         #n_tokens = 99999  # 100k not so bad...
         n_tokens = 9999
-        n_props = 20
-        data = np.random.uniform(-100,100,(n_props,n_tokens))
+        n_props = 6
+        data1 = np.random.uniform(-100,100,(n_props/2,n_tokens))
+        data2 = np.random.normal(0,100,(n_props/2,n_tokens))
+        data = np.vstack([data2, data1])
         self.names = ['%s'%uuid4() for _ in range(n_props)]
         self.no = nObject(data, self.names)
         self.frame = GuiFrame('Object selector','f')
         self.accept('z',self.refresh)
-    def refresh(self):
+    def refresh(self):  # FIXME adding repeatedly rather than updating
         for name in self.names:
             self.frame.add_item('x_'+name, self.no.set_x, (name,))
             self.frame.add_item('y_'+name, self.no.set_y, (name,))
@@ -715,20 +744,36 @@ class dond(DirectObject, HasKeybinds):
 
 class do4d(DirectObject, HasKeybinds):
     def __init__(self):
-        tsteps = 99  # this is really molecules
-        npoints = 9999  # this is realy timesteps
+        tsteps = 10  # this is really molecules
+        npoints = 999  # this is realy timesteps
         data = np.cumsum(np.random.randint(-1,2,(tsteps,npoints,3)), axis=1)
-        data = [data[:,i,:] for i in range(len(data[0]))]
+        data2 = [data[:,i,:] for i in range(len(data[0]))]
         #embed()
         ctup = np.random.rand(tsteps, 4)
-        self.selected = fourObject(make4d(data,ctup))
+        self.selected = fourObject(make4d(data,ctup, geomType = GeomLinestrips))
+        self.f2 = fourObject(make4d(data2,ctup))
+        self.f2.set_size(3)
+        self.f2.parent.stash()
 
-        self.slider = DirectSlider(range=(0,tsteps-1), value=0, pageSize=1, thumb_frameSize=(0,.04,-.02,.02), command=self.t_set)
+        self.slider = DirectSlider(range=(0,len(data)-1), value=0, pageSize=1, thumb_frameSize=(0,.04,-.02,.02), command=self.t_set)
         self.slider.setPos((0,0,-.9))
         # TODO make clicking not on the button set the slider position?
+        self.accept('s',self.set_selected, [self.f2])
 
     def set_selected(self, fourObject):  # TODO type check?
+        #if self.selected:
+            #self.selected.parent.stash()
         self.selected = fourObject
+        self.selected.parent.unstash()
+        self.slider['range'] = (0,len(self.selected)-1)
+
+    @event_callback('a')
+    def t_all(self):
+        if not self.selected._all:
+            self.selected.show_all()
+        else:
+            self.selected.hide_all()
+    
 
     def t_set(self):
         value = int(self.slider['value'])
@@ -774,10 +819,11 @@ def main():
     #ft = FullTest(99,1)
 
     renderManager()
-    bs = BoxSel() # FIXME must be started after renderManager >_<
+    frames = {'data':GuiFrame('data','f')}
+    bs = BoxSel(frames) # FIXME must be started after renderManager >_<
 
-    dnd = dond()
-    #d4d = do4d()
+    #dnd = dond()
+    d4d = do4d()
 
     ec = exit_cleanup()
     ac = AcceptKeys()

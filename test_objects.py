@@ -30,6 +30,7 @@ from monoDict import MonoDict as md
 from defaults import *
 from keys import HasKeybinds, event_callback, AcceptKeys
 from ui import GuiFrame
+from trees import treeMe
 
 import multiprocessing as mp
 from multiprocessing import Pipe
@@ -612,7 +613,9 @@ class nObject:
 
         self.parent = render.find('geomRoot').attachNewNode(GeomNode(''))  # FIXME naming
         self.__node__ = None
-        self.__old_nodes__ = []
+        self.__coll_node__ = None
+        self.__old_nodes__ = []  # FIXME dict by hash_
+        self.__old_coll_nodes__ = []  # FIXME dict by hash_
         self.__t_index__ = 0
 
     def msgVec(self, ctup, x, y, z):
@@ -651,6 +654,23 @@ class nObject:
             self.__node__.stash()  # FIXME going to need a way to retrieve previous view modes
             self.__old_nodes__.append(self.__node__)
         self.__node__ = self.parent.attachNewNode(self.msgVec(ctup, *out))
+        self.set_size(2)
+
+        if self.__coll_node__:
+            self.__coll_node__.stash()
+            self.__old_coll_nodes__.append(self.__coll_node__)
+
+        # collision stuff  slow :(
+        in_ = np.array([list(a) for a in zip(*out)])
+        uui = np.array([ ' ' for _ in range(len(in_))])
+        gc = np.ones(len(in_))
+
+        node = treeMe(None, in_, uui, gc)
+        node.reparentTo(render.find('collideRoot'))
+        self.__coll_node__ = node
+
+    def set_size(self, size):
+        self.__node__.setRenderModeThickness(size)
 
     def set_x(self, prop_name, *args):
         self._x = self.props[prop_name]
@@ -675,16 +695,20 @@ class nObject:
 
 class dond(DirectObject, HasKeybinds):
     def __init__(self):
+        #n_tokens = 99999  # 100k not so bad...
         n_tokens = 9999
         n_props = 20
-        data = np.random.randint(-100,100,(n_props,n_tokens))
-        names = ['%s'%uuid4() for _ in range(n_props)]
-        no = nObject(data, names)
-        frame = GuiFrame('Object selector','f')
-        for name in names:
-            frame.add_item('x_'+name, no.set_x, (name,))
-            frame.add_item('y_'+name, no.set_y, (name,))
-            frame.add_item('z_'+name, no.set_z, (name,))
+        data = np.random.uniform(-100,100,(n_props,n_tokens))
+        self.names = ['%s'%uuid4() for _ in range(n_props)]
+        self.no = nObject(data, self.names)
+        self.frame = GuiFrame('Object selector','f')
+        self.accept('z',self.refresh)
+    def refresh(self):
+        for name in self.names:
+            self.frame.add_item('x_'+name, self.no.set_x, (name,))
+            self.frame.add_item('y_'+name, self.no.set_y, (name,))
+            self.frame.add_item('z_'+name, self.no.set_z, (name,))
+            self.frame.add_item(' ')
 
 
 
@@ -741,7 +765,6 @@ def main():
     grid = Grid3d()
     axis = Axis3d()
     cc = CameraControl()
-    #bs = BoxSel() #TODO
     base.disableMouse()
     frame_rate()
     startup_data()
@@ -751,6 +774,7 @@ def main():
     #ft = FullTest(99,1)
 
     renderManager()
+    bs = BoxSel() # FIXME must be started after renderManager >_<
 
     dnd = dond()
     #d4d = do4d()

@@ -26,6 +26,7 @@ notes:
     impact on rendering
 
  bugs:
+  0. if you toggle vis on a GuiFrame and then resize the window the title doesnt stay in the right place! also, index error on ''
   1. turn on threading-mode Cull/Draw, do mouse collision with showCollisions(render) on the CollisionTraverser will segfault
   2.  Assertion failed: si != _state_map.end() at line 672 of panda/src/putil/bamWriter.cxx out of nowhere when piping back to main thread
   3.
@@ -56,6 +57,8 @@ just setPythonTag (and increase the priority if empty) of that node when we get 
 
 things
 ======
+ 2. async loading of bams???
+ 1. selection bug, need to hide the selection when we stash geoms
  0. really weird bug with the server where predictions are not sent?
  7. we could use getPythonTag to make it really easy to link collision nodes to vertecies...
  6. collision nodes need to be able to quickly reference the geometry atom

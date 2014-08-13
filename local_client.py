@@ -21,6 +21,7 @@ def main():
     from protocols import connectionServerProtocol, dataServerProtocol
     from protocols import dataClientProtocol
     from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
+    from keys import AcceptKeys
 
     # common
     event_loop = get_event_loop()
@@ -62,7 +63,7 @@ def main():
     rendMan = renderManager(event_loop, ppe)
     bs = BoxSel(frames)
 
-    datCli_base = dataClientProtocol(rendMan.set_nodes, rendMan.set_send_request, rendMan.cache, event_loop)
+    datCli_base = dataClientProtocol(rendMan.render_callback, rendMan.set_send_request, rendMan.cache, event_loop)
     datCli = datCli_base()
     datCli.connection_lost('START')
 
@@ -73,6 +74,7 @@ def main():
     shutdown = make_shutdown(event_loop, eventThread, serverCon, serverData, ppe)
     el = exit_cleanup(event_loop, ppe, datCli.transport, shutdown)
 
+    ac = AcceptKeys()
     run()
 
 

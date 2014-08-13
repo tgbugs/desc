@@ -194,6 +194,7 @@ class Grid3d(DirectObject):
         gridGeom = makeGrid()
         gridNode.addGeom(gridGeom)
         grid = render.attachNewNode(gridNode)
+        grid.setScale(10)
 
 class Axis3d(DirectObject): #FIXME not the best way to do this, making all these new direct objects if they need to be controlled
     def __init__(self, scale=10):

@@ -128,9 +128,9 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         radius = np.max(norms) * .5
         side = ((4/3) * radius**2) ** .5
         if parent == None:
-            l2Node = NodePath(CollisionNode('Root for %s 0'%request_hash))
+            l2Node = NodePath(CollisionNode('ObjectRoot for %s 0'%request_hash))  # TODO naming for search
         else:
-            l2Node = parent.attachNewNode(CollisionNode('Root for %s 0'%request_hash))
+            l2Node = parent.attachNewNode(CollisionNode('ObjectRoot for %s 0'%request_hash))
     else:
         #l2Node = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
         l2Node = parent.attachNewNode(CollisionNode(' %s'%(int(parent.getName()[-2:]) + 1)))

@@ -297,6 +297,9 @@ class BoxSel(HasSelectables,DirectObject):
         target = self.getClickTarget()
         if target:
             self.processTarget(target)
+            root = [n for n in target.getIntoNodePath().getAncestors() if n.getName().count('ObjectRoot')][0]  # FIXME global naming please
+            print(root, 'got a hit')
+            # switch that to selection for object level manipulation
         else:
             if not self.__shift__:
                 self.clearSelection()
@@ -390,10 +393,12 @@ class BoxSel(HasSelectables,DirectObject):
             if lX <= pX and pX <= uX:
                 if lZ <= pZ and pZ <= uZ: 
                     self.processTarget(node)
+                    # TODO we need a way to tell the ObjectRoot collNode a child actually got a hit
                     if self.visualize:
                         points3.append(point3d)
                         if self.visualize >= self.VIS_ALL:
                             points.append([pX, 0, pZ])
+                    return True
 
         if self.visualize >= self.VIS_ALL:
             l2points = []
@@ -453,12 +458,16 @@ class BoxSel(HasSelectables,DirectObject):
                     radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                     self.projRoot.attachNewNode(makeSimpleGeom(radU,color,GeomLinestrips))
 
+            hit = None
             if test:
                 for c in node.getChildren():
                     if c.getNumChildren():
-                        projectL2(c, contained)
+                        if projectL2(c, contained):  # next level and check hit
+                            hit = True
                     else:
-                        projectNode(c)
+                        if projectNode(c):
+                            hit = True
+
 
                 #if not contained:
                 if 0:
@@ -467,6 +476,7 @@ class BoxSel(HasSelectables,DirectObject):
                         radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
                         n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
                         n.setBin('unsorted',0)
+            return hit
 
         def tests(d1, r3, radius, p2p, lX, uX, lZ, uZ, cfz):
             """ see if boxes and circles overlap """
@@ -531,7 +541,11 @@ class BoxSel(HasSelectables,DirectObject):
 
         # actually do the projection
         for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
-            projectL2(c)
+            if projectL2(c):  # check if we got a hit
+                # add the root node to the list of selected root nodes
+                print(c,'got a hit!')
+                pass
+
 
         print(len(self.curSelShown))
         #someday we thread this ;_;

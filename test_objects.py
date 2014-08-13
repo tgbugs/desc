@@ -739,9 +739,6 @@ class dond(DirectObject, HasKeybinds):
             self.frame.add_item('z_'+name, self.no.set_z, (name,))
             self.frame.add_item(' ')
 
-
-
-
 class do4d(DirectObject, HasKeybinds):
     def __init__(self):
         tsteps = 10  # this is really molecules

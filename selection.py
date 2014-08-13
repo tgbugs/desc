@@ -298,7 +298,8 @@ class BoxSel(HasSelectables,DirectObject):
         if target:
             self.processTarget(target)
             try:
-                root = [n for n in target.getIntoNodePath().getAncestors() if n.getName().count('ObjectRoot')][0]  # FIXME global naming please
+                print([n for n in target.getIntoNodePath().getAncestors() if n.getName().count('ObjectRoot')])
+                root = [n for n in target.getIntoNodePath().getAncestors() if n.getName().count('ObjectRoot')][-1]  # FIXME global naming please
                 cbs = root.getPythonTag('selection_callbacks')
                 if cbs:
                     [f() for f in cbs]
@@ -353,7 +354,6 @@ class BoxSel(HasSelectables,DirectObject):
         return task.cont
 
     def getEnclosedNodes(self):
-        print('yes we here')
         cfx = 1
         cfz = base.camLens.getAspectRatio()
         cx, _, cz = self.__baseBox__.getPos()
@@ -548,18 +548,23 @@ class BoxSel(HasSelectables,DirectObject):
 
         # actually do the projection
         for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
-            if c.getName().count('ObjectRoot'): # FIXME starts with
-                for c_ in c.getChildren():
-                    if projectL2(c_):  # check if we got a hit
-                        cbs = c_.getPythonTag('selection_callbacks')
-                        if cbs:
-                            [f() for f in cbs]
-
-            else:
+            if c.getName().count('ObjectRoot for'):
+                print('yes we normal')
                 if projectL2(c):  # check if we got a hit
                     cbs = c.getPythonTag('selection_callbacks')
                     if cbs:
                         [f() for f in cbs]
+
+            elif c.getName().count('ObjectRoot'): # FIXME starts with
+                for c_ in c.getChildren():
+                    if projectL2(c_):  # check if we got a hit
+                        print('yes we here')
+                        print(c_)
+                        cbs = c_.getPythonTag('selection_callbacks')
+                        if cbs:
+                            [f() for f in cbs]
+            else:
+                print(c.getName())
 
 
         print(len(self.curSelShown))

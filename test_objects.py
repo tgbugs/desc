@@ -572,7 +572,7 @@ class fourObject:  # should probably inherit from our base object class
         geomRoot = render.find('geomRoot')
         self.parent = geomRoot.attachNewNode(GeomNode(''))
         collRoot = render.find('collideRoot')
-        self.coll_parent = geomRoot.attachNewNode(GeomNode('ObjectRoot'))
+        self.coll_parent = collRoot.attachNewNode(CollisionNode('ObjectRoot'))
         self.__geom_list__ = []
         for geomNode in geomList:
             nodepath = self.parent.attachNewNode(geomNode)
@@ -797,6 +797,7 @@ class do4d(DirectObject, HasKeybinds):
         self.selected = fourObject
         self.selected.unstash()
         self.slider['range'] = (0,len(self.selected)-1)
+        print('selected set to', fourObject)
 
     @event_callback('a')
     def t_all(self):

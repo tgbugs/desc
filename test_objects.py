@@ -3,6 +3,7 @@ from __future__ import print_function
 from direct.showbase.ShowBase import ShowBase
 from direct.gui.DirectButton import DirectButton
 from direct.gui.OnscreenText import OnscreenText
+from direct.gui.DirectGui import DirectSlider
 from direct.showbase.DirectObject import DirectObject
 from direct.task.Task import Task
 #from panda3d.core import PandaNode#, NodePath
@@ -23,10 +24,12 @@ from panda3d.core import CollisionNode, CollisionSphere
 
 import sys
 from ipython import embed
+from uuid import uuid4
 
 from monoDict import MonoDict as md
 from defaults import *
 from keys import HasKeybinds, event_callback, AcceptKeys
+from ui import GuiFrame
 
 import multiprocessing as mp
 from multiprocessing import Pipe
@@ -594,7 +597,98 @@ class fourObject:  # should probably inherit from our base object class
     def __len__(self):
         return len(self.__geom_list__)
 
-from direct.gui.DirectGui import DirectSlider
+class nObject:
+    fmt = GeomVertexFormat.getV3c4()
+    geomType = GeomPoints  # FIXME this should probably be instance or even render specific
+    def __init__(self, prop_vecs, prop_names):
+        # TODO continuous or discrete sample space aka timeserries w/ regular intervals?
+        self.prop_vecs = prop_vecs  # iterable of property vectors, all of the same length
+        self.props = {name:index for index,name in enumerate(prop_names)}
+
+        self._x = None
+        self._y = None
+        self._z = None
+        self._t = None
+
+        self.parent = render.find('geomRoot').attachNewNode(GeomNode(''))  # FIXME naming
+        self.__node__ = None
+        self.__old_nodes__ = []
+        self.__t_index__ = 0
+
+    def msgVec(self, ctup, x, y, z):
+        vertexData = GeomVertexData('points', self.fmt, Geom.UHDynamic)
+        cloudGeom = Geom(vertexData)
+        cloudNode = GeomNode('just some points')
+
+        verts = GeomVertexWriter(vertexData, 'vertex')
+        color = GeomVertexWriter(vertexData, 'color')
+
+        for x_, y_, z_, c in zip(x, y, z, ctup):
+            verts.addData3f(x_, y_, z_)
+            color.addData4f(*c)
+
+        points = self.geomType(Geom.UHDynamic)  # FIXME static?
+        points.addConsecutiveVertices(0,len(x))
+        points.closePrimitive()
+
+        cloudGeom.addPrimitive(points)
+        cloudNode.addGeom(cloudGeom) #TODO figure out if it is faster to add and subtract Geoms from geom nodes...
+        print(cloudNode)
+        return cloudNode
+
+    def draw(self):
+        print('drawing')
+        if self._t:
+            sorted_ = np.argsort(self.prop_vecs[self._t])
+            out = [self.prop_vecs[dim][sorted_] for dim in [self._x, self._y, self._z]]  # FIXME timeserries >_< WHARGH
+            # FIXME, solution is to have multiple nObjects, but that is not performant :/
+        else:
+            out = self.prop_vecs[[self._x, self._y, self._z]]
+
+        ctup = np.random.rand(len(out[0]), 4)  # FIXME
+
+        if self.__node__:
+            self.__node__.stash()  # FIXME going to need a way to retrieve previous view modes
+            self.__old_nodes__.append(self.__node__)
+        self.__node__ = self.parent.attachNewNode(self.msgVec(ctup, *out))
+
+    def set_x(self, prop_name, *args):
+        self._x = self.props[prop_name]
+        print(self._x, self._y, self._z)
+        if self._x is not None and self._y is not None and self._z is not None:
+            self.draw()
+    def set_y(self, prop_name, *args):
+        self._y = self.props[prop_name]
+        print(self._x, self._y, self._z)
+        if self._x is not None and self._y is not None and self._z is not None:
+            self.draw()
+    def set_z(self, prop_name, *args):
+        self._z = self.props[prop_name]
+        print(self._x, self._y, self._z)
+        if self._x is not None and self._y is not None and self._z is not None:
+            self.draw()
+    def set_t(self, prop_name, *args):
+        self._t = self.props[prop_name]
+        print(self._x, self._y, self._z)
+        if self._x is not None and self._y is not None and self._z is not None:
+            self.draw()
+
+class dond(DirectObject, HasKeybinds):
+    def __init__(self):
+        n_tokens = 9999
+        n_props = 20
+        data = np.random.randint(-100,100,(n_props,n_tokens))
+        names = ['%s'%uuid4() for _ in range(n_props)]
+        no = nObject(data, names)
+        frame = GuiFrame('Object selector','f')
+        for name in names:
+            frame.add_item('x_'+name, no.set_x, (name,))
+            frame.add_item('y_'+name, no.set_y, (name,))
+            frame.add_item('z_'+name, no.set_z, (name,))
+
+
+
+
 class do4d(DirectObject, HasKeybinds):
     def __init__(self):
         tsteps = 99  # this is really molecules
@@ -629,7 +723,7 @@ class do4d(DirectObject, HasKeybinds):
 
 
 def main():
-    from util import ui_text, frame_rate, exit_cleanup
+    from util import ui_text, frame_rate, exit_cleanup, startup_data
     from ui import CameraControl, Axis3d, Grid3d
     from panda3d.core import loadPrcFileData
     from time import time
@@ -650,6 +744,7 @@ def main():
     #bs = BoxSel() #TODO
     base.disableMouse()
     frame_rate()
+    startup_data()
 
     #render something
     #ct = CollTest(2000)
@@ -657,7 +752,8 @@ def main():
 
     renderManager()
 
-    d4d = do4d()
+    dnd = dond()
+    #d4d = do4d()
 
     ec = exit_cleanup()
     ac = AcceptKeys()

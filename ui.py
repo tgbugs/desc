@@ -471,7 +471,7 @@ class GuiFrame(DirectObject, HasKeybinds):
     }
 
     def __init__(self, title,
-                 shortcut = None,
+                 shortcut = None,  # XXX obsolete, but needs a non deco replacement
                  x = 0,
                  y = .1,
                  width = .2,

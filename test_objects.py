@@ -568,29 +568,51 @@ def make4d(array4, ctup, geomType = GeomPoints):
 class fourObject:  # should probably inherit from our base object class
     def __init__(self, geomList, collList = None):
         #self.geomList = geomList
-        print(geomList)
-        self.collList = collList
+        #print(geomList)
         geomRoot = render.find('geomRoot')
         self.parent = geomRoot.attachNewNode(GeomNode(''))
+        collRoot = render.find('collideRoot')
+        self.coll_parent = geomRoot.attachNewNode(GeomNode('ObjectRoot'))
         self.__geom_list__ = []
         for geomNode in geomList:
             nodepath = self.parent.attachNewNode(geomNode)
             nodepath.stash()
             self.__geom_list__.append(nodepath)
+
+        self.__coll_list__ = []
+        if collList:
+            self.__coll_list__ = collList
+            for collNode in self.__coll_list__:
+                collNode.reparentTo(self.coll_parent)
+                collNode.stash()
         #print(self.__geom_list__)
         self.__geom__ = None
+        self.__coll__ = None
         self.__set_index__(0)
         self._all = False
+
+    def stash(self):
+        self.parent.stash()
+        self.coll_parent.stash()
+
+    def unstash(self):
+        self.parent.unstash()
+        self.coll_parent.unstash()
 
     def set_size(self, size):
         self.parent.setRenderModeThickness(size)
 
     def __set_index__(self, index):
         geom = self.__geom_list__[index]  # error check first
+        coll = self.__coll_list__[index]  # error check first
         if self.__geom__:
             self.__geom__.stash()
         self.__geom__ = geom
         self.__geom__.unstash()
+        if self.__coll__:
+            self.__coll__.stash()
+        self.__coll__ = coll
+        self.__coll__.unstash()
         self.__index__ = index
         print('set index to', index)
 
@@ -610,14 +632,17 @@ class fourObject:  # should probably inherit from our base object class
 
     def show_all(self):
         if not self._all:
-            for n in self.__geom_list__:
+            self.coll_parent.unstash()
+            for n,c in zip(self.__geom_list__,self.__coll_list__):
                 n.unstash()
+                c.unstash()
             self._all = True
 
     def hide_all(self):
         if self._all:
-            for n in self.__geom_list__:
+            for n,c in zip(self.__geom_list__,self.__coll_list__):
                 n.stash()
+                c.stash()
             #self.goto_index(self.__index__)
             self._all = False
 
@@ -743,17 +768,26 @@ class do4d(DirectObject, HasKeybinds):
     def __init__(self):
         tsteps = 10  # this is really molecules
         npoints = 999  # this is realy timesteps
+        self.slider = DirectSlider(range=(0,1), value=0, pageSize=1, thumb_frameSize=(0,.04,-.02,.02), command=self.t_set)
+        self.slider.setPos((0,0,-.9))
+
         data = np.cumsum(np.random.randint(-1,2,(tsteps,npoints,3)), axis=1)
         data2 = [data[:,i,:] for i in range(len(data[0]))]
         #embed()
         ctup = np.random.rand(tsteps, 4)
-        self.selected = fourObject(make4d(data,ctup, geomType = GeomLinestrips))
-        self.f2 = fourObject(make4d(data2,ctup))
-        self.f2.set_size(3)
-        self.f2.parent.stash()
+        tm1 = [treeMe(None, d, np.array(['%s'%uuid4() for _ in d]),np.ones(len(d))) for d in data]
+        self.f1 = fourObject(make4d(data,ctup, geomType = GeomLinestrips), tm1 )
+        sc1 = lambda: self.set_selected(self.f1)
+        self.f1.coll_parent.setPythonTag('selection_callbacks', [sc1])
+        self.set_selected(self.f1)
 
-        self.slider = DirectSlider(range=(0,len(data)-1), value=0, pageSize=1, thumb_frameSize=(0,.04,-.02,.02), command=self.t_set)
-        self.slider.setPos((0,0,-.9))
+        tm2 = [treeMe(None, d, np.array(['%s'%uuid4() for _ in d]),np.ones(len(d))) for d in data2]
+        self.f2 = fourObject(make4d(data2,ctup), tm2)
+        self.f2.set_size(3)
+        self.f2.stash()
+        sc2 = lambda: self.set_selected(self.f2)
+        self.f2.coll_parent.setPythonTag('selection_callbacks', [sc2])
+
         # TODO make clicking not on the button set the slider position?
         self.accept('s',self.set_selected, [self.f2])
 
@@ -761,7 +795,7 @@ class do4d(DirectObject, HasKeybinds):
         #if self.selected:
             #self.selected.parent.stash()
         self.selected = fourObject
-        self.selected.parent.unstash()
+        self.selected.unstash()
         self.slider['range'] = (0,len(self.selected)-1)
 
     @event_callback('a')

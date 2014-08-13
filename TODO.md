@@ -57,6 +57,7 @@ just setPythonTag (and increase the priority if empty) of that node when we get 
 
 things
 ======
+ 3. need a better way to deal with collections of points that are technically from the same 'object' eg when dealing with collision
  2. async loading of bams???
  1. selection bug, need to hide the selection when we stash geoms
  0. really weird bug with the server where predictions are not sent?

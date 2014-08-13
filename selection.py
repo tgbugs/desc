@@ -297,8 +297,14 @@ class BoxSel(HasSelectables,DirectObject):
         target = self.getClickTarget()
         if target:
             self.processTarget(target)
-            root = [n for n in target.getIntoNodePath().getAncestors() if n.getName().count('ObjectRoot')][0]  # FIXME global naming please
-            print(root, 'got a hit')
+            try:
+                root = [n for n in target.getIntoNodePath().getAncestors() if n.getName().count('ObjectRoot')][0]  # FIXME global naming please
+                cbs = root.getPythonTag('selection_callbacks')
+                if cbs:
+                    [f() for f in cbs]
+                print(root, 'got a hit')
+            except IndexError:
+                print('anger')
             # switch that to selection for object level manipulation
         else:
             if not self.__shift__:
@@ -347,6 +353,7 @@ class BoxSel(HasSelectables,DirectObject):
         return task.cont
 
     def getEnclosedNodes(self):
+        print('yes we here')
         cfx = 1
         cfz = base.camLens.getAspectRatio()
         cx, _, cz = self.__baseBox__.getPos()
@@ -541,10 +548,18 @@ class BoxSel(HasSelectables,DirectObject):
 
         # actually do the projection
         for c in self.collRoot.getChildren():  # FIXME this is linear doesnt use the pseudo oct tree
-            if projectL2(c):  # check if we got a hit
-                # add the root node to the list of selected root nodes
-                print(c,'got a hit!')
-                pass
+            if c.getName().count('ObjectRoot'): # FIXME starts with
+                for c_ in c.getChildren():
+                    if projectL2(c_):  # check if we got a hit
+                        cbs = c_.getPythonTag('selection_callbacks')
+                        if cbs:
+                            [f() for f in cbs]
+
+            else:
+                if projectL2(c):  # check if we got a hit
+                    cbs = c.getPythonTag('selection_callbacks')
+                    if cbs:
+                        [f() for f in cbs]
 
 
         print(len(self.curSelShown))

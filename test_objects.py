@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from __future__ import print_function
 #import direct.directbase.DirectStart #FIXME showbase
 from direct.showbase.ShowBase import ShowBase
@@ -649,7 +650,27 @@ class fourObject:  # should probably inherit from our base object class
     def __len__(self):
         return len(self.__geom_list__)
 
+
 class nObject:
+    """ This would probably represent a single TYPE level entity, with each
+        column set of the row vectors being data pretaining to the same single
+        TOKEN
+
+        we need to enforce the idea that each MEASUREMENT property must be scalar
+        COMPUTED properties, such as averages or arbitrary functions over multiple
+        measurements, the key difference probably being uniformity of sampling in time
+        
+        so then what is a time serries? a whole bunch of repeated measurements of a quantity
+        break our data up as follows:
+        (NOTE: assumptions about the stability of the system for non-concurrent no or partial order
+        no order
+        pre order
+        partial order
+        total order
+        total order with gurantees about sampling
+
+        TODO: gurantees about independence? statistical assertions about said type?
+    """
     fmt = GeomVertexFormat.getV3c4()
     geomType = GeomPoints  # FIXME this should probably be instance or even render specific
     def __init__(self, prop_vecs, prop_names):

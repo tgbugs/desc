@@ -106,6 +106,55 @@ class CommutativeDiagram:
         self.
 
 
+###
+#   Types of sets of objects, annotations to cope with pre/partial/total orders and sampling rates
+###
+
+class tokenAccess:  # FIXME I'm basically asking for an ORM here
+    """ inherit from this and set properties you want and the index to use """
+    COLUMNS = []
+    INDEX = None
+    def __init__(self, index, coll_source):
+        for name in self.COLUMNS:
+            setattr(self, name, coll_source[name][index])
+
+
+#what I really want is the structure that will let me reason about how to present a set points
+    #any object can be a member of multiple orders (the whole point of this system)
+    #we need another layer before we get to the points...
+
+class orderedObject:
+    def __init__(self, points, order):
+        """
+            len(points) == len(order)
+        """
+        pass
+
+        
+
+class setObject:
+    """ basically, vectorize everything, and do corrispondence with the ordering
+        this is actually the opposite of vectorization for SIMD but whatever
+    """
+    #collection of things  # try not to reinvent the database please >_<
+    #functional order  # XXX because type is consistent per set, vectorize everything and use the index to manage cross type corrispondence
+        #defaults to the python implementation with no gurantees from reproducibility
+        #these sets have their use cases but basically force functions that opperate
+        #on themassume that all members of the set are of the same type
+        #BASICALLY python has solved this, *args, **kwargs, or arg called repeatedly
+    #actual order
+        #defaults to no order, that is, there are no expectations for indexing behavior
+
+    #FUNCTIONAL = [
+        #'none',  # functions with a single arg
+        #'labeled',  # dict of indexes (inefficient, but whatever)  # FIXME no, this is confounding because labled implies types in the set are different
+    #]
+    def __init__(self, collection, ordering = None):
+        self.collection = colleciton
+        self.ordering = ordering
+    
+
+
 
 ###
 #   Simple data objects

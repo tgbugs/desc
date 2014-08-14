@@ -792,11 +792,10 @@ class do4d(DirectObject, HasKeybinds):
         self.accept('s',self.set_selected, [self.f2])
 
     def set_selected(self, fourObject):  # TODO type check?
-        #if self.selected:
-            #self.selected.parent.stash()
         self.selected = fourObject
         self.selected.unstash()
         self.slider['range'] = (0,len(self.selected)-1)
+        self.slider['value'] = fourObject.__index__
         print('selected set to', fourObject)
 
     @event_callback('a')
@@ -854,8 +853,8 @@ def main():
     frames = {'data':GuiFrame('data','f')}
     bs = BoxSel(frames) # FIXME must be started after renderManager >_<
 
-    #dnd = dond()
-    d4d = do4d()
+    dnd = dond()
+    #d4d = do4d()
 
     ec = exit_cleanup()
     ac = AcceptKeys()

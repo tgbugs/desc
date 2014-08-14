@@ -26,6 +26,7 @@ notes:
     impact on rendering
 
  bugs:
+  1. random broken pipe errors when running client, trouble reproing, consider using a future result?
   0. if you toggle vis on a GuiFrame and then resize the window the title doesnt stay in the right place! also, index error on ''
   1. turn on threading-mode Cull/Draw, do mouse collision with showCollisions(render) on the CollisionTraverser will segfault
   2.  Assertion failed: si != _state_map.end() at line 672 of panda/src/putil/bamWriter.cxx out of nowhere when piping back to main thread

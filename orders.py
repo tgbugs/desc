@@ -1,8 +1,19 @@
+#!/usr/bin/env python3.4
 """
     orders and properties
+
+    these will largely be an internal representation if we stick with the uuid
 """
 
 from collections import defaultdict, OrderedDict
+from uuid import uuid4
+from weakref import WeakSet as wrs
+
+class WeakSet(wrs):
+    def __repr__(self):
+        return repr(set([a for a in self]))
+
+from ipython import embed
 
 class RelationClass:  # there will be many different realtion classes with their own meanings (hello tripples), but the orders that they can take are limited
     """
@@ -13,22 +24,47 @@ class RelationClass:  # there will be many different realtion classes with their
         for adding members we will always reference against the 'upper' value that
         is above the added value...
     """
+    # TODO it should be possible to put orders in other orders of less complexity since the members of the total order satisfy relations for the preorder
+        # this will require a bit more work to make everything work as expected without doing silly things like nesting dicts
+        # best option might be to use that Chained collection or something to fake join tables?
+        # OR just create a new combined object???
     # TODO how to add nodes that are greater than other nodes (which actually happens frequently where there is *some* order)
+    name = "FIXME ME DUMMY"
     def __init__(self, name):
+        self.table = None
         self.name = name
         self.adj_matrix = None
         self.reachability = None
 
-    def add_member(self, member, *relations):  # FIXME we could also use this function to just create a member without extra code?
+    @property
+    def members(self):
+        return [m for m in self.table]
+
+    @property
+    def values(self):  # FIXME
+        return [v for v in self.table.values()]
+
+    def items(self):  # FIXME massively broken
+        try:
+            return self.table.items()
+        except AttributeError:
+            return self.table
+
+    def add_member(self, member, uppers = tuple(), lowers = tuple()):  # FIXME we could also use this function to just create a member without extra code?
         """
             when creating a new vertex for a given relation class or object participating in an order
             simply call rc.add_member(self) during object __init__
         """
         #add the member as a vertex
+        # FIXME this MUST be a weakref
 
-    def del_member(self, member):
+    #def del_member(self, member):  # we use weakrefs for order objects
         # will we ever use this?
-        pass
+        # FIXME deleting lowers is going to be MASSIVELY slow ;_;
+        # but, I guess not a huge issue given expected usage?
+
+    def add_pair(self, lower, upper):
+        raise NotImplementedError('You need to inherit from this class and define this method.')
 
     def add_edge(self, start, end):
         pass
@@ -50,10 +86,62 @@ class RelationClass:  # there will be many different realtion classes with their
     def ge(self, a, b):
         raise NotImplementedError('You need to inherit from this class and define this method.')
 
-class UnOrder(RelationClass):
+    def __iter__(self):
+        yield from self.table
+
+    def __sorted__(self):
+        # TODO toposort?
+
+        uppers = set()
+        [uppers.update(s) for s in self.table.values()]
+
+        #starts=[node for node in depDict.keys() if node not in revDepDict.keys()]
+        starts=[member for member in self.table if node not in uppers]  # FIXME make sure this is correct?
+        L=[] #our sorted list
+        while starts:
+            node=starts.pop()
+            L.append(node)
+            discards=set()
+            #print(depDict.keys(),node)
+            try:
+                for m in depDict[node]:
+                    revDepDict[m].discard(node)
+                    discards.add(m)
+                    if not revDepDict[m]:
+                        starts.append(m)
+                depDict[node].difference_update(discards)
+            except KeyError:
+                pass #the node is a leaf and thus not in depDict
+        check=set()
+        (check.update(v) for v in depDict.values())
+        (check.update(v) for v in revDepDict.values())
+        if check:
+            raise TypeError('NOT ACYCLIC!!')
+        else:
+            return L
+
+
+
+
+        yield from sorted(self.table)
+
+    def __repr__(self):
+        out = ""
+        for k, v in self.table.items():
+            out += "%s : uppers = %s \n"%(k, set([m for m in v]))
+        return out
+
+
+class UnOrder(RelationClass):  # FIXME we may not need this? just don't define any pairs?
     """
         Unordered set with an equivalence relation
     """
+    def __init__(self):
+        self.table = set()  # this one does not use weak references since it is the equivalent of dict.keys()
+
+    def add_member(self, member):
+        self.table.add(member)
+
     def lt(self, a, b):
         return False
     def le(self, a, b):
@@ -75,8 +163,26 @@ class PreOrder(RelationClass):
         transitive
         table defines the 'is covered by' set ie keys are a where a <= b implies b covers a
     """
-    table = defaultdict(set)
-    # TODO additions to the table are where we control transitivity
+    def __init__(self):
+        self.table = defaultdict(WeakSet)
+    
+
+    def add_member(self, member, uppers = tuple(), lowers = tuple()):
+        self.table[member]
+        for upper in uppers:
+            if upper in self.table:
+                self.add_pair(member, upper)
+                for even_more_upper in self.table[upper]:
+                    self.add_pair(member, even_more_upper)
+            else:
+                raise ValueError('%s is not currently in this set.'%upper)
+
+        for lower in lowers:
+            self.add_pair(lower, member)
+
+    def add_pair(self, lower, upper):
+        self.table[lower].add(upper)
+
     def lt(self, a, b):
         return self.le(a, b)
     def le(self, a, b):
@@ -105,12 +211,21 @@ class PartialOrder(PreOrder):
 class TotalOrder(RelationClass):
     """
         this is a strict total order
+        
+        technically this could inherit from PartialOrder, but for performance
+        reasons the internal implementation needs to be different
     """
     # FIXME insertion into this thing sucks... but really we should never be doing anything except appending?
     # TODO is self.table.find(a) < self.table.find(b)
-    table = []  # gurantee uniqueness issue: object must be hashable, but we   FIXME this needs to be instance level fyi
+    def __init__(self, table = None):
+        self.table = table  # FIXME probably need to preserve hasability?
+        if self.table == None:
+            self.table = []  # gurantee uniqueness issue: object must be hashable, but we   FIXME this needs to be instance level fyi
+        elif self.table:
+            try: hash(self.table[0])
+            except TypeError: raise TypeError('Order members must be hashable!')
 
-    def add_member(self, member, upper = None):
+    def add_member(self, member, upper = None):  # should this be __add_member__ so that we always use RCMember??
         """
             lower < member < upper lower is implicit
             insert happens AT the index of upper so the item at upper
@@ -143,9 +258,35 @@ class TotalOrder(RelationClass):
         return self.le(b, a)
 
 class RCMember:
-    def __init__(self, relation_class, upper = None):
+    """ class for creating and accessing members of orders
+    """
+    def __init__(self, relation_class, uppers = tuple(), lowers = tuple(), uuid = None):
+        self.uuid = uuid
+        if not self.uuid:
+            self.uuid = uuid4()
+
         self.relation_class = relation_class
-        self.realtion_class.add_member(self, upper)
+        self.relation_class.add_member(self, uppers)
+
+    @property
+    def uppers(self):
+        return self.relation_class.table[self]
+
+    @property
+    def lowers(self): # FIXME SLOW AS BALLS
+        return [m for m, uppers_ in self.relation_class.items() if self in uppers_] 
+
+    def add_upper(self, upper):
+        self.relation_class.add_pair(self, upper)
+
+    def add_lower(self, lower):
+        self.relation_class.add_pair(lower, self)
+
+    def __hash__(self):  # FIXME :/
+        return hash(self.uuid)
+
+    def __repr__(self):
+        return "Member %s of order %s"%(self.uuid, self.relation_class.name)
 
     def __lt__(self, other):
         if self.relation_class.lt(self, other):
@@ -197,7 +338,7 @@ class Property:  # FIXME should inherit from something like a time serries?
     def __init__(self, name, instances):
         self.name = name
         self.instances = instances
-        self.instance_type = 
+        self.instance_type = None
 
     def __iter__(self):
         for instance in self.instances:
@@ -228,4 +369,12 @@ class HasProperties:
     def __init__(self, properties):
         self.properties = properties
 
+def main():
+    p = PartialOrder()
+    pom = RCMember(p)
+    for _ in range(10):
+        pom = RCMember(p,[pom])
+    embed()
 
+if __name__ == '__main__':
+    main()

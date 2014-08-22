@@ -8,8 +8,13 @@
 from collections import defaultdict, OrderedDict
 from uuid import uuid4
 from weakref import WeakSet as wrs
+from weakref import getweakrefs
+
 
 class WeakSet(wrs):
+    #def __contains__(self, item):
+        #return item in self
+
     def __repr__(self):
         return repr(set([a for a in self]))
 
@@ -125,11 +130,13 @@ class RelationClass:  # there will be many different realtion classes with their
 
         yield from sorted(self.table)
 
+    """
     def __repr__(self):
         out = ""
         for k, v in self.table.items():
             out += "%s : uppers = %s \n"%(k, set([m for m in v]))
         return out
+    #"""
 
 
 class UnOrder(RelationClass):  # FIXME we may not need this? just don't define any pairs?
@@ -274,7 +281,14 @@ class RCMember:
 
     @property
     def lowers(self): # FIXME SLOW AS BALLS
-        return [m for m, uppers_ in self.relation_class.items() if self in uppers_] 
+        out = []
+        for m, uppers_ in self.relation_class.items():
+            print(type(uppers_))
+            if self in uppers_:  # FIXME weakref megafail
+                print('got',self)
+                out.append(m)
+                break
+        return out
 
     def add_upper(self, upper):
         self.relation_class.add_pair(self, upper)
@@ -370,10 +384,16 @@ class HasProperties:
         self.properties = properties
 
 def main():
+    from _weakref import ref
     p = PartialOrder()
     pom = RCMember(p)
     for _ in range(10):
         pom = RCMember(p,[pom])
+
+    m = p.members[4]
+    # FIXME ref(m) does NOT return the same weakref object as is used in pom.uppers.data to refer to the same RCMember object!
+    print((m in pom.uppers))  # returns false
+    print(id(m) in [id(o) for o in pom.uppers])  # returns true
     embed()
 
 if __name__ == '__main__':

@@ -171,7 +171,7 @@ class PreOrder(RelationClass):
         table defines the 'is covered by' set ie keys are a where a <= b implies b covers a
     """
     def __init__(self):
-        self.table = defaultdict(WeakSet)
+        self.table = defaultdict(WeakSet)  # the issue does not seem to be with defaultdict...
     
 
     def add_member(self, member, uppers = tuple(), lowers = tuple()):
@@ -283,12 +283,13 @@ class RCMember:
     def lowers(self): # FIXME SLOW AS BALLS
         out = []
         for m, uppers_ in self.relation_class.items():
-            print(type(uppers_))
-            if self in uppers_:  # FIXME weakref megafail
-                print('got',self)
+            #print(type(uppers_))
+            if self in [wr() for wr in uppers_.data]:  # for whatever reason ref.__eq__ fails so we just call wr to get the strong reference
+                #print('got',self)
                 out.append(m)
                 break
         return out
+
 
     def add_upper(self, upper):
         self.relation_class.add_pair(self, upper)
@@ -388,12 +389,12 @@ def main():
     p = PartialOrder()
     pom = RCMember(p)
     for _ in range(10):
-        pom = RCMember(p,[pom])
+        pom = RCMember(p,[pom])  # FIXME wow... the scope for [pom] is not at all what I expected?!
+        #a = RCMember(p,[pom])
+        #pom = a
+
 
     m = p.members[4]
-    # FIXME ref(m) does NOT return the same weakref object as is used in pom.uppers.data to refer to the same RCMember object!
-    print((m in pom.uppers))  # returns false
-    print(id(m) in [id(o) for o in pom.uppers])  # returns true
     embed()
 
 if __name__ == '__main__':

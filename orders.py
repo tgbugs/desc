@@ -101,24 +101,24 @@ class RelationClass:  # there will be many different realtion classes with their
         [uppers.update(s) for s in self.table.values()]
 
         #starts=[node for node in depDict.keys() if node not in revDepDict.keys()]
-        starts=[member for member in self.table if node not in uppers]  # FIXME make sure this is correct?
+        starts = [member for member in self.table if member not in uppers]  # FIXME make sure this is correct?
         L=[] #our sorted list
         while starts:
-            node=starts.pop()
+            node = starts.pop()
             L.append(node)
             discards=set()
             #print(depDict.keys(),node)
             try:
-                for m in depDict[node]:
+                for m in self.table[node]:
                     revDepDict[m].discard(node)
                     discards.add(m)
                     if not revDepDict[m]:
                         starts.append(m)
-                depDict[node].difference_update(discards)
+                self.table[node].difference_update(discards)
             except KeyError:
                 pass #the node is a leaf and thus not in depDict
         check=set()
-        (check.update(v) for v in depDict.values())
+        (check.update(v) for v in self.table.values())
         (check.update(v) for v in revDepDict.values())
         if check:
             raise TypeError('NOT ACYCLIC!!')
@@ -390,12 +390,13 @@ def main():
     pom = RCMember(p)
     for _ in range(10):
         pom = RCMember(p,[pom])  # FIXME wow... the scope for [pom] is not at all what I expected?!
-        #a = RCMember(p,[pom])
-        #pom = a
+
+    print(p.members)
+    print([i for i in p.__sorted__()])
 
 
-    m = p.members[4]
-    embed()
+
+    #embed()
 
 if __name__ == '__main__':
     main()

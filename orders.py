@@ -34,6 +34,7 @@ class RelationClass:  # there will be many different realtion classes with their
         # best option might be to use that Chained collection or something to fake join tables?
         # OR just create a new combined object???
     # TODO how to add nodes that are greater than other nodes (which actually happens frequently where there is *some* order)
+    # TODO FIXME how are we going to deal with objects that have multiple relation classes :/ (answer: not here, these will underly those)
     name = "FIXME ME DUMMY"
     def __init__(self, name):
         self.table = None
@@ -95,40 +96,26 @@ class RelationClass:  # there will be many different realtion classes with their
         yield from self.table
 
     def __sorted__(self):
-        # TODO toposort?
+        """ This provides no gurantees of uniqueness for preorders and partial orders
+        """
+        # sorted from lowest to highest not sure if topo sort, but it will work
 
-        uppers = set()
-        [uppers.update(s) for s in self.table.values()]
-
-        #starts=[node for node in depDict.keys() if node not in revDepDict.keys()]
-        starts = [member for member in self.table if member not in uppers]  # FIXME make sure this is correct?
-        L=[] #our sorted list
+        starts = [node for node, uppers in self.table.items() if not uppers]
+        uppers_all = {k:set([v_ for v_ in v]) for k,v in self.table.items() if v}
+        L = []
         while starts:
             node = starts.pop()
             L.append(node)
-            discards=set()
-            #print(depDict.keys(),node)
-            try:
-                for m in self.table[node]:
-                    revDepDict[m].discard(node)
-                    discards.add(m)
-                    if not revDepDict[m]:
-                        starts.append(m)
-                self.table[node].difference_update(discards)
-            except KeyError:
-                pass #the node is a leaf and thus not in depDict
-        check=set()
-        (check.update(v) for v in self.table.values())
-        (check.update(v) for v in revDepDict.values())
-        if check:
-            raise TypeError('NOT ACYCLIC!!')
-        else:
-            return L
+            for lower, uppers in uppers_all.items():
+                uppers.discard(node)
+                if not uppers:
+                    starts.append(lower)
+            for d in starts:
+                uppers_all.pop(d)  # do not modify dict while iterating
+        
+        return L[::-1]  # flip it
 
 
-
-
-        yield from sorted(self.table)
 
     """
     def __repr__(self):
@@ -164,6 +151,9 @@ class UnOrder(RelationClass):  # FIXME we may not need this? just don't define a
     def ge(self, a, b):
         return False
 
+    def __sorted__(self):
+        raise TypeError('UnOrders have no sorted representation and should not be used for ordered visualization')  # FIXME though who knows, maybe the order you collected rats in matters :x
+
 class PreOrder(RelationClass):
     """
         reflexive
@@ -193,7 +183,7 @@ class PreOrder(RelationClass):
     def lt(self, a, b):
         return self.le(a, b)
     def le(self, a, b):
-        if b in self.table[a]:  # that is a <= b
+        if b in [wr() for wr in self.table[a].data]:  # that is a <= b
             return True
     def eq(self, a, b):  # FIXME how to deal with identity?
         return False
@@ -210,7 +200,7 @@ class PartialOrder(PreOrder):
         antisymmetric property
     """
     def eq(self, a, b):  # FIXME how to deal with identity?
-        if a in self.table[b] and b in self.table[a]:
+        if a in self.table[b] and b in self.table[a]:  # FIXME weakref problems?
             return True
     def ne(self, a, b):
         return not self.eq(a, b)
@@ -263,6 +253,16 @@ class TotalOrder(RelationClass):
         return self.lt(b, a)
     def ge(self, a, b):
         return self.le(b, a)
+
+    def __sorted__(self):
+        return self.table
+
+class EdgesMatter(RelationClass):
+    """ We will *probably* need a class that can deal with directed graphs that
+        have weighted edges since those are pretty common and CAN give rise
+        where edgeweights cannot be equal, to unique orders
+    """
+    # TODO
 
 class RCMember:
     """ class for creating and accessing members of orders
@@ -350,9 +350,11 @@ class Property:  # FIXME should inherit from something like a time serries?
     # TODO, for graphs, we we do not precompute reachability (the preorder) then implementing orderability calcs
     # will require repeatedly walking edges >_<, also, loads of work to add new orderable types
     # or we require a ton of memory using adj lists
+    # XXX properties are how objects fit into multiple relationclasses
     def __init__(self, name, instances):
         self.name = name
         self.instances = instances
+        # TODO how to handle sorting?
         self.instance_type = None
 
     def __iter__(self):
@@ -394,9 +396,8 @@ def main():
     print(p.members)
     print([i for i in p.__sorted__()])
 
+    embed()
 
-
-    #embed()
 
 if __name__ == '__main__':
     main()

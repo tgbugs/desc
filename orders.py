@@ -10,6 +10,8 @@ from uuid import uuid4
 from weakref import WeakSet as wrs
 from weakref import getweakrefs
 
+from numpy import argsort
+
 
 class WeakSet(wrs):
     #def __contains__(self, item):
@@ -113,7 +115,7 @@ class RelationClass:  # there will be many different realtion classes with their
             for d in starts:
                 uppers_all.pop(d)  # do not modify dict while iterating
         
-        return L[::-1]  # flip it
+        return L[::-1]  # flip it  # FIXME are we worried that these are not weakrefs? I don't think so
 
 
 
@@ -343,23 +345,41 @@ class RCMember:
 
 class Property:  # FIXME should inherit from something like a time serries?
     """ a type level property object
+        
+        these behave like vectors and all properties of the same type should have the same length
+        because their values represent each instance
+
         instances (values) in a property object should have a way of ordering themselves
-        or raise an error if they fail
+        or raise an error if they fail, only orderables can really be used for sorting
     """
 
-    # TODO, for graphs, we we do not precompute reachability (the preorder) then implementing orderability calcs
+    # TODO, for graphs, we do not precompute reachability (the preorder) then implementing orderability calcs
     # will require repeatedly walking edges >_<, also, loads of work to add new orderable types
     # or we require a ton of memory using adj lists
     # XXX properties are how objects fit into multiple relationclasses
     def __init__(self, name, instances):
         self.name = name
-        self.instances = instances
-        # TODO how to handle sorting?
-        self.instance_type = None
+        self.instances = instances  # this assumes a universal index for all instances across properties  FIXME these should probably be called tokens!??
+        self.instance_type = None  # basically iterable/not iterable is really the only distinction we need
+        # in theory we could... just make lists of properties (hah)
+
+
+    def __argsort__(self):
+        return list(argsort(self.instances))
 
     def __iter__(self):
         for instance in self.instances:
             yield instance
+
+    def __getitem__(self, key):
+        if isinstance(key, list):
+            # FIXME indexes vs bools... bool lists should match the lenght of the list :/
+            out = []
+            for index in key:
+                out.append(self.instances[index])
+            return out
+        else:
+            return self.instances[key]
 
     def __repr__(self):
         return self.name+' with %s tokens'%len(self.instances)
@@ -368,6 +388,8 @@ class Property:  # FIXME should inherit from something like a time serries?
 class Prop_Computed(Property):
     """
         A property computed from a collection of other properties
+
+        THIS IS HOW YOU CREATE SCALAR PROPERTIES FOR VIZ
     """
     def __init__(self, name, function, *properties):
         # how do we figure out the output type without a type system!?
@@ -378,13 +400,28 @@ class Prop_Computed(Property):
         self.properties = properties
 
     def __iter__(self):
-        for props in zip(*properties):  # I wonder if this is really inefficient
+        for args in zip(*properties):  # I wonder if this is really inefficient
             yield function(*args)
 
 
 class HasProperties:
     def __init__(self, properties):
         self.properties = properties
+        # TODO: at the instance level we have: scalars, vectors, computed-> scalar, computed-> vector
+        # we need a way to distinguish scalar/vector at token level AND at type level
+        # scalars at a given level can be used to position objects in space AT THAT LEVEL
+        # construction of scalars at a given level 
+
+    def make_token(self, index):
+        out = {}
+        for p in self.properties:
+            out[p.name] = p[index]
+        return type(self.__clas__.__name__+'_token', (object,), out)()
+        #return out
+
+    def add_token(self, token):
+        # TODO properties need to implement append or add or something
+        pass
 
 def main():
     from _weakref import ref
@@ -396,6 +433,7 @@ def main():
     print(p.members)
     print([i for i in p.__sorted__()])
 
+    pro = Property('test', p.members)
     embed()
 
 

@@ -200,7 +200,7 @@ class PartialOrder(PreOrder):
         antisymmetric property
     """
     def eq(self, a, b):  # FIXME how to deal with identity?
-        if a in self.table[b] and b in self.table[a]:  # FIXME weakref problems?
+        if a in [wr() for wr in self.table[b].data] and b in [wr() for wr in self.table[a].data]:
             return True
     def ne(self, a, b):
         return not self.eq(a, b)

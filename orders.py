@@ -12,6 +12,7 @@ from weakref import getweakrefs
 from inspect import getargspec
 
 from numpy import argsort
+from numpy.random import randint
 
 
 class WeakSet(wrs):
@@ -344,7 +345,6 @@ class RCMember:
             return False
 
 
-
 class Property:  # FIXME should inherit from something like a time serries?
     """ a type level property object
         
@@ -370,7 +370,7 @@ class Property:  # FIXME should inherit from something like a time serries?
         # in theory we could... just make lists of properties (hah)
 
     @property
-    def isVector(self):
+    def isVector(self):  # FIXME this is incorrect, because matricies can be iterated over even though that will be incorrect
         return hasattr(self.value, '__iter__')
 
     @property
@@ -384,6 +384,12 @@ class Property:  # FIXME should inherit from something like a time serries?
         for instance in self.value:
             yield instance
 
+    def __len__(self):
+        if self.isVector:
+            return len(self.value)
+        else:
+            raise TypeError('scalars have no lenght?')
+
     def __getitem__(self, key):
         if isinstance(key, list):
             # FIXME indexes vs bools... bool lists should match the lenght of the list :/
@@ -395,7 +401,10 @@ class Property:  # FIXME should inherit from something like a time serries?
             return self.value[key]
 
     def __repr__(self):
-        return self.name+' with %s tokens'%len(self.value)
+        if self.isScalar:
+            return self.name+' with scalar value %s'%self.value
+        else:
+            return self.name+' with %s tokens'%len(self.value)
 
 
 class Prop_Computed(Property):
@@ -439,6 +448,7 @@ class HasProperties:
             # used when the object (or set of objects) has been selected and we want to view data about their tokens/instances
             # it should be possible to display tokens of ALL selected types that meet the criteria (eg buildings and humans both have heights)
         self.token_properties = {}
+        self.num_tokens = 0
             # used to locate the object itself (again in the kr)
         #computed_properties = None  # these are scalar
 
@@ -446,7 +456,9 @@ class HasProperties:
             if p.isScalar:
                 self.scalar_properties[p.name] = p
             elif p.isVector:
-                self.token_properties[p.name] = p
+                self.token_properties[p.name] = p  # FIXME this has not solved the problem of the timeserries yet!
+                self.vector_properties[p.name] = p
+                self.num_tokens = len(p)
             else:
                 raise TypeError('unknown type')
         
@@ -474,7 +486,7 @@ class HasProperties:
     def make_token(self, index = None):
         # TODO if no index is specified, selection with replacement could be a great way to do automated bootstrapping and simulation?
         if index == None:
-            index = np.random.randint(0,len(self.token_properties))
+            index = randint(0,self.num_tokens)
 
         out = {'__doc__':'tokens do not track the hierarchy, only their type does',
                'parent_type':self
@@ -499,8 +511,10 @@ def main():
     print(p.members)
     print([i for i in p.__sorted__()])
 
-    pro = Property('test', p.members)
-    hp = HasProperties((pro,pro))
+    pro1 = Property('test', p.members)
+    pro2 = Property('test2', p.members)
+    pro3 = Property('answer to the ultimate question', 42)
+    hp = HasProperties((pro1,pro2,pro3))
     embed()
 
 

@@ -650,6 +650,7 @@ class fourObject:  # should probably inherit from our base object class
     def __len__(self):
         return len(self.__geom_list__)
 
+
 class nObject:
     """ This would probably represent a single TYPE level entity, with each
         column set of the row vectors being data pretaining to the same single

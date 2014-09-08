@@ -9,6 +9,7 @@ from collections import defaultdict, OrderedDict
 from uuid import uuid4
 from weakref import WeakSet as wrs
 from weakref import getweakrefs
+from inspect import getargspec
 
 from numpy import argsort
 
@@ -128,6 +129,7 @@ class RelationClass:  # there will be many different realtion classes with their
     #"""
 
 
+# TODO matricies and tensors!?
 class UnOrder(RelationClass):  # FIXME we may not need this? just don't define any pairs?
     """
         Unordered set with an equivalence relation
@@ -357,18 +359,29 @@ class Property:  # FIXME should inherit from something like a time serries?
     # will require repeatedly walking edges >_<, also, loads of work to add new orderable types
     # or we require a ton of memory using adj lists
     # XXX properties are how objects fit into multiple relationclasses
-    def __init__(self, name, instances):
+    def __init__(self, name, value):
         self.name = name
-        self.instances = instances  # this assumes a universal index for all instances across properties  FIXME these should probably be called tokens!??
-        self.instance_type = None  # basically iterable/not iterable is really the only distinction we need
+        self.value = value  # this assumes a universal index for all instances across properties  FIXME these should probably be called tokens!??
+        if not hasattr(self.value,'__iter__'):
+            self.__iter__ = lambda self: self.value
+            self.__argsort__ = lambda self: self.value
+
+        #None  # basically iterable/not iterable is really the only distinction we need
         # in theory we could... just make lists of properties (hah)
 
+    @property
+    def isVector(self):
+        return hasattr(self.value, '__iter__')
+
+    @property
+    def isScalar(self):
+        return not self.isVector
 
     def __argsort__(self):
-        return list(argsort(self.instances))
+        return list(argsort(self.value))
 
     def __iter__(self):
-        for instance in self.instances:
+        for instance in self.value:
             yield instance
 
     def __getitem__(self, key):
@@ -376,13 +389,13 @@ class Property:  # FIXME should inherit from something like a time serries?
             # FIXME indexes vs bools... bool lists should match the lenght of the list :/
             out = []
             for index in key:
-                out.append(self.instances[index])
+                out.append(self.value[index])
             return out
         else:
-            return self.instances[key]
+            return self.value[key]
 
     def __repr__(self):
-        return self.name+' with %s tokens'%len(self.instances)
+        return self.name+' with %s tokens'%len(self.value)
 
 
 class Prop_Computed(Property):
@@ -391,37 +404,90 @@ class Prop_Computed(Property):
 
         THIS IS HOW YOU CREATE SCALAR PROPERTIES FOR VIZ
     """
-    def __init__(self, name, function, *properties):
+    def __init__(self, name, function, properties):
+        """ NOTE: the only restriction on functions is that the names of its args are a subest of the properties listed herin
+            and that no kwargs are used
+        """
         # how do we figure out the output type without a type system!?
         #expected_length = len(properties[0])  # FIXME, probably should raise a warning, otherwise assume that all props are same lenght, and alert that zip() goes w/ shortest, return ERROR or something?
         #for i, p in enumerate(properties):
             #if len(p) != expected_length:
                 #raise ValueError('Property lengths do not match! Your %sth column (and possibly other) did not match.'%i)  # XXX TypeError? check numpy
-        self.properties = properties
+        self.name = name
+        self.function = function
+        self.args = getargspect(function)[0]
+
+        properties = {p.name:p for p in properties}  # FIXME name collisions
+        self._values = []
+        for name in args:
+            self._values.append(properties[name])
+
+    @property
+    def value(self):
+        return [v for v in self.__iter__()]
+
 
     def __iter__(self):
-        for args in zip(*properties):  # I wonder if this is really inefficient
+        for args in zip(*values):
             yield function(*args)
 
 
 class HasProperties:
-    def __init__(self, properties):
-        self.properties = properties
+    def __init__(self, properties):  # FIXME initing this way will be nasty :/
+            # used to locate the object itself (knowledge representation)
+        self.scalar_properties = {}  # not sure where these are going to come from since they would in principle have to be computed...
+            # used when the object (or set of objects) has been selected and we want to view data about their tokens/instances
+            # it should be possible to display tokens of ALL selected types that meet the criteria (eg buildings and humans both have heights)
+        self.token_properties = {}
+            # used to locate the object itself (again in the kr)
+        #computed_properties = None  # these are scalar
+
+        for p in properties:
+            if p.isScalar:
+                self.scalar_properties[p.name] = p
+            elif p.isVector:
+                self.token_properties[p.name] = p
+            else:
+                raise TypeError('unknown type')
+        
+
+        # what is a property but a relationship to a token of a type? or rather an instance of a type?
+            # RE: how normalized do you want this >_<
+            # and how much do you want explicity at RUN time (grrr python)
+
+
+
+
+        #self.properties = properties  # FIXME make sure properties are actually properties!?
+        #self.properties = {p.name:p for p in properties}  # FIXME name collisions, FIXME scalar vs vector vs etc
         # TODO: at the instance level we have: scalars, vectors, computed-> scalar, computed-> vector
         # we need a way to distinguish scalar/vector at token level AND at type level
         # scalars at a given level can be used to position objects in space AT THAT LEVEL
         # construction of scalars at a given level 
 
-    def make_token(self, index):
-        out = {}
-        for p in self.properties:
-            out[p.name] = p[index]
-        return type(self.__clas__.__name__+'_token', (object,), out)()
+    def add_property(self, name, property):
+        if isVector:
+            self.token_properties[key] = property
+        elif isScalar:
+            self.scalar_properties[key] = property
+
+    def make_token(self, index = None):
+        # TODO if no index is specified, selection with replacement could be a great way to do automated bootstrapping and simulation?
+        if index == None:
+            index = np.random.randint(0,len(self.token_properties))
+
+        out = {'__doc__':'tokens do not track the hierarchy, only their type does',
+               'parent_type':self
+              }
+        for name, instances in self.token_properties.items():
+            out[name] = instances[index]
+        return type(self.__class__.__name__+'_token', (object,), out)()
         #return out
 
     def add_token(self, token):
         # TODO properties need to implement append or add or something
         pass
+
 
 def main():
     from _weakref import ref
@@ -434,6 +500,7 @@ def main():
     print([i for i in p.__sorted__()])
 
     pro = Property('test', p.members)
+    hp = HasProperties((pro,pro))
     embed()
 
 

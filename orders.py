@@ -346,38 +346,42 @@ class RCMember:
 
 
 class Property:  # FIXME should inherit from something like a time serries?
-    """ a type level property object
+    """ a singular type level property object
         
         these behave like vectors and all properties of the same type should have the same length
         because their values represent each instance
 
         instances (values) in a property object should have a way of ordering themselves
         or raise an error if they fail, only orderables can really be used for sorting
+
     """
 
     # TODO, for graphs, we do not precompute reachability (the preorder) then implementing orderability calcs
     # will require repeatedly walking edges >_<, also, loads of work to add new orderable types
     # or we require a ton of memory using adj lists
     # XXX properties are how objects fit into multiple relationclasses
-    def __init__(self, name, value):
+    def __init__(self, name, tensor):
         self.name = name
-        self.value = value  # this assumes a universal index for all instances across properties  FIXME these should probably be called tokens!??
-        if not hasattr(self.value,'__iter__'):
-            self.__iter__ = lambda self: self.value
-            self.__argsort__ = lambda self: self.value
-
-        #None  # basically iterable/not iterable is really the only distinction we need
-        # in theory we could... just make lists of properties (hah)
+        self.tensor = tensor
+        self.degree = tensor.ndim
 
     @property
-    def isVector(self):  # FIXME this is incorrect, because matricies can be iterated over even though that will be incorrect
-        return hasattr(self.value, '__iter__')
+    def isVisible(self):  # FIXME 0 yes, 1 timeserries OR spaceserries (eg linescan), 2 image OR set of timeserries, 3 time serries of images OR 3d rendering, 4 timeserries of a 3d volume
+        # ideally we really want to limit the combination of things these tensors will represent and break up things that should be their own entities
+        # even at the cost of performance because we have our own structure of representing tokens which is not intrinsically part of the tensor
+        # this is a conscious design decision about the level of normalization and the balance between implicit vs explicity structure/context
+        return self.degree <= 3
 
-    @property
-    def isScalar(self):
-        return not self.isVector
+class Prop_Token:
+    """
+        A class to containerize tokens to improve performance and reduce the overhead
+        of having a zillion class instances (yay writing our own orm >_<)
+    """
+    def __init__(self, indexed_tensor):
+        self.indexed_tensors = indexed_tensor
 
-    def __argsort__(self):
+
+    def __argsort__(self):  # FIXME sorting for tensors degree > 1
         return list(argsort(self.value))
 
     def __iter__(self):
@@ -409,11 +413,14 @@ class Property:  # FIXME should inherit from something like a time serries?
 
 class Prop_Computed(Property):
     """
+        NOTE: actually, given a function with the correct arg names and
+        a properties object we can construct this object on the fly
+
         A property computed from a collection of other properties
 
         THIS IS HOW YOU CREATE SCALAR PROPERTIES FOR VIZ
     """
-    def __init__(self, name, function, properties):
+    def __init__(self, function, properties):
         """ NOTE: the only restriction on functions is that the names of its args are a subest of the properties listed herin
             and that no kwargs are used
         """
@@ -422,9 +429,9 @@ class Prop_Computed(Property):
         #for i, p in enumerate(properties):
             #if len(p) != expected_length:
                 #raise ValueError('Property lengths do not match! Your %sth column (and possibly other) did not match.'%i)  # XXX TypeError? check numpy
-        self.name = name
+        self.args = getargspec(function)[0]
+        self.name = '_'.join([function.__name__].extend(self.args))
         self.function = function
-        self.args = getargspect(function)[0]
 
         properties = {p.name:p for p in properties}  # FIXME name collisions
         self._values = []
@@ -433,35 +440,22 @@ class Prop_Computed(Property):
 
     @property
     def value(self):
-        return [v for v in self.__iter__()]
-
+        return [v for v in self]
 
     def __iter__(self):
-        for args in zip(*values):
+        for args in zip(*self._values):
             yield function(*args)
 
 
 class HasProperties:
-    def __init__(self, properties):  # FIXME initing this way will be nasty :/
-            # used to locate the object itself (knowledge representation)
-        self.scalar_properties = {}  # not sure where these are going to come from since they would in principle have to be computed...
-            # used when the object (or set of objects) has been selected and we want to view data about their tokens/instances
-            # it should be possible to display tokens of ALL selected types that meet the criteria (eg buildings and humans both have heights)
-        self.token_properties = {}
-        self.num_tokens = 0
-            # used to locate the object itself (again in the kr)
-        #computed_properties = None  # these are scalar
+    def __init__(self, properties, functions = None):  # FIXME initing this way will be nasty :/
+        self.properties = {p.name:p for p in properties}
+        self.computed_properties = {}
+        for f in functions:
+            p = Prop_Computed(f, properties)
+            self.computed_properties[p.name] = p
 
-        for p in properties:
-            if p.isScalar:
-                self.scalar_properties[p.name] = p
-            elif p.isVector:
-                self.token_properties[p.name] = p  # FIXME this has not solved the problem of the timeserries yet!
-                self.vector_properties[p.name] = p
-                self.num_tokens = len(p)
-            else:
-                raise TypeError('unknown type')
-        
+        self.visualizable_properties = {}  # at a given level generate the list of things we can viz
 
         # what is a property but a relationship to a token of a type? or rather an instance of a type?
             # RE: how normalized do you want this >_<

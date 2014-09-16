@@ -11,7 +11,7 @@ from weakref import WeakSet as wrs
 from weakref import getweakrefs
 from inspect import getargspec
 
-from numpy import argsort
+from numpy import argsort, ndarray, array
 from numpy.random import randint
 
 
@@ -362,7 +362,10 @@ class Property:  # FIXME should inherit from something like a time serries?
     # XXX properties are how objects fit into multiple relationclasses
     def __init__(self, name, tensor):
         self.name = name
-        self.tensor = tensor
+        if type(tensor) != ndarray:
+            tensor = array(tensor)  # convert all tensors to ndarrays for consistent behavior
+            # NOTE AWESOME: turns out ndarrays actually perserve the sort methods for collections!!!!! so we can use them with our own orders!
+        self.tensor = tensor  # XXX tensors shall be the largest unit of data whose components do not themselves need labels
         self.degree = tensor.ndim
 
     @property
@@ -448,7 +451,7 @@ class Prop_Computed(Property):
 
 
 class HasProperties:
-    def __init__(self, properties, functions = None):  # FIXME initing this way will be nasty :/
+    def __init__(self, properties, functions = tuple()):  # FIXME initing this way will be nasty :/
         self.properties = {p.name:p for p in properties}
         self.computed_properties = {}
         for f in functions:

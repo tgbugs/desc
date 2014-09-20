@@ -24,6 +24,11 @@ class WeakSet(wrs):
 
 from ipython import embed
 
+
+##
+#  Orders and graphs TODO weighted graphs
+##
+
 class RelationClass:  # there will be many different realtion classes with their own meanings (hello tripples), but the orders that they can take are limited
     """
         A relation class contains the adjascency matrix for a set of nodes and edges
@@ -345,6 +350,59 @@ class RCMember:
             return False
 
 
+
+##
+#  Basic data objects for the viz data model Properties/Tensors, functions, these rest at the type level so functions should opperate on sets in theory 
+##
+
+class HasProperties:
+    def __init__(self, properties, functions = tuple()):  # FIXME initing this way will be nasty :/
+        self.properties = {p.name:p for p in properties}
+        self.computed_properties = {}
+        for f in functions:
+            p = Prop_Computed(f, properties)
+            self.computed_properties[p.name] = p
+
+        self.visualizable_properties = {}  # at a given level generate the list of things we can viz
+
+        # what is a property but a relationship to a token of a type? or rather an instance of a type?
+            # RE: how normalized do you want this >_<
+            # and how much do you want explicity at RUN time (grrr python)
+
+
+
+
+        #self.properties = properties  # FIXME make sure properties are actually properties!?
+        #self.properties = {p.name:p for p in properties}  # FIXME name collisions, FIXME scalar vs vector vs etc
+        # TODO: at the instance level we have: scalars, vectors, computed-> scalar, computed-> vector
+        # we need a way to distinguish scalar/vector at token level AND at type level
+        # scalars at a given level can be used to position objects in space AT THAT LEVEL
+        # construction of scalars at a given level 
+
+    def add_property(self, name, property):
+        if isVector:
+            self.token_properties[key] = property
+        elif isScalar:
+            self.scalar_properties[key] = property
+
+    def make_token(self, index = None):
+        # TODO if no index is specified, selection with replacement could be a great way to do automated bootstrapping and simulation?
+        if index == None:
+            index = randint(0,self.num_tokens)
+
+        out = {'__doc__':'tokens do not track the hierarchy, only their type does',
+               'parent_type':self
+              }
+        for name, instances in self.token_properties.items():
+            out[name] = instances[index]
+        return type(self.__class__.__name__+'_token', (object,), out)()
+        #return out
+
+    def add_token(self, token):
+        # TODO properties need to implement append or add or something
+        pass
+
+
 class Property:  # FIXME should inherit from something like a time serries?
     """ a singular type level property object
         
@@ -374,6 +432,7 @@ class Property:  # FIXME should inherit from something like a time serries?
         # even at the cost of performance because we have our own structure of representing tokens which is not intrinsically part of the tensor
         # this is a conscious design decision about the level of normalization and the balance between implicit vs explicity structure/context
         return self.degree <= 3
+
 
 class Prop_Token:
     """
@@ -449,54 +508,12 @@ class Prop_Computed(Property):
         for args in zip(*self._values):
             yield function(*args)
 
+##
+#  Example functions (use to delimite/filter output types for viz?)
+##
 
-class HasProperties:
-    def __init__(self, properties, functions = tuple()):  # FIXME initing this way will be nasty :/
-        self.properties = {p.name:p for p in properties}
-        self.computed_properties = {}
-        for f in functions:
-            p = Prop_Computed(f, properties)
-            self.computed_properties[p.name] = p
-
-        self.visualizable_properties = {}  # at a given level generate the list of things we can viz
-
-        # what is a property but a relationship to a token of a type? or rather an instance of a type?
-            # RE: how normalized do you want this >_<
-            # and how much do you want explicity at RUN time (grrr python)
-
-
-
-
-        #self.properties = properties  # FIXME make sure properties are actually properties!?
-        #self.properties = {p.name:p for p in properties}  # FIXME name collisions, FIXME scalar vs vector vs etc
-        # TODO: at the instance level we have: scalars, vectors, computed-> scalar, computed-> vector
-        # we need a way to distinguish scalar/vector at token level AND at type level
-        # scalars at a given level can be used to position objects in space AT THAT LEVEL
-        # construction of scalars at a given level 
-
-    def add_property(self, name, property):
-        if isVector:
-            self.token_properties[key] = property
-        elif isScalar:
-            self.scalar_properties[key] = property
-
-    def make_token(self, index = None):
-        # TODO if no index is specified, selection with replacement could be a great way to do automated bootstrapping and simulation?
-        if index == None:
-            index = randint(0,self.num_tokens)
-
-        out = {'__doc__':'tokens do not track the hierarchy, only their type does',
-               'parent_type':self
-              }
-        for name, instances in self.token_properties.items():
-            out[name] = instances[index]
-        return type(self.__class__.__name__+'_token', (object,), out)()
-        #return out
-
-    def add_token(self, token):
-        # TODO properties need to implement append or add or something
-        pass
-
+def function1(test, test1):
+    return None
 
 def main():
     from _weakref import ref

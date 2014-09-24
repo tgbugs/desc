@@ -12,7 +12,7 @@ from ipython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from test_objects import makeSimpleGeom
-from request import FAKE_PREDICT
+from request import FAKE_PREDICT, processRequest
 
 
 #fix sys module reference
@@ -20,6 +20,8 @@ sys.modules['core'] = sys.modules['panda3d.core']
 
 
 #TODO logging...
+
+#TODO type view (full tree of all types with a given property, or can select quantiative representation per type), instance view (only direct subtypes of the selected type will be presented), token view
 
 class responseMaker:  # TODO we probably move this to its own file?
     npoints = 9999
@@ -36,6 +38,8 @@ class responseMaker:  # TODO we probably move this to its own file?
         n = self.npoints
         np.random.seed()  # XXX MUST do this otherwise the same numbers pop out over and over, good case for cache invalidation though...
         positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
+
+        positions, properties = processRequest(request)
         uuids = np.array(['%s'%uuid4() for _ in range(n)])
         bounds = np.ones(n) * .5
         example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
@@ -43,7 +47,7 @@ class responseMaker:  # TODO we probably move this to its own file?
         example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
         #print('done making bam',example_bam)  # XXX if you want this use repr() ffs
 
-        data_tuple = (example_bam, example_coll, b'this is a UI data I swear')
+        data_tuple = (example_bam, example_coll, properties)
 
         #code for testing threading and sending stuff
         #cnt = 9999999

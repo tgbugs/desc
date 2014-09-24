@@ -48,6 +48,51 @@ class Request:  # testing only since this will need to be in its own module to k
         #def __hash__(self):
             #return self.hash_
 
+class requestProcessor:  # FIXME @classmethod?
+    def __init__(self, datastore):
+        self.datastore = datastore
+        self.request_types = {  # technically view types
+            'new':,
+            'type':self.typeReq,
+            'instance':self.instReq,
+            'token':self.tokenReq,
+        }
+
+    def newReq(self, request):
+        # return the default set of types to get everything off and running
+        return None
+
+    def typeReq(self, request):  # default request that boots everything up
+        # return the scalar properties of the type
+        # return the (scalar) properties of all instances >> ui
+        # return the (scalar) properties of all tokens >> ui
+        # return ALL children (under given hierarchy?) aka instances  # overlaying coordinate systems based on minimal quantitative data?
+
+        # TODO if no properties requested: return some graph layout?
+        # TODO in theory a type request could just be a name and we could go from there (have to start somewhere)
+        objects = self.datastore[request.type_]
+
+    def instReq(self, request):
+        """ summary of direct subtypes """
+        # return the positions of the subset of properties specified on the instances
+        objects = self.datastore[request.type_].instances  # FIXME children of varying types
+
+    def tokenReq(self, request):
+        # return the positions of the subset of properties specified on the set of tokens in question
+        objects = self.datastore[request.type_].tokens
+
+    def processRequest(self, request):
+        return self.request_types[request.type_](request)
+
+
+def processRequest(request):
+    """
+        The code that processes the requests and returns the positions and UI elements
+        the selected type/objects needs to persist when further manipulations are engaged
+    """
+    
+
+
 class DataByteStream:
     """ Named struct for defining fields of serialized byte streams """
 

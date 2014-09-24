@@ -26,7 +26,7 @@ from ipython import embed
 
 
 ##
-#  Orders and graphs TODO weighted graphs
+#  Orders and graphs TODO weighted graphs  TODO more than one ordering
 ##
 
 class RelationClass:  # there will be many different realtion classes with their own meanings (hello tripples), but the orders that they can take are limited

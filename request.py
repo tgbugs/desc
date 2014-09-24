@@ -20,13 +20,16 @@ class Request:  # testing only since this will need to be in its own module to k
         argh, since we probably shouldn't / can't dump whole collision trees
         to bam we *may* need to send the uuid data in the serialization of points
     """
-    def __init__(self,request_type:'[raw (sql or something?), data view,'
+    def __init__(self, request_type:'[raw (sql or something?), data view,'
                  ' type/knowledge view, any relationship view??]',
-                 type_:'uuid', properties:'[0..n]', constraints:'a set of'
+                 type_:'uuid', relationship:'currently active hierarchy'
+                 '(set of hierarchies? dont think is possible)',
+                 properties:'[0..n]', constraints:'a set of'
                  ' constraints on properties (cache/eager load the rest too so you change selectors locally '):
         #should properties be generated on the fly as an enum for the interface? no, they will bugger the hash
         self.request_type = request_type
         self.type_ = type_   #FIXME if the request type is for know then here we should expect a list... HRM
+        self.relationship = relationship
         self.properties = properties
         pbytes = ''.join(['{}'.format(p) for p in properties])
         md5 = hashlib.md5()
@@ -48,7 +51,7 @@ class Request:  # testing only since this will need to be in its own module to k
         #def __hash__(self):
             #return self.hash_
 
-class requestProcessor:  # FIXME @classmethod?
+class requestProcessor:  # FIXME @classmethod?  #TODO multiple selected types??? yield only common properties?, TODO depth of childs, need to keep type level stuff in local memory/space so we can quickly rearrange based on the relationship selected :/
     def __init__(self, datastore):
         self.datastore = datastore
         self.request_types = {  # technically view types
@@ -299,9 +302,9 @@ class DataByteStream:
             yield request_hash, data_tuple
 
 
-FAKE_REQUEST = Request('test.','test',(1,2,3),None)
-FAKE_PREDICT = Request('prediction','who knows',(2,3,4),None)
-RAND_REQUEST = lambda: Request('random','%s'%uuid4(),(0,0,0),None)
+FAKE_REQUEST = Request('test.','test','default',(1,2,3),None)
+FAKE_PREDICT = Request('prediction','who knows','default',(2,3,4),None)
+RAND_REQUEST = lambda: Request('random','%s'%uuid4(),'default',(0,0,0),None)
 
 def main():
     from enum import Enum

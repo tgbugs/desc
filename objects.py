@@ -220,3 +220,34 @@ class dProperties:
     computed = {}
 
 
+##
+#  THIRD TIME'S THE CHARM!
+##
+
+
+class dObject:  # TODO needs the HasProperties decorator...
+    def __init__(self, type_):
+        self.type_ = type_
+        self.active_relation = 'default'  # FIXME this probably should access some global state manager for the UI????
+        self.relations = {}  # a dict of instances as a function of a given relationship not sure if best idea...
+        self.Properties = None  # TODO these are what we really need for the UI moreso than the instances or tokens themselves
+        self.instProperties = None
+        self.tokenProperties = None
+
+    @property
+    def instances(self):
+        """ returns a list of other child dObjects
+        """
+        return self.relations[self.active_relation]
+
+    @property
+    def tokens(self):
+        #TODO this probably will need to be recursive? and depend on the relationship
+        #FIXME recursion :/ probably need to override this somewhere
+        out = []
+        for obj in self.relations[self.active_relation]:  #TODO one fix might just be to have tokens exist under this but they themselves have no children
+            out.extend(obj.tokens)
+        return out
+
+
+

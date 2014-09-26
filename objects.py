@@ -226,13 +226,13 @@ class dProperties:
 
 
 class dObject:  # TODO needs the HasProperties decorator...
-    def __init__(self, type_):
-        self.type_ = type_
+    def __init__(self, type_, relationship_tables):
+        self.type_ = type_  # XXX aka name in ontology
         self.active_relation = 'default'  # FIXME this probably should access some global state manager for the UI????
         self.relations = {}  # a dict of instances as a function of a given relationship not sure if best idea...
-        self.Properties = None  # TODO these are what we really need for the UI moreso than the instances or tokens themselves
-        self.instProperties = None
-        self.tokenProperties = None
+        self.Properties = {}  # TODO these are what we really need for the UI moreso than the instances or tokens themselves
+        self.instProperties = {}  # based on the active set of relations
+        self.tokenProperties = {}  # based on the active set of relations
 
     @property
     def instances(self):
@@ -247,6 +247,14 @@ class dObject:  # TODO needs the HasProperties decorator...
         out = []
         for obj in self.relations[self.active_relation]:  #TODO one fix might just be to have tokens exist under this but they themselves have no children
             out.extend(obj.tokens)
+        return out
+
+    @property
+    def instProperties(self):
+        out = []
+        for i in self.instances:
+            out.extend(i.Properties)
+
         return out
 
 

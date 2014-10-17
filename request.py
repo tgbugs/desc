@@ -51,11 +51,28 @@ class Request:  # testing only since this will need to be in its own module to k
         #def __hash__(self):
             #return self.hash_
 
+
+class Response:
+    def __init__(self, positions, geometry, colors, uuids, bounds, ui_data, makeBam = True):
+        self.positions = positions
+        self.geometry = geometry
+        self.uuids = uuids
+        self.bounds = bounds
+        self.ui_data = ui_data  # this is where we are really going to need work
+        if makeBam:
+            self.bam = makeBam(positions, geometry, colors)
+        else:
+            self.bam = None
+
+
+
+
+
 class requestProcessor:  # FIXME @classmethod?  #TODO multiple selected types??? yield only common properties?, TODO depth of childs, need to keep type level stuff in local memory/space so we can quickly rearrange based on the relationship selected :/
     def __init__(self, datastore):
         self.datastore = datastore
         self.request_types = {  # technically view types
-            'new':,
+            'new':self.newReq,
             'type':self.typeReq,
             'instance':self.instReq,
             'token':self.tokenReq,

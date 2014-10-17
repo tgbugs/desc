@@ -17,7 +17,7 @@ from numpy.random import bytes as make_bytes
 from panda3d.core import NodePath, PandaNode
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import DataByteStream
+from request import ResponseByteStream
 from ipython import embed
 
 from prof import profile_me
@@ -38,7 +38,7 @@ def make_response(pipe, request, respMaker):
     """ returns the request hash and a compressed bam stream """
     rh =  request.hash_
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
-    data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+    data_stream = ResponseByteStream.makeResponseStream(rh, data_tuple)
     pipe.send_bytes(data_stream)
     pipe.close()
     del pipe
@@ -69,12 +69,12 @@ class connectionClientProtocol(asyncio.Protocol):  # this could just be made int
 
     def data_received(self, data):
         token_data = b''
-        token_start = data.find(DataByteStream.OP_TOKEN)  # FIXME sadly we'll probably need to deal with splits again
+        token_start = data.find(ResponseByteStream.OP_TOKEN)  # FIXME sadly we'll probably need to deal with splits again
         #print('token?',data)
         if token_start != -1:
-            #token_start += DataByteStream.LEN_OPCODE
+            #token_start += ResponseByteStream.LEN_OPCODE
             #print('__',self,'token_start',token_start,'__')
-            token_data = data[token_start:token_start+DataByteStream.LEN_OPCODE+DataByteStream.LEN_TOKEN]
+            token_data = data[token_start:token_start+ResponseByteStream.LEN_OPCODE+ResponseByteStream.LEN_TOKEN]
         if token_data:
             self.future_token.set_result(token_data)
             self.transport.write_eof()
@@ -132,16 +132,16 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
         self.__block__ += data
         #print(id(self),'block length',len(self.__block__))
         if not self.__block_size__:
-            if DataByteStream.OP_DATA not in self.__block__:
+            if ResponseByteStream.OP_DATA not in self.__block__:
                 self.__block__ = b''
                 return None
             else:
-                self.__block_size__, self.__block_tuple__ = DataByteStream.decodeResponseHeader(self.__block__)
+                self.__block_size__, self.__block_tuple__ = ResponseByteStream.decodeResponseHeader(self.__block__)
 
         if len(self.__block__) >= self.__block_size__:
             #print('total size expecte', self.__block_size__)
             #print('post split block',self.__block__[self.__block_size__:])
-            request_hash, data_tuple = DataByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
+            request_hash, data_tuple = ResponseByteStream.decodeResponseStream(self.__block__[:self.__block_size__], *self.__block_tuple__)
             data_tuple = no_repr(data_tuple)
             self.render_callback(request_hash, data_tuple)
             self.__block__ = self.__block__[self.__block_size__:]
@@ -273,8 +273,8 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
         #print(self.pprefix,data)
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
-            token = make_bytes(DataByteStream.LEN_TOKEN)  # FIXME
-            token_stream = DataByteStream.makeTokenStream(token)
+            token = make_bytes(ResponseByteStream.LEN_TOKEN)  # FIXME
+            token_stream = ResponseByteStream.makeTokenStream(token)
             self.tm.update_ip_token_pair(self.ip, token)
             self.open_data_firewall(self.ip)
             #DO ALL THE THINGS
@@ -304,7 +304,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
 class dataServerProtocol(asyncio.Protocol):
     """ Data server protocol that holds the code for managing incoming data
         streams. It should be data agnoistic, thus try to keep the code that
-        actually manipulates the data in DataByteStream.
+        actually manipulates the data in ResponseByteStream.
     """
 
     def __new__(cls, event_loop, respMaker, rcm, tm, ppe):
@@ -346,7 +346,7 @@ class dataServerProtocol(asyncio.Protocol):
         if not self.token_received:
             self.__block__ += data
             try:
-                token, token_end = DataByteStream.decodeToken(self.__block__)
+                token, token_end = ResponseByteStream.decodeToken(self.__block__)
                 if token in self.expected_tokens:
                     self.token_received = True  # dont store the token anywhere in memory, ofc if you can find the t_r bit and flip it...
                     self.tm.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
@@ -376,14 +376,14 @@ class dataServerProtocol(asyncio.Protocol):
 
     def process_data(self,data):  # XXX is this actually a coroutine?
         self.__block__ += data
-        split = self.__block__.split(DataByteStream.STOP)  # split requires a copy?
+        split = self.__block__.split(ResponseByteStream.STOP)  # split requires a copy?
         if len(split) is 1:  # NO STOPS
-            if DataByteStream.OP_PICKLE not in self.__block__:  # NO OPS
+            if ResponseByteStream.OP_PICKLE not in self.__block__:  # NO OPS
                 self.__block__ = b''
             yield None  # self.__block__ already updated
         else:  # len(split) > 1:
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
-            yield from DataByteStream.decodePickleStreams(split)
+            yield from ResponseByteStream.decodePickleStreams(split)
 
     def process_requests(self, requests:'iterable', pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         #print(self.pprefix,'processing requests')
@@ -413,7 +413,7 @@ class dataServerProtocol(asyncio.Protocol):
                         if recv.poll():
                             _data_stream = recv.recv_bytes()  # this would raise EOF but we pop
                             self.transport.write(_data_stream)
-                            _request_hash = _data_stream[DataByteStream.LEN_OPCODE:DataByteStream.LEN_OPCODE + DataByteStream.LEN_HASH]
+                            _request_hash = _data_stream[ResponseByteStream.LEN_OPCODE:ResponseByteStream.LEN_OPCODE + ResponseByteStream.LEN_HASH]
                             self.rcm.update_cache(_request_hash, _data_stream)
                             recv.close()
                             pops.append(i)

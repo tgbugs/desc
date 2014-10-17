@@ -875,8 +875,8 @@ def main():
     frames = {'data':GuiFrame('data','f')}
     bs = BoxSel(frames) # FIXME must be started after renderManager >_<
 
-    dnd = dond()
-    #d4d = do4d()
+    #dnd = dond()
+    d4d = do4d()
 
     ec = exit_cleanup()
     ac = AcceptKeys()

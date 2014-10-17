@@ -96,7 +96,7 @@ def processRequest(request):
     
 
 
-class DataByteStream:
+class ResponseByteStream:
     """ Named struct for defining fields of serialized byte streams """
 
     #switch for local vs network behavior
@@ -236,7 +236,6 @@ class DataByteStream:
 
         return total_size, (offLen, data_size)
 
-
     @classmethod
     def decodeResponseStream(cls, bytes_, offLen, data_size):
         hashStart = -data_size - offLen - cls.LEN_HEADER_FIXED + cls.LEN_OPCODE
@@ -261,8 +260,6 @@ class DataByteStream:
         data_tuple = tuple([ data[start:stop] for start, stop in offslice ])
         #data_tuple = tuple([ data[offsets[i] : offsets[i + 1]] for i in range(n_fields + 1) ])  # check perf?
         return request_hash, data_tuple
-
-
 
     @classmethod
     def decodeResponseStreams(cls, split):  # XXX deprecated

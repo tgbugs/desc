@@ -18,7 +18,7 @@ from numpy.random import bytes as make_bytes
 from IPython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import Request, DataByteStream, FAKE_PREDICT
+from request import Request, ResponseByteStream, FAKE_PREDICT
 from test_objects import makeSimpleGeom
 from panda3d.core import GeomPoints, GeomVertexFormat, GeomVertexData, GeomNode, GeomVertexWriter, Geom
 
@@ -93,8 +93,8 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
         print(self.pprefix,data)
         if data == b'I promis I real client, plz dataz':
             self.transport.write(b'ok here dataz')
-            token = make_bytes(DataByteStream.LEN_TOKEN)
-            token_stream = DataByteStream.makeTokenStream(token)
+            token = make_bytes(ResponseByteStream.LEN_TOKEN)
+            token_stream = ResponseByteStream.makeTokenStream(token)
             self.update_ip_token_pair(self.ip, token)
             self.open_data_firewall(self.ip)
             #DO ALL THE THINGS
@@ -126,7 +126,7 @@ class connectionServerProtocol(asyncio.Protocol):  # this is really the auth ser
 class dataServerProtocol(asyncio.Protocol):
     """ Data server protocol that holds the code for managing incoming data
         streams. It should be data agnoistic, thus try to keep the code that
-        actually manipulates the data in DataByteStream.
+        actually manipulates the data in ResponseByteStream.
     """
     def __init__(self):
         self.token_received = False
@@ -155,7 +155,7 @@ class dataServerProtocol(asyncio.Protocol):
         if not self.token_received:
             self.__block__ += data
             try:
-                token, token_end = DataByteStream.decodeToken(self.__block__)
+                token, token_end = ResponseByteStream.decodeToken(self.__block__)
                 if token in self.expected_tokens:
                     self.token_received = True  # dont store the token anywhere in memory, ofc if you can find the t_r bit and flip it...
                     self.remove_token_for_ip(self.ip, token)  # do this immediately so that the token cannot be reused!
@@ -182,14 +182,14 @@ class dataServerProtocol(asyncio.Protocol):
 
     def process_data(self,data):  # XXX is this actually a coroutine?
         self.__block__ += data
-        split = self.__block__.split(DataByteStream.STOP)  # split requires a copy?
+        split = self.__block__.split(ResponseByteStream.STOP)  # split requires a copy?
         if len(split) is 1:  # NO STOPS
-            if DataByteStream.OP_PICKLE not in self.__block__:  # NO OPS
+            if ResponseByteStream.OP_PICKLE not in self.__block__:  # NO OPS
                 self.__block__ = b''
             yield None  # self.__block__ already updated
         else:  # len(split) > 1:
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
-            yield from DataByteStream.decodePickleStreams(split)
+            yield from ResponseByteStream.decodePickleStreams(split)
 
     def process_requests(self,request_generator):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         print(self.pprefix,'processing requests')
@@ -249,7 +249,7 @@ class dataServerProtocol(asyncio.Protocol):
         data_stream = self.get_cache(rh)
         if data_stream is None:  # FIXME if we KNOW we are going to gz stuff we should do it early...
             data_tuple = self.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
-            data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+            data_stream = ResponseByteStream.makeResponseStream(rh, data_tuple)
             self.update_cache(rh, data_stream)
         #self.data_queue.put(data_stream)
         #print('data has been put in the queue')
@@ -380,7 +380,7 @@ def make_response(args):
 
     data_tuple = (example_bam, example_coll, b'this is a UI data I swear')
 
-    data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+    data_stream = ResponseByteStream.makeResponseStream(rh, data_tuple)
     return data_stream
 
 def make_response_pipe(pipe, request):
@@ -422,7 +422,7 @@ def make_response_pipe(pipe, request):
 
     data_tuple = (example_bam, example_coll, b'this is a UI data I swear')
 
-    data_stream = DataByteStream.makeResponseStream(rh, data_tuple)
+    data_stream = ResponseByteStream.makeResponseStream(rh, data_tuple)
     pipe.send_bytes(data_stream)
     pipe.close()
 

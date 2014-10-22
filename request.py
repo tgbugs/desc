@@ -116,7 +116,7 @@ def processRequest(request):
     """
     n = 9999
     positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
-    ui_data = "GET OUT OF HERE STALKER"
+    ui_data = b"GET OUT OF HERE STALKER"  # URG BYTES
     return positions, ui_data
 
 class responseMaker:  # TODO we probably move this to its own file?

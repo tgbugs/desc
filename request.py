@@ -5,9 +5,14 @@ import traceback
 import zlib
 
 from uuid import uuid4
+import numpy as np
 
 #from numpy import cumsum
 from ipython import embed
+from test_objects import makeSimpleGeom
+
+#fix sys module reference
+sys.modules['core'] = sys.modules['panda3d.core']
 
 class Request:  # testing only since this will need to be in its own module to keep python happy
     """ the serializable object used for transporting the requested data
@@ -104,12 +109,57 @@ class requestProcessor:  # FIXME @classmethod?  #TODO multiple selected types???
     def processRequest(self, request):
         return self.request_types[request.type_](request)
 
-
 def processRequest(request):
     """
         The code that processes the requests and returns the positions and UI elements
         the selected type/objects needs to persist when further manipulations are engaged
     """
+    n = 9999
+    positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
+    ui_data = "GET OUT OF HERE STALKER"
+    return positions, ui_data
+
+class responseMaker:  # TODO we probably move this to its own file?
+    npoints = 9999
+    def __init__(self):
+        #setup at connection to whatever database we are going to use
+        pass
+
+    def make_response(self, request):
+        # TODO so encoding the collision nodes to a bam takes a REALLY LONG TIME
+        # it seems like it might be more prudent to serialize to (x,y,z,radius) or maybe a type code?
+        # yes, the size of the bam serialization is absolutely massive, easily 3x the size in memory
+        # also if we send it already in tree form... so that the child node positions are just nested
+        # it might be pretty quick to generate the collision nodes
+        n = self.npoints
+        np.random.seed()  # XXX MUST do this otherwise the same numbers pop out over and over, good case for cache invalidation though...
+
+        positions, ui_data = processRequest(request)
+        uuids = np.array(['%s'%uuid4() for _ in range(n)])
+        bounds = np.ones(n) * .5
+        example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
+        #print('making example bam')
+        example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
+        #print('done making bam',example_bam)  # XXX if you want this use repr() ffs
+
+        data_tuple = (example_bam, example_coll, ui_data)
+
+        #code for testing threading and sending stuff
+        #cnt = 9999999
+        #if request.request_type is 'prediction':
+            #data_tuple = [make_bytes(cnt) for _ in range(2)] + [b'THIS IS THE FIRST ONE']
+        #else:
+            #data_tuple = [make_bytes(cnt) for _ in range(2)] + [b'THIS IS THE SECOND ONE']
+
+        return data_tuple
+
+    def make_predictions(self, request):
+        #TODO this is actually VERY easy, because all we need to do is use
+            #the list of connected UI elements that we SEND OUT ANYWAY and
+            #just prospectively load those models/views
+        request = FAKE_PREDICT
+        yield request  # XXX NOTE: yielding the request itself causes a second copy to be sent
+
     
 
 

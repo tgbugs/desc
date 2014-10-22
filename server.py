@@ -4,15 +4,12 @@ import pickle
 import ssl
 import sys
 from asyncio import get_event_loop
-from uuid import uuid4
 from collections import defaultdict, deque
 
-import numpy as np
 from ipython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from test_objects import makeSimpleGeom
-from request import FAKE_PREDICT, processRequest
+from request import FAKE_PREDICT, responseMaker
 
 
 #fix sys module reference
@@ -23,47 +20,6 @@ sys.modules['core'] = sys.modules['panda3d.core']
 
 #TODO type view (full tree of all types with a given property, or can select quantiative representation per type), instance view (only direct subtypes of the selected type will be presented), token view
 
-class responseMaker:  # TODO we probably move this to its own file?
-    npoints = 9999
-    def __init__(self):
-        #setup at connection to whatever database we are going to use
-        pass
-
-    def make_response(self, request):
-        # TODO so encoding the collision nodes to a bam takes a REALLY LONG TIME
-        # it seems like it might be more prudent to serialize to (x,y,z,radius) or maybe a type code?
-        # yes, the size of the bam serialization is absolutely massive, easily 3x the size in memory
-        # also if we send it already in tree form... so that the child node positions are just nested
-        # it might be pretty quick to generate the collision nodes
-        n = self.npoints
-        np.random.seed()  # XXX MUST do this otherwise the same numbers pop out over and over, good case for cache invalidation though...
-        positions = np.cumsum(np.random.randint(-1,2,(n,3)), axis=0)
-
-        positions, ui_data = processRequest(request)
-        uuids = np.array(['%s'%uuid4() for _ in range(n)])
-        bounds = np.ones(n) * .5
-        example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
-        #print('making example bam')
-        example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
-        #print('done making bam',example_bam)  # XXX if you want this use repr() ffs
-
-        data_tuple = (example_bam, example_coll, ui_data)
-
-        #code for testing threading and sending stuff
-        #cnt = 9999999
-        #if request.request_type is 'prediction':
-            #data_tuple = [make_bytes(cnt) for _ in range(2)] + [b'THIS IS THE FIRST ONE']
-        #else:
-            #data_tuple = [make_bytes(cnt) for _ in range(2)] + [b'THIS IS THE SECOND ONE']
-
-        return data_tuple
-
-    def make_predictions(self, request):
-        #TODO this is actually VERY easy, because all we need to do is use
-            #the list of connected UI elements that we SEND OUT ANYWAY and
-            #just prospectively load those models/views
-        request = FAKE_PREDICT
-        yield request  # XXX NOTE: yielding the request itself causes a second copy to be sent
 
 class requestCacheManager:
     """ we want to use a global cache so that we don't recompute the same request
@@ -164,14 +120,13 @@ def main():
 
     #shared state, in theory this stuff could become its own Protocol
     rcm = requestCacheManager(9999)
-    respMaker = responseMaker
     # FIXME here we cannot remove references to these methods from instances
         # because they are defined at the class level and not passed in at
         # run time. We MAY be able to fix this by using a metaclass that
         # constructs these so that when a new protocol is started those methods
         # are passed in and thus can successfully be deleted from a class instance
 
-    datServ = dataServerProtocol(serverLoop, respMaker, rcm, tm, ppe)
+    datServ = dataServerProtocol(serverLoop, responseMaker, rcm, tm, ppe)
 
     coro_conServer = serverLoop.create_server(conServ, '127.0.0.1', CONNECTION_PORT, ssl=None)  # TODO ssl
     coro_dataServer = serverLoop.create_server(datServ, '127.0.0.1', DATA_PORT, ssl=None)  # TODO ssl and this can be another box

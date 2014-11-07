@@ -1,12 +1,31 @@
 #!/usr/bin/env python3.4
 
-
 import ssl
 import time
 from asyncio import get_event_loop
 from threading import Thread
 
 from ipython import embed
+
+import sys
+import inspect
+from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
+
+# render setup
+from direct.showbase.ShowBase import ShowBase
+from panda3d.core import loadPrcFileData
+from panda3d.core import PStatClient
+
+from render_manager import renderManager
+from selection import BoxSel
+from util import ui_text, console, exit_cleanup, frame_rate, startup_data
+from ui import CameraControl, Axis3d, Grid3d, GuiFrame
+from protocols import dataClientProtocol
+
+from keys import AcceptKeys, callbacks
+
+# fix sys module reference
+sys.modules['core'] = sys.modules['panda3d.core']
 
 #import rpdb2
 #rpdb2.start_embedded_debugger("asdf123")
@@ -17,26 +36,6 @@ from ipython import embed
     #that would vastly simplify life...? ehhhhh
 
 def main():
-    import sys
-    import inspect
-    from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
-
-    # render setup
-    from direct.showbase.ShowBase import ShowBase
-    from panda3d.core import loadPrcFileData
-    from panda3d.core import PStatClient
-
-    from render_manager import renderManager
-    from selection import BoxSel
-    from util import ui_text, console, exit_cleanup, frame_rate, startup_data
-    from ui import CameraControl, Axis3d, Grid3d, GuiFrame
-    from protocols import dataClientProtocol
-
-    from keys import AcceptKeys, callbacks
-
-    # fix sys module reference
-    sys.modules['core'] = sys.modules['panda3d.core']
-
     PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()

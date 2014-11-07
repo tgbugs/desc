@@ -5,15 +5,18 @@ import ssl
 import sys
 from asyncio import get_event_loop
 from collections import defaultdict, deque
+from threading import Thread
 
 from ipython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import FAKE_PREDICT, responseMaker
 
-
 #fix sys module reference
 sys.modules['core'] = sys.modules['panda3d.core']
+
+from protocols import connectionServerProtocol, dataServerProtocol
+from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
 
 
 #TODO logging...
@@ -105,9 +108,6 @@ class make_shutdown:
         #return 'The server has already been shutdown!'
 
 def main():
-    from threading import Thread
-    from protocols import connectionServerProtocol, dataServerProtocol
-    from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
     serverLoop = get_event_loop()
     ppe = ProcessPoolExecutor()
 

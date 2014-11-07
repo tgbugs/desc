@@ -6,7 +6,6 @@
 
 import os  # for dealing with firewall stuff?
 import asyncio
-import pickle
 import struct
 from time import sleep
 from multiprocessing import Pipe as mpp
@@ -17,7 +16,7 @@ from numpy.random import bytes as make_bytes
 from panda3d.core import NodePath, PandaNode
 
 from defaults import CONNECTION_PORT, DATA_PORT
-from request import ResponseByteStream
+from request import RequestByteStream, ResponseByteStream
 from ipython import embed
 
 from prof import profile_me
@@ -25,10 +24,6 @@ from prof import profile_me
 ###
 #   Utility or picklable functions
 ###
-
-def dumps(object_):
-    """ Special dumps that adds a double stop to make deserializing easier """
-    return pickle.dumps(object_)+b'.'
 
 class no_repr(tuple):
     def __repr__(self):
@@ -177,7 +172,7 @@ class dataClientProtocol(asyncio.Protocol):  # in theory there will only be 1 of
 
     def send_request(self, request):
         """ this is called BY renderManager.get_cache !!!!"""
-        out = dumps(request)
+        out = RequestByteStream.makeRequestStream(request)
         if self.transport is None:
             self.__to_send__ += out
         else:
@@ -383,7 +378,7 @@ class dataServerProtocol(asyncio.Protocol):
             yield None  # self.__block__ already updated
         else:  # len(split) > 1:
             self.__block__ = split.pop()  # this will always hit b'' or an incomplete pickle
-            yield from ResponseByteStream.decodePickleStreams(split)
+            yield from RequestByteStream.decodePickleStreams(split)
 
     def process_requests(self, requests:'iterable', pred = 0):  # TODO we could also use this to manage request_prediction and have the predictor return a generator
         #print(self.pprefix,'processing requests')

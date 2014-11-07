@@ -162,6 +162,44 @@ class responseMaker:  # TODO we probably move this to its own file?
 
     
 
+class RequestByteStream:
+    #request stream
+    #pickle codes
+    OP_PICKLE = b'\x80'
+    OP_PICKLE_INT = OP_PICKLE[0]
+    PICKLE_STOP = b'.'
+
+    @classmethod
+    def makeRequestStream(cls, object_):
+        """ Special dumps that adds a double stop to make deserializing easier """
+        return pickle.dumps(object_)+b'.'
+
+    @classmethod
+    def decodePickleStreams(cls, split):  # FIXME this fails HARD if there is another \x80
+        for bytes_ in split:
+            pickleStart = 0
+            if bytes_[pickleStart] != cls.OP_PICKLE_INT: #apparently indexing into bytes returns ints not bytes
+                if cls.DEBUG:
+                    print('what the heck kind of data is this!?')
+                    print(bytes_)
+                    print('')
+                pickleStart = bytes_.find(cls.OP_PICKLE)
+                if pickleStart == -1:
+                    if cls.DEBUG:
+                        print('What is this garbage? You have a stop but no start?!')
+                    yield None
+            try:
+                thing = pickle.loads(bytes_[pickleStart:]+cls.PICKLE_STOP)  # have to add the stop back in
+                if type(thing) is not Request:
+                    yield None
+                else:
+                    yield thing
+            except (ValueError, EOFError, pickle.UnpicklingError) as e:  # ValueError is for bad pickle protocol
+                if cls.DEBUG:
+                    print('What is this garbage?',bytes_[pickleStart:])
+                    print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
+                yield None  # we cannot raise here because we won't evaluate the rest of the loop
+
 
 class ResponseByteStream:
     """ Named struct for defining fields of serialized byte streams """
@@ -181,13 +219,7 @@ class ResponseByteStream:
     #token stream
     LEN_TOKEN = 256
 
-    #request stream
-    #pickle codes
-    OP_PICKLE = b'\x80'
-    OP_PICKLE_INT = OP_PICKLE[0]
-    PICKLE_STOP = b'.'
-
-    #request response data stream
+    #response data stream
     BYTEORDER = 'little'  # this is NOT readable as a number, need big for that
     LEN_HASH = 16
     LEN_CDATA = 4
@@ -256,32 +288,6 @@ class ResponseByteStream:
                 return stream[start:start + cls.LEN_TOKEN], start+cls.LEN_TOKEN
             except IndexError:
                 raise IndexError('This token is not long enough!')
-
-    @classmethod
-    def decodePickleStreams(cls, split):  # FIXME this fails HARD if there is another \x80
-        for bytes_ in split:
-            pickleStart = 0
-            if bytes_[pickleStart] != cls.OP_PICKLE_INT: #apparently indexing into bytes returns ints not bytes
-                if cls.DEBUG:
-                    print('what the heck kind of data is this!?')
-                    print(bytes_)
-                    print('')
-                pickleStart = bytes_.find(cls.OP_PICKLE)
-                if pickleStart == -1:
-                    if cls.DEBUG:
-                        print('What is this garbage? You have a stop but no start?!')
-                    yield None
-            try:
-                thing = pickle.loads(bytes_[pickleStart:]+cls.PICKLE_STOP)  # have to add the stop back in
-                if type(thing) is not Request:
-                    yield None
-                else:
-                    yield thing
-            except (ValueError, EOFError, pickle.UnpicklingError) as e:  # ValueError is for bad pickle protocol
-                if cls.DEBUG:
-                    print('What is this garbage?',bytes_[pickleStart:])
-                    print('Error was',e)  # TODO log this? or if these are know... then don't sweat it
-                yield None  # we cannot raise here because we won't evaluate the rest of the loop
 
     @classmethod
     def decodeResponseHeader(cls, bytes_):

@@ -160,7 +160,9 @@ class responseMaker:  # TODO we probably move this to its own file?
         request = FAKE_PREDICT
         yield request  # XXX NOTE: yielding the request itself causes a second copy to be sent
 
-    
+###
+#   Byte stream definitions
+###
 
 class RequestByteStream:
     #request stream

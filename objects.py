@@ -258,4 +258,26 @@ class dObject:  # TODO needs the HasProperties decorator...
         return out
 
 
+##
+#  fourth time...
+##
+
+def make_data_object():
+
+def example_function(input_tensor, it_name, os_name, it_parent, os_parent)
+    return output_scalar
+
+class reduction_function:
+    def __init__(self, domain, codomain, func):
+        self.domain = domain
+        self.codomain = codomain
+        self.func = func
+
+class thing:
+    def __init__(scalars, functions, domains):
+        pass
+
+
+
+
 

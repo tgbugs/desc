@@ -84,7 +84,8 @@ def main():
     datCli = datCli_base()
     datCli.connection_lost('START')
 
-    rendMan.fake_request()
+    #rendMan.fake_request()
+    load_points = rendMan.load_points
 
     asyncThread = Thread(target=clientLoop.run_forever)
     asyncThread.start()

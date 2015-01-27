@@ -21,6 +21,9 @@ from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 from protocols import collPipeProtocol
 from keys import event_callback, HasKeybinds
 
+from test_objects import makeSimpleGeom  #for direct loading
+import numpy as np
+
 
 #import sys  # we shouldnt need to call this here
 #sys.modules['core'] = sys.modules['panda3d.core']
@@ -300,6 +303,26 @@ class renderManager(DirectObject, HasKeybinds):
     @event_callback
     def print_cache(self):
         print([repr(k) for k in self.cache.keys()])
+
+    def load_points(self, list_of_tups):
+        """ Lets you load points in directly from a pickle or something.
+            In theory we could ship this out as a request, but we have the points
+            here locally, so we should just build the model locally, maybe we
+            still need to hook into the requests system to get everything registered
+            for controllin viz etc
+        """
+        positions = list_of_tups
+        geom = makeSimpleGeom(positions, np.random.rand(4))  #TODO color
+        self.render(geom, None, None) # HAH
+        # TODO doubleclick to show/hide
+
+
+    def load_matrix(self, matrix):  #TODO
+        """ Load a 3d matrix of values and view them directly
+        """
+        raise NotImplemented
+
+
 
     def __send_request__(self, request):
         raise NotImplementedError('NEVER CALL THIS DIRECTLY. If you didnt, is'

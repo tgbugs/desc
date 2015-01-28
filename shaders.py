@@ -66,6 +66,7 @@ def make_texture3d(array):
     xl,yl,zl = array.shape
 
     tex.setup3dTexture(xl, yl, zl, Texture.TUnsignedByte, Texture.FLuminanceAlphamask)  #all ints
+    tex.setQualityLevel(3)
     mv = memoryview(tex.modifyRamImage())
     asdf = np.asarray(mv)
     #embed()
@@ -76,8 +77,12 @@ def make_texture3d(array):
     # ^ the above seems incorrect... the thing should be a 3d matrix... yet somehow?
 
     #asdf[::2] = 255
-    #asdf[::256] = 255
-    asdf[::256**2] = 255
+    asdf[:array.size:2] = 255
+    #test = asdf[::2].reshape(*array.shape)
+    #test[0,1,0] = 255
+
+    #asdf[::256] = 255  # this hits subsets of every slice or something, a single row at a time
+    #asdf[::256**2] = 255
     #asdf[1::2] = 255  #doesn't seem to do anything
     #asdf[::2] = array.flatten()  # FIXME surely there is a faster way?
     #asdf[array.size::2] = 0
@@ -128,7 +133,9 @@ def main():
     # XXX REAL CODE HERE
     ###
 
-    array = np.random.randint(0,255,(256,256,256))
+    size = 64
+
+    array = np.random.randint(0,255,(size,size,size))
     tex, memarray = make_texture3d(array)
     tex2 = Texture()
 
@@ -136,8 +143,9 @@ def main():
     # TODO how to read the matrix in?!
 
     geomNode = GeomNode('shader_test')
-    geomNode.addGeom(make_cube(256,256,256))
+    geomNode.addGeom(make_cube(size,size,size))
     nodePath = render.attachNewNode(geomNode)
+    #embed()
     nodePath.setTexGen(TextureStage.getDefault(), TexGenAttrib.MWorldPosition)
     nodePath.setTexture(tex)
     #embed()

@@ -75,7 +75,9 @@ def make_texture3d(array):
     # [::2] indexes channel 0, so it seems that the channels are interspersed RGBA...RGBA style
     # ^ the above seems incorrect... the thing should be a 3d matrix... yet somehow?
 
-    asdf[::2] = 255
+    #asdf[::2] = 255
+    #asdf[::256] = 255
+    asdf[::256**2] = 255
     #asdf[1::2] = 255  #doesn't seem to do anything
     #asdf[::2] = array.flatten()  # FIXME surely there is a faster way?
     #asdf[array.size::2] = 0

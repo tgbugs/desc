@@ -16,7 +16,7 @@ from ipython import embed
 
 def make_cube(x, y, z):  # FIXME make prism
     """ make x, y, z sized cube (ints pls) """
-    colors = [[1,1,1,1] for i in range(8)]
+    colors = [[1,1,1,0] for i in range(8)]
     #colors[0] = np.array((1,1,1,1))
     #colors[1] = np.array((1,0,0,0))
     #colors[2] = np.array((0,1,0,0))
@@ -47,7 +47,7 @@ def make_cube(x, y, z):  # FIXME make prism
         color.addData4f(*c)
 
     targetTris = GeomTristrips(Geom.UHStatic)
-    #targetTris.addConsecutiveVertices(0,8)
+    targetTris.addConsecutiveVertices(0,8)
     for i in order:
         targetTris.addVertex(i)#-1)
     targetTris.closePrimitive()
@@ -69,38 +69,15 @@ def make_texture3d(array):
     tex.setQualityLevel(3)
     mv = memoryview(tex.modifyRamImage())
     asdf = np.asarray(mv)
-    #embed()
-    #asdf[1] = 255
-    #asdf[0] = 255
-    #asdf[:256:2] = 255
-    # [::2] indexes channel 0, so it seems that the channels are interspersed RGBA...RGBA style
-    # ^ the above seems incorrect... the thing should be a 3d matrix... yet somehow?
+    
+    # so it turns out that panda uses fortran style indexing for arrays (apparently)???
+    # empeically using reshape(x,y,z,'A') to map  works??? figure this out!
+    # to map indexes directly to x, y, z values
+    values = asdf[::2].reshape(*array.shape, order='A')
+    values[::] = array  # TODO transform between writing and cartesian coordinate systems
 
-    #asdf[::2] = 255
-    asdf[:array.size:2] = 255
-    #test = asdf[::2].reshape(*array.shape)
-    #test[0,1,0] = 255
-
-    #asdf[::256] = 255  # this hits subsets of every slice or something, a single row at a time
-    #asdf[::256**2] = 255
-    #asdf[1::2] = 255  #doesn't seem to do anything
-    #asdf[::2] = array.flatten()  # FIXME surely there is a faster way?
-    #asdf[array.size::2] = 0
-    #for i in range(128):
-        #asdf[i::256] = 0
-
-    #asdf[1::2] = 1
-    #embed()
-    """
-    for i in range(zl):
-        p = PNMImage(xl, yl, 1)
-
-        for x in range(xl):  # FIXME SLOW AS BALLS
-            for y in range(yl):
-                p.setChannelVal(x, y, 0, array[x, y, i])
-
-        tex.load(p, i, 0)
-    #"""
+    tex.setMagfilter(Texture.FTNearest)
+    tex.setMinfilter(Texture.FTNearest)
 
     return tex, None
 
@@ -133,11 +110,20 @@ def main():
     # XXX REAL CODE HERE
     ###
 
-    size = 64
+    size = 256
+
+    shift = .001  # .001 works with scale .499 and size 2
+    scale = 1/size  - (1/ (size * 100))
+    #scale = 1
+    #shift = -size * .125
 
     array = np.random.randint(0,255,(size,size,size))
+
+    #array = np.linspace(0,255,size**3).reshape(size,size,size)
+
     tex, memarray = make_texture3d(array)
     tex2 = Texture()
+    tex2.setup2dTexture()
 
 
     # TODO how to read the matrix in?!
@@ -147,11 +133,15 @@ def main():
     nodePath = render.attachNewNode(geomNode)
     #embed()
     nodePath.setTexGen(TextureStage.getDefault(), TexGenAttrib.MWorldPosition)
+    nodePath.setTexProjector(TextureStage.getDefault(), render, nodePath)
+    nodePath.setTexPos(TextureStage.getDefault(), shift, shift, shift)
+    nodePath.setTexScale(TextureStage.getDefault(), scale)
+
     nodePath.setTexture(tex)
     #embed()
     #nodePath.setTexGen(TextureStage.getDefault(), 0, 0, 0)  #bug?
 
-    """
+    #"""
     myShader = Shader.load(Shader.SL_GLSL, "my_vert.glsl", "my_frag.glsl")#, "my_geom.glsl")
 
     # wow, this actually... turns the box black or something, probably shound't attach the texture to the nodepath if we do it this way

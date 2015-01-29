@@ -84,6 +84,10 @@ def makeGrid(rng = 1000, spacing = 10): #FIXME make this scale based on zoom???
     return grid
 
 def makeAxis(): #FIXME make this scale based on zoom???
+    """
+    x y z
+    r g b
+    """
     colors = (
         (1,0,0,1),
         (0,1,0,1),

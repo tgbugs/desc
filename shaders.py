@@ -74,51 +74,7 @@ def make_texture3d(array):
     # empeically using reshape(x,y,z,'A') to map  works??? figure this out!
     # to map indexes directly to x, y, z values
     values = asdf[::2].reshape(*array.shape, order='A')
-    values[::] = array
-
-    #embed()
-    #asdf[1] = 255
-    #asdf[0] = 255
-    #asdf[:256:2] = 255
-    # [::2] indexes channel 0, so it seems that the channels are interspersed RGBA...RGBA style
-    # ^ the above seems incorrect... the thing should be a 3d matrix... yet somehow?
-
-
-    
-    #s = values.size if values.size < 256 else 255
-    #for i in range(values.size):
-        #values[i] = (255 // s) * i
-    #embed()
-
-    #values[0] = 255
-    #asdf[::2] = 255
-    #asdf[1::2] = 0
-    #asdf[::4] = 127
-
-    #asdf[:array.size:2] = 255
-    #test = asdf[::2].reshape(*array.shape)
-    #test[0,1,0] = 255
-
-    #asdf[::256] = 255  # this hits subsets of every slice or something, a single row at a time
-    #asdf[::256**2] = 255
-    #asdf[1::2] = 255  #doesn't seem to do anything
-    #asdf[::2] = array.flatten()  # FIXME surely there is a faster way?
-    #asdf[array.size::2] = 0
-    #for i in range(128):
-        #asdf[i::256] = 0
-
-    #asdf[1::2] = 1
-    #embed()
-    """
-    for i in range(zl):
-        p = PNMImage(xl, yl, 1)
-
-        for x in range(xl):  # FIXME SLOW AS BALLS
-            for y in range(yl):
-                p.setChannelVal(x, y, 0, array[x, y, i])
-
-        tex.load(p, i, 0)
-    #"""
+    values[::] = array  # TODO transform between writing and cartesian coordinate systems
 
     tex.setMagfilter(Texture.FTNearest)
     tex.setMinfilter(Texture.FTNearest)
@@ -154,7 +110,7 @@ def main():
     # XXX REAL CODE HERE
     ###
 
-    size = 4
+    size = 256
 
     shift = .001  # .001 works with scale .499 and size 2
     scale = 1/size  - (1/ (size * 100))
@@ -163,10 +119,11 @@ def main():
 
     array = np.random.randint(0,255,(size,size,size))
 
-    array = np.linspace(0,255,size**3).reshape(size,size,size)
+    #array = np.linspace(0,255,size**3).reshape(size,size,size)
 
     tex, memarray = make_texture3d(array)
     tex2 = Texture()
+    tex2.setup2dTexture()
 
 
     # TODO how to read the matrix in?!
@@ -184,7 +141,7 @@ def main():
     #embed()
     #nodePath.setTexGen(TextureStage.getDefault(), 0, 0, 0)  #bug?
 
-    """
+    #"""
     myShader = Shader.load(Shader.SL_GLSL, "my_vert.glsl", "my_frag.glsl")#, "my_geom.glsl")
 
     # wow, this actually... turns the box black or something, probably shound't attach the texture to the nodepath if we do it this way

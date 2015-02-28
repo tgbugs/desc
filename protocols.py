@@ -15,11 +15,11 @@ from numpy.random import bytes as make_bytes
 
 from panda3d.core import NodePath, PandaNode
 
-from defaults import CONNECTION_PORT, DATA_PORT
-from request import RequestByteStream, ResponseByteStream
-from ipython import embed
+from .defaults import CONNECTION_PORT, DATA_PORT
+from .request import RequestByteStream, ResponseByteStream
+from .ipython import embed
 
-from prof import profile_me
+from .prof import profile_me
 
 ###
 #   Utility or picklable functions

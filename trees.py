@@ -4,10 +4,10 @@ import numpy as np
 
 from panda3d.core import NodePath, CollisionNode, CollisionSphere, BitMask32
 
-from defaults import BITMASK_COLL_MOUSE
-from defaults import BITMASK_COLL_CLICK
-from prof import profile_me
-from ipython import embed
+from .defaults import BITMASK_COLL_MOUSE
+from .defaults import BITMASK_COLL_CLICK
+from .prof import profile_me
+from .ipython import embed
 
 TREE_MAX_POINTS = 512
 

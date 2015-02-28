@@ -24,12 +24,12 @@ from numpy import pi, arange, argmin, sin, cos, tan, arctan2 #, arccos, arcsin, 
 
 import sys
 from threading import Thread
-from ipython import embed
+from .ipython import embed
 
-from defaults import *
-from util import genLabelText
-from test_objects import makeSimpleGeom
-from keys import event_callback, HasKeybinds
+from .defaults import *
+from .util import genLabelText
+from .test_objects import makeSimpleGeom
+from .keys import event_callback, HasKeybinds
 
 import inspect
 

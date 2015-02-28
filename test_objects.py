@@ -24,14 +24,14 @@ from panda3d.core import CollisionNode, CollisionSphere
 #loadPrcFileData("", "want-tk #t")
 
 import sys
-from ipython import embed
+from .ipython import embed
 from uuid import uuid4
 
-from monoDict import MonoDict as md
-from defaults import *
-from keys import HasKeybinds, event_callback, AcceptKeys
-from ui import GuiFrame
-from trees import treeMe
+from .monoDict import MonoDict as md
+from .defaults import *
+from .keys import HasKeybinds, event_callback, AcceptKeys
+from .ui import GuiFrame
+from .trees import treeMe
 
 import multiprocessing as mp
 from multiprocessing import Pipe
@@ -406,7 +406,7 @@ def smipleMake(index_counter,target,geomType=GeomPoints): #FIXME works under pyt
     out, index = makeGeom(index_counter,target,ctup,0,None,geomType)
     return lambda:(out, index) #this is stupid
          
-from monoDict import Counter
+from .monoDict import Counter
 index_counter = Counter(0,1)
 class CollTest(DirectObject):
     def __init__(self,n=9999,bins=9,show=False):
@@ -527,7 +527,7 @@ def WRAP_PROC(asdf):
     return makeSimpleGeom(*asdf)
 
 from multiprocessing import Pool
-from process_fixed import ProcessPoolExecutor 
+from .process_fixed import ProcessPoolExecutor 
 pool = ProcessPoolExecutor()
 #pool = Pool()
 

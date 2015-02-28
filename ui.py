@@ -10,9 +10,9 @@ from panda3d.core import GeomTristrips, GeomLinestrips
 from panda3d.core import TextNode, LineSegs, Point3, Point2
 
 
-from ipython import embed
+from .ipython import embed
 
-from keys import event_callback, HasKeybinds
+from .keys import event_callback, HasKeybinds
 
 
 keybinds = {

@@ -4,7 +4,7 @@ from functools import wraps
 
 from direct.showbase.DirectObject import DirectObject
 
-from ipython import embed
+from .ipython import embed
 
 # TODO we will need a good way to replace the default keybinds with ones from a config, probably based on qualname
     # possibly we can store the default binds and the just fill in overwritten binds and just always use qualname in the decorator

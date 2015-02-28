@@ -11,24 +11,24 @@ from multiprocessing import Pipe as mpp
 from threading import Lock
 #from concurrent.futures import ProcessPoolExecutor
 
-from ipython import embed
+from .ipython import embed
 
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import GeomNode, NodePath, PandaNode
 
-from trees import treeMe
-from request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
-from protocols import collPipeProtocol
-from keys import event_callback, HasKeybinds
+from .trees import treeMe
+from .request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
+from .protocols import collPipeProtocol
+from .keys import event_callback, HasKeybinds
 
-from test_objects import makeSimpleGeom  #for direct loading
+from .test_objects import makeSimpleGeom  #for direct loading
 import numpy as np
 
 
 #import sys  # we shouldnt need to call this here
 #sys.modules['core'] = sys.modules['panda3d.core']
 
-from prof import profile_me
+from .prof import profile_me
 
 #import rpdb2
 

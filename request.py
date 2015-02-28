@@ -8,8 +8,8 @@ from uuid import uuid4
 import numpy as np
 
 #from numpy import cumsum
-from ipython import embed
-from test_objects import makeSimpleGeom
+from .ipython import embed
+from .test_objects import makeSimpleGeom
 
 #fix sys module reference
 sys.modules['core'] = sys.modules['panda3d.core']

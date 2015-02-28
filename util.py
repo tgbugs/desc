@@ -3,10 +3,10 @@ from threading import Thread, Lock
 from direct.showbase.DirectObject import DirectObject
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode, Point3
-from ipython import embed
-from keys import event_callback, HasKeybinds
+from .ipython import embed
+from .keys import event_callback, HasKeybinds
 
-from monitor import getMaxPixelsPerMM
+from .monitor import getMaxPixelsPerMM
 
 def genLabelText(text, i): #FIXME
   #return OnscreenText(text = text, pos = (-1.3, .95-.05*i), fg=(1,1,1,1),

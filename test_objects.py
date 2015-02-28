@@ -157,7 +157,33 @@ def makeSimpleGeom(array, ctup, geomType = GeomPoints, fix = False):
     else:
         return cloudNode  # decoding fails becuase ForkingPickler is called for reasons beyond comprehension
 
- 
+def makeSimpleGeomBuffer(array, ctup, geomType=GeomPoints):
+    """ massively faster than the nonbuffer version """
+    color = np.repeat(ctup, len(array), 0)
+    full = [tuple(d) for d in np.hstack((array,color))]
+
+    fmt = GeomVertexFormat.getV3c4()
+
+    vertexData = GeomVertexData('points', fmt, Geom.UHDynamic) #FIXME use the index for these too? with setPythonTag, will have to 'reserve' some
+    cloudGeom = Geom(vertexData)
+    cloudNode = GeomNode('just some points')
+
+    vertexData.setNumRows(len(array))
+    mem_array = vertexData.modifyArray(0)
+    view = memoryview(mem_array)
+    arr = np.asarray(view)
+    arr[:] = full
+
+    points = geomType(Geom.UHDynamic)
+    points.addConsecutiveVertices(0,len(array))
+    points.closePrimitive()
+
+    cloudGeom.addPrimitive(points)
+    cloudNode.addGeom(cloudGeom)
+
+    return cloudNode
+
+
 
 def _makeGeom(array,ctup,i,pipe, geomType=GeomPoints): #XXX testing multiple Geom version ... for perf seems like it will be super slow
     #SUUUPER slow TONS of draw calls

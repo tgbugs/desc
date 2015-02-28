@@ -21,7 +21,7 @@ from .request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
 from .protocols import collPipeProtocol
 from .keys import event_callback, HasKeybinds
 
-from .test_objects import makeSimpleGeom  #for direct loading
+from .test_objects import makeSimpleGeom, makeSimpleGeomBuffer  #for direct loading
 import numpy as np
 
 
@@ -317,10 +317,9 @@ class renderManager(DirectObject, HasKeybinds):
         self.render(geom, None, None) # HAH
         # TODO doubleclick to show/hide
 
-    def load_lines(self, list_of_tups):  # FIXME better off making a switch to reduce improts?
+    def load_lines(self, array):  # FIXME better off making a switch to reduce improts?
         """ load lines instead of points """
-        positions = list_of_tups
-        geom = makeSimpleGeom(positions, np.random.rand(4), GeomLinestrips)  #TODO color
+        geom = makeSimpleGeomBuffer(array, np.random.randint(0,255,(1,4)), GeomLinestrips)  #TODO color
         self.render(geom, None, None) # HAH
 
     def load_matrix(self, matrix):  #TODO

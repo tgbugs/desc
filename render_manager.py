@@ -139,7 +139,8 @@ class renderManager(DirectObject, HasKeybinds):
         else:
             print('already being rendered', geom)
 
-        coll.reparentTo(self.collRoot)
+        if coll != None:
+            coll.reparentTo(self.collRoot)
 
         # FIXME this will just reparent all the l2 nodes if already attached
         #[n.reparentTo(self.collRoot) for n in coll]

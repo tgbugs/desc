@@ -39,7 +39,7 @@ class geomTest(DirectObject):
         geoms = GeomNode('container')
         for _ in range(n):
             ax = makeAxis()
-            ax.setPos(np.random.randint(-100,100))
+            #ax.setPos(np.random.randint(-100,100))  #FIXME
             geoms.addGeom(ax)
 
         geomParent.attachNewNode(geoms)

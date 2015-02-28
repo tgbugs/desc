@@ -14,7 +14,7 @@ from threading import Lock
 from .ipython import embed
 
 from direct.showbase.DirectObject import DirectObject
-from panda3d.core import GeomNode, NodePath, PandaNode
+from panda3d.core import GeomNode, NodePath, PandaNode, GeomLinestrips
 
 from .trees import treeMe
 from .request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
@@ -317,6 +317,11 @@ class renderManager(DirectObject, HasKeybinds):
         self.render(geom, None, None) # HAH
         # TODO doubleclick to show/hide
 
+    def load_lines(self, list_of_tups):  # FIXME better off making a switch to reduce improts?
+        """ load lines instead of points """
+        positions = list_of_tups
+        geom = makeSimpleGeom(positions, np.random.rand(4), GeomLinestrips)  #TODO color
+        self.render(geom, None, None) # HAH
 
     def load_matrix(self, matrix):  #TODO
         """ Load a 3d matrix of values and view them directly

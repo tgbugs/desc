@@ -7,7 +7,7 @@ from time import sleep
 from uuid import uuid4
 
 import numpy as np
-from ipython import embed
+from .util.ipython import embed
 
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import TextNode, PandaNode, NodePath
@@ -484,9 +484,9 @@ def main():
     from panda3d.core import loadPrcFileData
     from panda3d.core import PStatClient
 
-    from selection import BoxSel
-    from util import ui_text, console, exit_cleanup
-    from ui import CameraControl, Axis3d, Grid3d
+    from .selection import BoxSel
+    from .util.util import ui_text, console, exit_cleanup
+    from .ui import CameraControl, Axis3d, Grid3d
     from test_objects import makeSimpleGeom
     import sys
     sys.modules['core'] = sys.modules['panda3d.core']

@@ -8,7 +8,7 @@ from uuid import uuid4
 import numpy as np
 
 #from numpy import cumsum
-from .ipython import embed
+from .util.ipython import embed
 from .test_objects import makeSimpleGeom
 
 #fix sys module reference
@@ -380,7 +380,7 @@ RAND_REQUEST = lambda: Request('random','%s'%uuid4(),'default',(0,0,0),None)
 
 def main():
     from enum import Enum
-    from ipython import embed
+    from .util.ipython import embed
 
     class REQUEST_TYPES(Enum):
         # for some reason I think we really do not want to hard code this since request types seem likely to ... grow?

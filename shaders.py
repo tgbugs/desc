@@ -12,7 +12,7 @@ from panda3d.core import Geom, GeomVertexWriter, GeomVertexFormat, GeomVertexDat
 
 import numpy as np
 
-from ipython import embed
+from .util.ipython import embed
 
 def make_cube(x, y, z):  # FIXME make prism
     """ make x, y, z sized cube (ints pls) """
@@ -88,8 +88,8 @@ def make_texture3d(array):
 
 def main():
     from direct.showbase.ShowBase import ShowBase
-    from util import startup_data, exit_cleanup, ui_text, console, frame_rate
-    from ui import CameraControl, Axis3d, Grid3d
+    from .util.util import startup_data, exit_cleanup, ui_text, console, frame_rate
+    from .ui import CameraControl, Axis3d, Grid3d
     from keys import AcceptKeys, callbacks
 
     base = ShowBase()

@@ -17,7 +17,7 @@ from panda3d.core import NodePath, PandaNode
 
 from .defaults import CONNECTION_PORT, DATA_PORT
 from .request import RequestByteStream, ResponseByteStream
-from .ipython import embed
+from .util.ipython import embed
 
 from .prof import profile_me
 

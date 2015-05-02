@@ -11,7 +11,7 @@ from multiprocessing import Pipe as mpp
 from threading import Lock
 #from concurrent.futures import ProcessPoolExecutor
 
-from .ipython import embed
+from .util.ipython import embed
 
 from direct.showbase.DirectObject import DirectObject
 from panda3d.core import GeomNode, NodePath, PandaNode, GeomLinestrips

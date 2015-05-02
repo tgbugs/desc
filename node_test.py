@@ -11,7 +11,7 @@ from IPython import embed
 
 import sys
 
-from ui import makeAxis
+from .ui import makeAxis
 
 def makePoint():
     point = (0,0,0)
@@ -73,7 +73,7 @@ class emptyTest(DirectObject):
 def main():
     from panda3d.core import PStatClient
     from panda3d.core import loadPrcFileData
-    from ui import CameraControl, Axis3d, Grid3d
+    from .ui import CameraControl, Axis3d, Grid3d
     #loadPrcFileData('','threading-model Cull/Draw') #XXX wow, not good for this use case...
     base = ShowBase()
     base.disableMouse()

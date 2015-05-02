@@ -24,10 +24,10 @@ from numpy import pi, arange, argmin, sin, cos, tan, arctan2 #, arccos, arcsin, 
 
 import sys
 from threading import Thread
-from .ipython import embed
+from .util.ipython import embed
 
 from .defaults import *
-from .util import genLabelText
+from .util.util import genLabelText
 from .test_objects import makeSimpleGeom
 from .keys import event_callback, HasKeybinds
 
@@ -645,9 +645,9 @@ def makePoint(point=[0,0,0]):
 
 def main():
     import pickle
-    from util import ui_text, console, exit_cleanup, frame_rate, startup_data
-    from render_manager import renderManager
-    from ui import CameraControl, Axis3d, Grid3d
+    from .util.util import ui_text, console, exit_cleanup, frame_rate, startup_data
+    from .render_manager import renderManager
+    from .ui import CameraControl, Axis3d, Grid3d
     base = ShowBase()
     base.setBackgroundColor(0,0,0)
     base.disableMouse()

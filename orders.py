@@ -22,7 +22,7 @@ class WeakSet(wrs):
     def __repr__(self):
         return repr(set([a for a in self]))
 
-from ipython import embed
+from .util.ipython import embed
 
 
 ##

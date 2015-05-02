@@ -5,7 +5,7 @@
 import numpy as np
 from panda3d.core import Geom, GeomVertexFormat, GeomVertexData
 
-from ipython import embed
+from .util.ipython import embed
 
 size = 1000
 data = np.random.randint(0,1000,(size,3))

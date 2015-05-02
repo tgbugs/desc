@@ -7,7 +7,7 @@ from asyncio import get_event_loop
 from collections import defaultdict, deque
 from threading import Thread
 
-from ipython import embed
+from .util.ipython import embed
 
 from defaults import CONNECTION_PORT, DATA_PORT
 from request import FAKE_PREDICT, responseMaker
@@ -16,7 +16,7 @@ from request import FAKE_PREDICT, responseMaker
 sys.modules['core'] = sys.modules['panda3d.core']
 
 from protocols import connectionServerProtocol, dataServerProtocol
-from process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
+from .util.process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
 
 
 #TODO logging...

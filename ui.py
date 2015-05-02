@@ -10,7 +10,7 @@ from panda3d.core import GeomTristrips, GeomLinestrips
 from panda3d.core import TextNode, LineSegs, Point3, Point2
 
 
-from .ipython import embed
+from .util.ipython import embed
 
 from .keys import event_callback, HasKeybinds
 
@@ -877,7 +877,7 @@ class GuiFrame(DirectObject, HasKeybinds):
 
 def main():
     from direct.showbase.ShowBase import ShowBase
-    from util import startup_data, exit_cleanup, ui_text, console, frame_rate
+    from .util.util import startup_data, exit_cleanup, ui_text, console, frame_rate
     base = ShowBase()
     base.disableMouse()
     base.setBackgroundColor(0,0,0)

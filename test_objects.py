@@ -24,7 +24,7 @@ from panda3d.core import CollisionNode, CollisionSphere
 #loadPrcFileData("", "want-tk #t")
 
 import sys
-from .ipython import embed
+from .util.ipython import embed
 from uuid import uuid4
 
 from .monoDict import MonoDict as md
@@ -509,8 +509,8 @@ class FullTest(DirectObject):
 
 
 def _main():
-    from util import ui_text
-    from ui import CameraControl, Axis3d, Grid3d
+    from .util.util import ui_text
+    from .ui import CameraControl, Axis3d, Grid3d
     #from panda3d.core import ConfigVariableBool
     #ConfigVariableString('view-frustum-cull',False)
     from panda3d.core import loadPrcFileData
@@ -553,7 +553,7 @@ def WRAP_PROC(asdf):
     return makeSimpleGeom(*asdf)
 
 from multiprocessing import Pool
-from .process_fixed import ProcessPoolExecutor 
+from .util.process_fixed import ProcessPoolExecutor 
 pool = ProcessPoolExecutor()
 #pool = Pool()
 
@@ -871,14 +871,14 @@ class do4d(DirectObject, HasKeybinds):
 
 
 def main():
-    from util import ui_text, frame_rate, exit_cleanup, startup_data
-    from ui import CameraControl, Axis3d, Grid3d
+    from .util.util import ui_text, frame_rate, exit_cleanup, startup_data
+    from .ui import CameraControl, Axis3d, Grid3d
     from panda3d.core import loadPrcFileData
     from time import time
     from panda3d.core import PStatClient
 
-    from selection import BoxSel
-    from render_manager import renderManager
+    from .selection import BoxSel
+    from .render_manager import renderManager
 
 
     PStatClient.connect()

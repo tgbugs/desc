@@ -1293,4 +1293,4 @@ if __name__ == '__main__':
 
    camera.setY(-5)
    base.disableMouse()
-   run()
+   base.run()

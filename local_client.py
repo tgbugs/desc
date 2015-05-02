@@ -75,7 +75,7 @@ def main():
     el = exit_cleanup(event_loop, ppe, datCli.transport, shutdown)
 
     ac = AcceptKeys()
-    run()
+    base.run()
 
 
 if __name__ == '__main__':

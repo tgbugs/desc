@@ -95,7 +95,7 @@ def main():
 
     con = console(locals(), True)
     ak = AcceptKeys()  # this needs to go last after all the classes init
-    run()  # this MUST be called last because we use sys.exit() to terminate
+    base.run()  # this MUST be called last because we use sys.exit() to terminate
     assert False, 'Note how this never gets printed due to sys.exit()'
 
 

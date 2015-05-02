@@ -535,7 +535,7 @@ def main():
     #uiRoot.detach()
     bs = BoxSel(False)  # TODO make it so that all the "root" nodes for the secen are initialized in their own space, probably in with defaults or something globalValues.py?
     #base.camLens.setFov(150)
-    run()
+    base.run()
 
 if __name__ == "__main__":
     main()

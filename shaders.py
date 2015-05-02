@@ -152,7 +152,7 @@ def main():
     nodePath.set_shader_input("stepsize",.5)
     #"""
 
-    run()
+    base.run()
 
 if __name__ == '__main__':
     main()

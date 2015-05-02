@@ -103,5 +103,5 @@ class PointsTest(DirectObject):
 
 base.setBackgroundColor(0,0,0)
 pt = PointsTest()
-run()
+base.run()
 

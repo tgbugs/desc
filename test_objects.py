@@ -547,7 +547,7 @@ def _main():
     #base.camLens.setFar(9E12) #view-frustum-cull 0
     bs = BoxSel() #some stuff
     ft = FullTest(999,bins)
-    run() #looks like this is the slow case... probably should look into non blocking model loading?
+    base.run() #looks like this is the slow case... probably should look into non blocking model loading?
 
 def WRAP_PROC(asdf):
     return makeSimpleGeom(*asdf)
@@ -906,7 +906,7 @@ def main():
 
     ec = exit_cleanup()
     ac = AcceptKeys()
-    run() # we don't need threading for this since panda has a builtin events interface
+    base.run() # we don't need threading for this since panda has a builtin events interface
 
 
 if __name__ == '__main__':

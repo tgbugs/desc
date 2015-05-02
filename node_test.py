@@ -86,7 +86,7 @@ def main():
     #nt = emptyTest(2000)
     gt = geomTest(2000)
     PStatClient.connect()
-    run()
+    base.run()
 
 if __name__ == '__main__':
     main()

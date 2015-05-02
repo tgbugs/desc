@@ -64,7 +64,7 @@ def main():
     asyncThread = Thread(target=event_loop.run_forever)
     asyncThread.start()
 
-    run()
+    base.run()
     # there may be a locking error where ppe trys to create
     # multiple queue managment threads at the same time
     # but I get the error even when rie is called a single time

@@ -38,8 +38,8 @@ class console(HasKeybinds):
 class exit_cleanup(HasKeybinds):
     """ in order to get everything to exit 'cleanly'
         we need to close the asyncio loop before we
-        call sys.exit() to terminate run() otherwise
-        the code following run() in the main thread
+        call sys.exit() to terminate base.run() otherwise
+        the code following base.run() in the main thread
         will never execute
     """
     def __init__(self, event_loop = None, ppe = None, transport = None, shutdown = None):
@@ -108,7 +108,7 @@ def main():
     from direct.showbase.ShowBase import ShowBase
     base = ShowBase()
     asdf = ui_text()
-    run()
+    base.run()
 
 if __name__ == '__main__':
     main()

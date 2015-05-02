@@ -690,7 +690,7 @@ def main():
 
     ut = ui_text()
     dt = BoxSel(visualize = BoxSel.VIS_ALL)
-    run()
+    base.run()
 
 if __name__ == '__main__':
     main()

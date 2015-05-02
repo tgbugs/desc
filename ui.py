@@ -904,7 +904,7 @@ def main():
     frames = [GuiFrame('%s'%i, x=-.1, y=.1, height=.25, width=-.25, items=items) for i in range(10)]
     # FIXME calling add_item after this causes weird behvaior
 
-    run()
+    base.run()
 
 if __name__ == '__main__':
     main()

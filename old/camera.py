@@ -97,7 +97,7 @@ def main():
     grid = Grid3d()
     axis = Axis3d()
     base.disableMouse()
-    run()
+    base.run()
 
 if __name__ == '__main__':
     main()

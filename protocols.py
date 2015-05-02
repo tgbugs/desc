@@ -369,11 +369,11 @@ class dataServerProtocol(asyncio.Protocol):
         self.requests_sent = set()
         self.rcm.passout.remove(self)
 
-    def process_data(self,data):  # XXX is this actually a coroutine?
+    def process_data(self, data):  # XXX is this actually a coroutine?
         self.__block__ += data
         split = self.__block__.split(ResponseByteStream.STOP)  # split requires a copy?
         if len(split) is 1:  # NO STOPS
-            if ResponseByteStream.OP_PICKLE not in self.__block__:  # NO OPS
+            if ResponseByteStream.OP_DATA not in self.__block__:  # NO OPS
                 self.__block__ = b''
             yield None  # self.__block__ already updated
         else:  # len(split) > 1:

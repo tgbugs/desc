@@ -6,7 +6,7 @@ def main():
 
     # server bits
     from server import tokenManager, requestCacheManager, responseMaker, make_shutdown
-    from defaults import CONNECTION_PORT, DATA_PORT
+    from .defaults import CONNECTION_PORT, DATA_PORT
 
     # render setup
     from direct.showbase.ShowBase import ShowBase
@@ -18,10 +18,10 @@ def main():
     from .util.util import ui_text, console, exit_cleanup, frame_rate, startup_data
     from .ui import CameraControl, Axis3d, Grid3d, GuiFrame
 
-    from protocols import connectionServerProtocol, dataServerProtocol
-    from protocols import dataClientProtocol
+    from .protocols import connectionServerProtocol, dataServerProtocol
+    from .protocols import dataClientProtocol
     from .util.process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
-    from keys import AcceptKeys
+    from .keys import AcceptKeys
 
     # common
     event_loop = get_event_loop()

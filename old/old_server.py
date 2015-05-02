@@ -17,8 +17,8 @@ import numpy as np
 from numpy.random import bytes as make_bytes
 from IPython import embed
 
-from defaults import CONNECTION_PORT, DATA_PORT
-from request import Request, ResponseByteStream, FAKE_PREDICT
+from .defaults import CONNECTION_PORT, DATA_PORT
+from .request import Request, ResponseByteStream, FAKE_PREDICT
 from test_objects import makeSimpleGeom
 from panda3d.core import GeomPoints, GeomVertexFormat, GeomVertexData, GeomNode, GeomVertexWriter, Geom
 

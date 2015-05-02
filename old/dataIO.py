@@ -14,7 +14,7 @@ from panda3d.core import TextNode, PandaNode, NodePath
 from panda3d.core import CollisionNode, CollisionSphere
 from panda3d.core import BitMask32
 
-from defaults import *
+from .defaults import *
 
 #scene renderer is what we will use to coordinate receiving the set of visible objects to render
 #the total set of possible objects could be treated as another sceneRednerer???

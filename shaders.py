@@ -90,7 +90,7 @@ def main():
     from direct.showbase.ShowBase import ShowBase
     from .util.util import startup_data, exit_cleanup, ui_text, console, frame_rate
     from .ui import CameraControl, Axis3d, Grid3d
-    from keys import AcceptKeys, callbacks
+    from .keys import AcceptKeys, callbacks
 
     base = ShowBase()
     base.disableMouse()

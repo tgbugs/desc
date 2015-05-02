@@ -9,13 +9,13 @@ from threading import Thread
 
 from .util.ipython import embed
 
-from defaults import CONNECTION_PORT, DATA_PORT
-from request import FAKE_PREDICT, responseMaker
+from .defaults import CONNECTION_PORT, DATA_PORT
+from .request import FAKE_PREDICT, responseMaker
 
 #fix sys module reference
 sys.modules['core'] = sys.modules['panda3d.core']
 
-from protocols import connectionServerProtocol, dataServerProtocol
+from .protocols import connectionServerProtocol, dataServerProtocol
 from .util.process_fixed import ProcessPoolExecutor_fixed as ProcessPoolExecutor
 
 

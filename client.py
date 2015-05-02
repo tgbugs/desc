@@ -20,9 +20,9 @@ from .render_manager import renderManager
 from .selection import BoxSel
 from .util.util import ui_text, console, exit_cleanup, frame_rate, startup_data
 from .ui import CameraControl, Axis3d, Grid3d, GuiFrame
-from protocols import dataClientProtocol
+from .protocols import dataClientProtocol
 
-from keys import AcceptKeys, callbacks
+from .keys import AcceptKeys, callbacks
 
 # fix sys module reference
 sys.modules['core'] = sys.modules['panda3d.core']

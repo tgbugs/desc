@@ -283,19 +283,28 @@ class renderManager(DirectObject, HasKeybinds):
     # key callbacks
     @event_callback('r')
     def fake_request(self):
-        r = FAKE_REQUEST
-        self.submit_request(r)
+        if self.event_loop is not None:
+            r = FAKE_REQUEST
+            self.submit_request(r)
+        else:
+            print('event_loop not found, not submitting')
 
     @event_callback('p')
     def fake_predict(self):
-        r = FAKE_PREDICT
-        self.submit_request(r)
+        if self.event_loop is not None:
+            r = FAKE_PREDICT
+            self.submit_request(r)
+        else:
+            print('event_loop not found, not submitting')
 
     @event_callback('n')
     def rand_request(self):
-        for _ in range(10):
-            r = RAND_REQUEST()
-            self.submit_request(r)
+        if self.event_loop is not None:
+            for _ in range(10):
+                r = RAND_REQUEST()
+                self.submit_request(r)
+        else:
+            print('event_loop not found, not submitting')
 
     @event_callback('c')
     def embed(self):

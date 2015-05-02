@@ -96,14 +96,8 @@ def startup_data():
         }
     )
 
-def frame_rate():  # FIXME causes segfaults ;_;
-    return None
+def frame_rate():
     base.setFrameRateMeter(True)
-    fr = aspect2d.attachNewNode(base.frameRateMeter)
-    base.setFrameRateMeter(False)
-    fr.wrtReparentTo(base.a2dTopRight)
-    fr.setX(-1)
-
 
 def main():
     from direct.showbase.ShowBase import ShowBase

@@ -96,7 +96,8 @@ def startup_data():
         }
     )
 
-def frame_rate():
+def frame_rate():  # FIXME causes segfaults ;_;
+    return None
     base.setFrameRateMeter(True)
     fr = aspect2d.attachNewNode(base.frameRateMeter)
     base.setFrameRateMeter(False)

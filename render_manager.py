@@ -314,7 +314,7 @@ class renderManager(DirectObject, HasKeybinds):
     def print_cache(self):
         print([repr(k) for k in self.cache.keys()])
 
-    def load_points(self, list_of_tups):
+    def _load_points(self, list_of_tups):  # XXX deprecated
         """ Lets you load points in directly from a pickle or something.
             In theory we could ship this out as a request, but we have the points
             here locally, so we should just build the model locally, maybe we
@@ -326,9 +326,26 @@ class renderManager(DirectObject, HasKeybinds):
         self.render(geom, None, None) # HAH
         # TODO doubleclick to show/hide
 
-    def load_lines(self, array):  # FIXME better off making a switch to reduce improts?
+    def load_points(self, array, color=None):  # FIXME better off making a switch to reduce improts?
+        """ load points using the buffer interface """
+        if color is not None:
+            if len(color) != len(array):
+                raise TypeError('The length of the color array must be the same as the array. %s != %s' % (len(color), len(array)))
+        else:
+            ctup = np.random.randint(0,255,(1,4))
+            color = np.repeat(ctup, len(array), 0)
+        geom = makeSimpleGeomBuffer(array, color)  #TODO color
+        self.render(geom, None, None) # HAH
+
+    def load_lines(self, array, color=None):  # FIXME better off making a switch to reduce improts?
         """ load lines instead of points """
-        geom = makeSimpleGeomBuffer(array, np.random.randint(0,255,(1,4)), GeomLinestrips)  #TODO color
+        if color:
+            if len(color) != len(array):
+                raise TypeError('The length of the color array must be the same as the array. %s != %s' % (len(color), len(array)))
+        else:
+            ctup = np.random.randint(0,255,(1,4))
+            color = np.repeat(ctup, len(array), 0)
+        geom = makeSimpleGeomBuffer(array, color, GeomLinestrips)  #TODO color
         self.render(geom, None, None) # HAH
 
     def load_matrix(self, matrix):  #TODO

@@ -157,9 +157,9 @@ def makeSimpleGeom(array, ctup, geomType = GeomPoints, fix = False):
     else:
         return cloudNode  # decoding fails becuase ForkingPickler is called for reasons beyond comprehension
 
-def makeSimpleGeomBuffer(array, ctup, geomType=GeomPoints):
+def makeSimpleGeomBuffer(array, color, geomType=GeomPoints):
     """ massively faster than the nonbuffer version """
-    color = np.repeat(ctup, len(array), 0)
+
     full = [tuple(d) for d in np.hstack((array,color))]
 
     fmt = GeomVertexFormat.getV3c4()

@@ -135,12 +135,16 @@ class renderManager(DirectObject, HasKeybinds):
 
     def render(self, geom, coll, ui):
         if not geom.getNumParents():
-            self.geomRoot.attachNewNode(geom)
+            geomnode = self.geomRoot.attachNewNode(geom)
         else:
+            geomnode = None
             print('already being rendered', geom)
 
         if coll != None:
             coll.reparentTo(self.collRoot)
+
+        if geomnode:
+            return geomnode
 
         # FIXME this will just reparent all the l2 nodes if already attached
         #[n.reparentTo(self.collRoot) for n in coll]
@@ -326,7 +330,7 @@ class renderManager(DirectObject, HasKeybinds):
         self.render(geom, None, None) # HAH
         # TODO doubleclick to show/hide
 
-    def load_points(self, array, color=None):  # FIXME better off making a switch to reduce improts?
+    def load_points(self, array, color=None, center=False):  # FIXME better off making a switch to reduce improts?
         """ load points using the buffer interface """
         if color is not None:
             if len(color) != len(array):
@@ -335,7 +339,12 @@ class renderManager(DirectObject, HasKeybinds):
             ctup = np.random.randint(0,255,(1,4))
             color = np.repeat(ctup, len(array), 0)
         geom = makeSimpleGeomBuffer(array, color)  #TODO color
-        self.render(geom, None, None) # HAH
+        if center:
+            center = geom.getBounds().getApproxCenter()
+            geomnode = self.render(geom, None, None) # HAH
+            geomnode.setPos(-center)
+        else:
+            self.render(geom, None, None) # HAH
 
     def load_lines(self, array, color=None):  # FIXME better off making a switch to reduce improts?
         """ load lines instead of points """
@@ -363,4 +372,28 @@ def capture_datatuple(data_tuple):
     with open('edge_case_data_tuple.pickle','wb') as f:
         pickle.dump(data_tuple, f)
 
+def start():
+    """ start a local renderManager with all the stuff needed for viewing """
+    from direct.showbase.ShowBase import ShowBase
+    from .render_manager import renderManager
+    from .util.util import startup_data, exit_cleanup, ui_text, console, frame_rate
+    from .ui import CameraControl, Axis3d, Grid3d, GuiFrame
+    from .keys import AcceptKeys, callbacks  # FIXME this needs to be pulled in automatically if exit_cleanup is imported
+
+    base = ShowBase()
+    base.disableMouse()
+    base.setBackgroundColor(0,0,0)
+    startup_data()
+    frame_rate()
+    ec = exit_cleanup()
+    uit = ui_text()
+    con = console()
+    cc = CameraControl()
+    ax = Axis3d()
+    gd = Grid3d()
+
+    rendman = renderManager()
+    ak = AcceptKeys()
+
+    return rendman, base
 

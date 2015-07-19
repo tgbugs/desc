@@ -62,8 +62,8 @@ class exit_cleanup(HasKeybinds):
         if self.event_loop:
             self.event_loop.call_soon_threadsafe(self.event_loop.stop)
 
-        sys.exit()  # FIXME for some reason tasks seem to persist
         taskMgr.stop() 
+        sys.exit()  # FIXME for some reason tasks seem to persist
 
 class ui_text(DirectObject):
     def __init__(self):
@@ -85,7 +85,7 @@ class ui_text(DirectObject):
         if base.mouseWatcherNode.hasMouse():
             x,y = base.mouseWatcherNode.getMouse()
             ap2 = aspect2d.getRelativePoint(render2d, Point3(x, y, 0))
-            self.pos.setText('%1.3f, %1.3f'%(ap2.x,ap2.y))
+            self.pos.setText('%1.3f, %1.3f'%(ap2.getX(),ap2.getY()))
         return task.cont
 
 def startup_data():

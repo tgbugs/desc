@@ -7,7 +7,7 @@ from direct.gui.DirectGui import DirectButton, DirectFrame, DGG, OnscreenText
 from panda3d.core import NodePath, GeomNode
 from panda3d.core import Geom, GeomVertexWriter, GeomVertexFormat, GeomVertexData
 from panda3d.core import GeomTristrips, GeomLinestrips
-from panda3d.core import TextNode, LineSegs, Point3, Point2
+from panda3d.core import TextNode, LineSegs, Point3, Point2, LVecBase3f
 
 
 from .util.ipython import embed
@@ -232,7 +232,7 @@ class CameraControl(DirectObject, HasKeybinds):
 
 
         self.track = self.camera.attachNewNode('track')  #hack for pointing vector
-        self.track.setPos((0,50,0))
+        self.track.setPos(LVecBase3f(0,50,0))
         #nn = GeomNode('helper')
         #ng = makeCameraTarget()
         #nn.addGeom(targetGeom)
@@ -539,7 +539,7 @@ class GuiFrame(DirectObject, HasKeybinds):
         l,r,b,t = 0, self.width, 0, self.height
         self.frame_bg = DirectFrame(parent=self.frame,
                                     frameColor=self.bg_color,
-                                    pos=(self.x, 0, self.y),
+                                    pos=LVecBase3f(self.x, 0, self.y),
                                     frameSize=(l,r,b,t),
                                     state=DGG.NORMAL,  # FIXME framesize is >_<
                                     suppressMouse=1)
@@ -634,13 +634,13 @@ class GuiFrame(DirectObject, HasKeybinds):
             if k == 'title':
                 if self.frame_bg.isHidden():
                     x, y, z = self.frame_bg.getPos()
-                    self.title_button.setPos(x, y , z-self.text_h)
+                    self.title_button.setPos(LVecBase3f(x, y , z-self.text_h))
                 else:
-                    self.title_button.setPos(0, 0, -self.text_h)
+                    self.title_button.setPos(LVecBase3f(0, 0, -self.text_h))
             elif k == self.__first_item__:
-                b.setPos(0, 0, -(self.text_h * 2))
+                b.setPos(LVecBase3f(0, 0, -(self.text_h * 2)))
             else:
-                b.setPos(0, 0, -self.text_h)
+                b.setPos(LVecBase3f(0, 0, -self.text_h))
             b['frameSize'] = 0, self.width, 0, self.text_h
             b['text_scale'] = self.text_s, self.text_s
             b['text_pos'] = 0, self.text_h - self.TEXT_MAGIC_NUMBER * self.text_s
@@ -712,7 +712,7 @@ class GuiFrame(DirectObject, HasKeybinds):
             text_align=TextNode.ALeft,
         )
 
-        b.setPos(0, 0, -self.text_h)
+        b.setPos(LVecBase3f(0, 0, -self.text_h))
         b.setName('DirectButton-'+text)
         if not len(self.items):
             self.items['title'] = b
@@ -722,7 +722,7 @@ class GuiFrame(DirectObject, HasKeybinds):
             b.node().setPythonTag('id', id(b))
             b.setBin(*self.DRAW_ORDER['items'])
             if len(self.items) is 1:  # the first item that is not the title
-                b.setPos(0, 0, -(self.text_h * 2))
+                b.setPos(LVecBase3f(0, 0, -(self.text_h * 2)))
                 self.__first_item__ = id(b)
 
             self.items[id(b)] = b
@@ -761,10 +761,10 @@ class GuiFrame(DirectObject, HasKeybinds):
             c = out.getChild(0)
             c.reparentTo(p)
             if index == self.__first_item__:  # XXX is fails, ints from id !=
-                c.setPos(out.getPos())
+                c.setPos(LVecBase3f(out.getPos()))
                 id_ = c.getPythonTag('id')
                 self.__first_item__ = id_
-                out.setPos(0, 0, -self.text_h)
+                out.setPos(LVecBase3f(0, 0, -self.text_h))
         self.items.pop(index)
         parent = list(self.items.values())[-1]
         out['text'] = ' del blank'
@@ -845,9 +845,9 @@ class GuiFrame(DirectObject, HasKeybinds):
         """
         self.x = x
         self.y = y #- self.text_h  # FIXME is hard :/
-        self.frame_bg.setPos(x, 0, y)
+        self.frame_bg.setPos(LVecBase3f(x, 0, y))
         if self.frame_bg.isHidden():
-            self.title_button.setPos(x, 0, y - self.text_h)
+            self.title_button.setPos(LVecBase3f(x, 0, y - self.text_h))
 
 
     def __enter__(self):

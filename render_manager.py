@@ -17,7 +17,7 @@ from direct.showbase.DirectObject import DirectObject
 from panda3d.core import GeomNode, NodePath, PandaNode, GeomLinestrips
 
 from .trees import treeMe
-from .request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST
+from .request import FAKE_REQUEST, FAKE_PREDICT, RAND_REQUEST, responseMaker
 from .protocols import collPipeProtocol
 from .keys import event_callback, HasKeybinds
 
@@ -54,7 +54,10 @@ class renderManager(DirectObject, HasKeybinds):
         BAM_ADD_LIMIT = 99999
         COLL_ADD_LIMIT = 99999
     
-    def __init__(self, event_loop = None, ppe = None):
+    def __init__(self, event_loop = None, ppe = None, runlocal=True):
+        if runlocal:
+            self.respMaker = responseMaker(runlocal=True)
+        self.runlocal = runlocal
         self.event_loop = event_loop
         self.ppe = ppe
         self.cache = {}
@@ -106,7 +109,11 @@ class renderManager(DirectObject, HasKeybinds):
             print('local cache hit')
         except KeyError:  # ValueError if a future is in there, maybe just use False?
             self.cache[request_hash] = False
-            self.__send_request__(request)
+            if self.runlocal:  # shortcircuiting a whole bunch of crappy code
+                data_tuple = self.respMaker.make_response(request)
+                self.render_callback(request_hash, data_tuple)
+            else:
+                self.__send_request__(request)
             print('local cache miss')
         except TypeError:  # TypeError will catch incorrect lenght on the input
             print('the request has been sent, if it is still wanted when it gets here we will render it')
@@ -255,9 +262,15 @@ class renderManager(DirectObject, HasKeybinds):
     # make nodes (or spawn processes that make nodes)
     def make_nodes(self, request_hash, data_tuple):
         """ fire and forget """
-        geom = self.makeGeom(data_tuple[0])  #needs to return a node
-        geom.setName(repr(request_hash))
-        coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
+        if data_tuple[0]:
+            geom = self.makeGeom(data_tuple[0])  #needs to return a node
+            geom.setName(repr(request_hash))
+        else:
+            geom = None
+        if self.runlocal:
+            coll_tup = data_tuple[1]
+        else:
+            coll_tup = pickle.loads(data_tuple[1]) #positions uuids geomCollides
         coll = self.makeColl(request_hash, coll_tup)  #returns a list or a recv pipe
         ui = self.makeUI(coll_tup[:2])  #needs to return a node (or something)
         return geom, coll, ui
@@ -265,7 +278,10 @@ class renderManager(DirectObject, HasKeybinds):
     def makeGeom(self, geom_data):
         """ this is for Geoms or GeomNodes """
         node = GeomNode('')  # use attach new node...
-        out = node.decodeFromBamStream(geom_data)
+        if self.runlocal:
+            out = geom_data
+        else:
+            out = node.decodeFromBamStream(geom_data)
         return out
 
     def makeColl(self, request_hash, coll_tup):
@@ -378,6 +394,7 @@ def start():
     from .render_manager import renderManager
     from .util.util import startup_data, exit_cleanup, ui_text, console, frame_rate
     from .ui import CameraControl, Axis3d, Grid3d, GuiFrame
+    from .selection import BoxSel
     from .keys import AcceptKeys, callbacks  # FIXME this needs to be pulled in automatically if exit_cleanup is imported
 
     base = ShowBase()
@@ -392,8 +409,13 @@ def start():
     ax = Axis3d()
     gd = Grid3d()
 
+    frames = {
+        'data':GuiFrame('Data view','f')
+    }
+    frames['data'].toggle_vis()
+    bs = BoxSel(frames)
+
     rendman = renderManager()
     ak = AcceptKeys()
-
     return rendman, base
 

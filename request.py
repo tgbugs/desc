@@ -121,9 +121,9 @@ def processRequest(request):
 
 class responseMaker:  # TODO we probably move this to its own file?
     npoints = 9999
-    def __init__(self):
+    def __init__(self, runlocal=False):
         #setup at connection to whatever database we are going to use
-        pass
+        self.runlocal = runlocal
 
     def make_response(self, request):
         # TODO so encoding the collision nodes to a bam takes a REALLY LONG TIME
@@ -137,9 +137,16 @@ class responseMaker:  # TODO we probably move this to its own file?
         positions, ui_data = processRequest(request)
         uuids = np.array(['%s'%uuid4() for _ in range(n)])
         bounds = np.ones(n) * .5
-        example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
+        if self.runlocal:
+            example_coll = (positions, uuids, bounds)  # FIXME putting pickles last can bollox the STOP
+        else:
+            example_coll = pickle.dumps((positions, uuids, bounds))  # FIXME putting pickles last can bollox the STOP
         #print('making example bam')
-        example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
+        if self.runlocal:
+            example_bam = makeSimpleGeom(positions, np.random.rand(4))
+        else:
+            example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
+
         #print('done making bam',example_bam)  # XXX if you want this use repr() ffs
 
         data_tuple = (example_bam, example_coll, ui_data)

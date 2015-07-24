@@ -624,7 +624,7 @@ class BoxSel(HasSelectables,DirectObject):
         textNode.node().setEffect(BillboardEffect.makePointEye())
 
 
-def makePoint(point=[0,0,0]):
+def makePoint(point=(0,0,0)):
     clr4 = [1,1,1,1]
     fmt = GeomVertexFormat.getV3c4() #3 component vertex, w/ 4 comp color
     vertexData = GeomVertexData('points', fmt, Geom.UHStatic)

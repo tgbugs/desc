@@ -61,8 +61,8 @@ def main():
 
     #asyncio and network setup
     clientLoop = get_event_loop()
-    ppe = ProcessPoolExecutor(4)  # not sure if 4 is better...
-    #ppe = False
+    #ppe = ProcessPoolExecutor(4)  # not sure if 4 is better...
+    ppe = False  # serilization is currently broken so we can't use pipes for this
 
     #clientLoop.set_default_executor(ppe)
 

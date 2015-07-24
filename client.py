@@ -39,6 +39,7 @@ def main():
     PStatClient.connect() #run pstats in console
     loadPrcFileData('','view-frustum-cull 0')
     base = ShowBase()
+    print('welp')
 
     base.setBackgroundColor(0,0,0)
     base.disableMouse()
@@ -96,7 +97,9 @@ def main():
     con = console(locals(), True)
     ak = AcceptKeys()  # this needs to go last after all the classes init
     base.run()  # this MUST be called last because we use sys.exit() to terminate
-    assert False, 'Note how this never gets printed due to sys.exit()'
+    print('I AM THE GREATEST')
+    # FIXME looks like sys.exit now returns us back to this python program... FUN :D
+    #assert False, 'Note how this never gets printed due to sys.exit()'
 
 
 if __name__ == "__main__":

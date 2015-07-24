@@ -32,9 +32,13 @@ class no_repr(tuple):
 def make_response(pipe, request, respMaker):
     """ returns the request hash and a compressed bam stream """
     rh =  request.hash_
+    print('DATA TUPLE!?')
     data_tuple = respMaker.make_response(request)  # LOL wow is there redundancy in these bams O_O zlib to the rescue
+    print('BUILDING THE REPONSE')
     data_stream = ResponseByteStream.makeResponseStream(rh, data_tuple)
+    print('SENDING STUFF OVER THE PIPE')
     pipe.send_bytes(data_stream)
+    print('SEND BYTES DONE')
     pipe.close()
     del pipe
 
@@ -304,7 +308,7 @@ class dataServerProtocol(asyncio.Protocol):
 
     def __new__(cls, event_loop, respMaker, rcm, tm, ppe):
         cls.event_loop = event_loop
-        cls.respMaker = respMaker
+        cls.respMaker = respMaker  # FIXME HOLY CRAP THIS PATTERN IS SO BAD FOR MAINT
         cls.rcm = rcm
         cls.tm = tm
         cls.ppe = ppe  # process pool executor
@@ -385,8 +389,8 @@ class dataServerProtocol(asyncio.Protocol):
         pipes = []
         for_pred = []
         for request in requests:  # FIXME this blocks... not sure it matters since we are waiting on the incoming blocks anyway?
-            print(pred, request.hash_, self.requests_sent)
             if request is not None and request.hash_ not in self.requests_sent:  # FIXME and not rerequested
+                print(pred, request.hash_, self.requests_sent)
                 self.requests_sent.add(request.hash_)
                 data_stream = self.rcm.get_cache(request.hash_)  # FIXME this is STUID to put here >_<
                 if data_stream is None:

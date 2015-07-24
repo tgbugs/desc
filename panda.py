@@ -97,7 +97,7 @@ in order to actually get panda3d to find the bloody Python.h and libpython3.4 we
     edit the config to fix model-path man!
 
 #to clean previous install
-rm -r ~/.local/lib64/python3.x/site-packages/panda3d
+rm -r ~/.local/lib64/python3.4/site-packages/panda3d
 rm -r ~/.local/lib64/panda3d
 rm -r ~/.local/share/panda3d
 
@@ -106,7 +106,8 @@ python makepanda/makepanda.py --everything --threads 8 --optimize 3 --verbose --
 python makepanda/installpanda.py --destdir=/home/tgillesp/.local/ --prefix=/
 
 #then you need to
-mv ~/.local/usr/lib64/python3.3/site-packages/panda3d ~/.local/lib64/python3.3/site-packages/panda3d 
+mv ~/.local/usr/lib64/python3.4/site-packages/panda3d ~/.local/lib64/python3.4/site-packages/panda3d 
+mv ~/.local/lib/panda3d ~/.local/lib64
 
 The right way to do this is as follows:
 1) run makepanda/makepanda.py with the version of python you want panda3d to use

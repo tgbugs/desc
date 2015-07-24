@@ -145,7 +145,7 @@ class responseMaker:  # TODO we probably move this to its own file?
         if self.runlocal:
             example_bam = makeSimpleGeom(positions, np.random.rand(4))
         else:
-            example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time
+            example_bam = makeSimpleGeom(positions, np.random.rand(4)).__reduce__()[1][-1]  # the ONE way we can get this to work atm; GeomNode iirc; FIXME make sure -1 works every time # FIXME FIXME FIXME __reduce__ causes an infinite hang
 
         #print('done making bam',example_bam)  # XXX if you want this use repr() ffs
 

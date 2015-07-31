@@ -657,6 +657,7 @@ def makePoint(point=(0,0,0)):
 def main():
     import pickle
     from .util.util import ui_text, console, exit_cleanup, frame_rate, startup_data
+    from .keys import AcceptKeys
     from .render_manager import renderManager
     from .ui import CameraControl, Axis3d, Grid3d
     base = ShowBase()
@@ -672,9 +673,9 @@ def main():
 
     r = renderManager()
 
-    from test_objects import makeSimpleGeom
+    from .test_objects import makeSimpleGeom
     import numpy as np
-    from trees import treeMe
+    from .trees import treeMe
     from uuid import uuid4
     from panda3d.core import GeomLinestrips
     n = 1000
@@ -701,6 +702,7 @@ def main():
 
     ut = ui_text()
     dt = BoxSel(visualize = BoxSel.VIS_ALL)
+    ac = AcceptKeys()
     base.run()
 
 if __name__ == '__main__':

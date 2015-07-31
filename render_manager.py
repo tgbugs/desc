@@ -361,6 +361,7 @@ class renderManager(DirectObject, HasKeybinds):
             geomnode.setPos(-center)
         else:
             self.render(geom, None, None) # HAH
+        return geomnode
 
     def load_lines(self, array, color=None):  # FIXME better off making a switch to reduce improts?
         """ load lines instead of points """
@@ -409,13 +410,13 @@ def start():
     ax = Axis3d()
     gd = Grid3d()
 
+    rendman = renderManager()
     frames = {
         'data':GuiFrame('Data view','f')
     }
     frames['data'].toggle_vis()
-    bs = BoxSel(frames)
+    bs = BoxSel(frames)  # FIXME must be loaded AFTER render manager or collRoot won't exist
 
-    rendman = renderManager()
     ak = AcceptKeys()
     return rendman, base
 

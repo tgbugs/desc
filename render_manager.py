@@ -360,7 +360,7 @@ class renderManager(DirectObject, HasKeybinds):
             geomnode = self.render(geom, None, None) # HAH
             geomnode.setPos(-center)
         else:
-            self.render(geom, None, None) # HAH
+            geomnode = self.render(geom, None, None) # HAH
         return geomnode
 
     def load_lines(self, array, color=None):  # FIXME better off making a switch to reduce improts?

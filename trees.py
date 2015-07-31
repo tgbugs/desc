@@ -135,7 +135,12 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
         #l2Node = parent.attachNewNode(CollisionNode('%s.%s. %s'%(request_hash, center, int(parent.getName()[-2:]) + 1)))
         l2Node = parent.attachNewNode(CollisionNode(' %s'%(int(parent.getName()[-2:]) + 1)))
 
-    bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
+    #base_mask = np.zeros_like(uuids, dtype=np.bool_)  # FIXME INSANE INTERACTION WITH SOMETHING panda related
+    bitmasks = []
+    for _ in range(8):
+        bitmasks.append(np.array([False] * len(uuids)))  # must pass by value otherwise we have 8 of the same thing
+
+    #bitmasks =  [ np.zeros_like(uuids,dtype=np.bool_) for _ in range(8) ]  # ICK there must be a better way of creating bitmasks
     partition = positions > center
     
     #the 8 conbinatorial cases

@@ -9,7 +9,7 @@
 
     To produce the the bug run this script and press r, g, b, m, or n
     to call setRenderModeThickness on the red, green, blue, or magenta points
-    or on geomRoot
+    or on geomRoot. Compare the print statements in the terminal to what you see.
     
     When running with only 2 states (1, 5):
         Fun things to press first:
@@ -117,6 +117,7 @@ class PointsTest(DirectObject):
 
 def main():
     base = ShowBase()
+    base.disableMouse()
     base.setBackgroundColor(0,0,0)
 
 
@@ -133,6 +134,7 @@ def main():
     m.reparentTo(r)
 
     render.setRenderModeThickness(1)
+    print([n for n in render.findAllMatches('*')])
 
     base.run()
 

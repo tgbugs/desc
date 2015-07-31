@@ -422,7 +422,7 @@ class BoxSel(HasSelectables,DirectObject):
             l2all = []
 
         # things we don't need to do every bloody time
-        utilityNode = render.attachNewNode('utilityNode')
+        #utilityNode = render.attachNewNode('utilityNode')
         track = camera.find('track')
         track_pos = render.getRelativePoint(track, track.getPos())
         cam_pos = render.getRelativePoint(camera, camera.getPos())
@@ -441,9 +441,9 @@ class BoxSel(HasSelectables,DirectObject):
                 point2projection = Point3(p2[0],0,p2[1])
 
                 r3 = node.getBounds().getRadius()  # this seems to be correct despite node.show() looking wrong in some cases
-                utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
+                self.utilityNode.setPos(point3d)  # FIXME I'm sure this is slower than just subtract and norm... but who knows
                 # this also works correctly with no apparent issues
-                d1 = camera.getDistance(utilityNode)  # FIXME make sure we get the correct camera
+                d1 = camera.getDistance(self.utilityNode)  # FIXME make sure we get the correct camera
                 if not d1:
                     d1 = 1E-9
 

@@ -30,6 +30,7 @@ from .defaults import *
 from .util.util import genLabelText
 from .test_objects import makeSimpleGeom
 from .keys import event_callback, HasKeybinds
+from .prof import profile_me
 
 import inspect
 
@@ -186,8 +187,12 @@ class BoxSel(HasSelectables,DirectObject):
         self.projRoot = render2d.attachNewNode('projRoot')
         self.selRoot = render.attachNewNode('selRoot')
         self.collRoot = render.find('collideRoot')
+        if not self.collRoot:
+            raise ValueError('No collideRoot found, you need to initilizate the render manager first.')
 
         self.utilityNode = render.attachNewNode('utilityNode')
+
+        self.bitmask_click = BitMask32.bit(BITMASK_COLL_CLICK)
 
         self.frames = frames
         if self.frames is None:
@@ -353,7 +358,8 @@ class BoxSel(HasSelectables,DirectObject):
         #embed()
         return task.cont
 
-    def getEnclosedNodes(self):
+    @profile_me
+    def getEnclosedNodes(self):  # FIXME, get a list of every object behind a pixel...
         cfx = 1
         cfz = base.camLens.getAspectRatio()
         cx, _, cz = self.__baseBox__.getPos()
@@ -386,10 +392,11 @@ class BoxSel(HasSelectables,DirectObject):
                 points = []
 
 
-        def projectNode(node):
+        p2 = Point2()  # allocating this once saves us about 110ms
+        white = (1,1,1,1)
+        def projectNode(node):  # FIXME this is where some serious time cost exists
             point3d = node.getBounds().getApproxCenter()
             p3 = base.cam.getRelativePoint(render, point3d)
-            p2 = Point2()
 
             if not base.camLens.project(p3,p2):
                 return False
@@ -400,6 +407,9 @@ class BoxSel(HasSelectables,DirectObject):
             if lX <= pX and pX <= uX:
                 if lZ <= pZ and pZ <= uZ: 
                     self.processTarget(node)
+                    # TODO it would be faster to change the color of all the vertexes of
+                    # the selected nodes when we're working with a single points geom
+                    # but that requires a function to do the mapping from nodes -> verts
                     # TODO we need a way to tell the ObjectRoot collNode a child actually got a hit
                     if self.visualize:
                         points3.append(point3d)
@@ -418,7 +428,7 @@ class BoxSel(HasSelectables,DirectObject):
         cam_pos = render.getRelativePoint(camera, camera.getPos())
         camVec = track_pos - cam_pos
         radius_correction = 2  #no idea if this is correct...
-        p2 = Point2()
+        #p2 = Point2()  # already allocated above
         def projectL2(node, contained = False):  # FIXME so it turns out that if our aspect ratio is perfectly square everything works
             """ projec only the centers of l2 spehres, figure out how to get their radii """
 
@@ -468,11 +478,12 @@ class BoxSel(HasSelectables,DirectObject):
             hit = None
             if test:
                 for c in node.getChildren():
-                    if c.getNumChildren():
-                        if projectL2(c, contained):  # next level and check hit
+                    #if c.getNumChildren():
+                    if c.getCollideMask() == self.bitmask_click:
+                        if projectNode(c):
                             hit = True
                     else:
-                        if projectNode(c):
+                        if projectL2(c, contained):  # next level and check hit
                             hit = True
 
 

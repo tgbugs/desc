@@ -72,7 +72,7 @@ def makePoint(x, y, z, color_tup, geomType=GeomPoints):
 
 class PointsTest(DirectObject):
     def __init__(self, num_states):
-        self.accept("escape", sys.exit)
+        self.accept("escape", self.exit)
         self.accept("r", self.test_task, extraArgs=['red'])
         self.accept("g", self.test_task, extraArgs=['green'])
         self.accept("b", self.test_task, extraArgs=['blue'])
@@ -86,6 +86,10 @@ class PointsTest(DirectObject):
                           'blue':0,
                           'magenta':0,
                           'geomRoot':0}
+
+    def exit(self):
+        taskMgr.stop()
+        sys.exit()
 
     def load_point(self, x, y, z, color, name=None):
         geom = makePoint(x, y, z, color)

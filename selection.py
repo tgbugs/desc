@@ -177,8 +177,9 @@ class BoxSel(HasSelectables,DirectObject):
     #visualization levels
     VIS_OFF = 0
     VIS_POINTS = 1
-    VIS_ALL = 2
-    VIS_DEBUG = 3
+    VIS_CENTERS = 2
+    VIS_ALL = 3
+    VIS_DEBUG = 4
     def __init__(self, frames = None, visualize = VIS_POINTS):
         super().__init__()
         self.visualize = visualize
@@ -243,11 +244,15 @@ class BoxSel(HasSelectables,DirectObject):
                     do_hide(child)
 
 
-        self.visualize = (self.visualize + 1) % 4  # rotate through 4 levels
+        self.visualize = (self.visualize + 1) % 5  # rotate through 5 levels
         if self.visualize == self.VIS_DEBUG:
-            do_show(self.collRoot)
+            if self.collRoot.getNumDescendants() < 100000:
+                #self.collRoot.showAllDescendants()
+                do_show(self.collRoot)
         elif not self.visualize:
-            do_hide(self.collRoot)
+            if self.collRoot.getNumDescendants() < 100000:
+                #self.collRoot.hideAllDescendants()
+                do_hide(self.collRoot)
 
     def clearSelection(self):  # TODO enable saving selections to registers etc
         #taskMgr.remove('show_task')
@@ -358,7 +363,7 @@ class BoxSel(HasSelectables,DirectObject):
         #embed()
         return task.cont
 
-    @profile_me
+    #@profile_me
     def getEnclosedNodes(self):  # FIXME, get a list of every object behind a pixel...
         cfx = 1
         cfz = base.camLens.getAspectRatio()
@@ -388,7 +393,7 @@ class BoxSel(HasSelectables,DirectObject):
 
         if self.visualize:
             points3 = []
-            if self.visualize >= self.VIS_ALL:
+            if self.visualize >= self.VIS_CENTERS:
                 points = []
 
 
@@ -413,11 +418,11 @@ class BoxSel(HasSelectables,DirectObject):
                     # TODO we need a way to tell the ObjectRoot collNode a child actually got a hit
                     if self.visualize:
                         points3.append(point3d)
-                        if self.visualize >= self.VIS_ALL:
+                        if self.visualize >= self.VIS_CENTERS:
                             points.append([pX, 0, pZ])
                     return True
 
-        if self.visualize >= self.VIS_ALL:
+        if self.visualize >= self.VIS_CENTERS:
             l2points = []
             l2all = []
 
@@ -463,7 +468,7 @@ class BoxSel(HasSelectables,DirectObject):
                     contained = True
 
 
-                if self.visualize >= self.VIS_ALL:
+                if self.visualize >= self.VIS_CENTERS:
                     # centers of all l2 points
                     if test:
                         l2points.append(point3d)
@@ -472,8 +477,9 @@ class BoxSel(HasSelectables,DirectObject):
                         l2all.append(point3d)
                         color = [0,0,1,1]
                     # visualize the projected radius of l2 collision spheres
-                    radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
-                    self.projRoot.attachNewNode(makeSimpleGeom(radU,color,GeomLinestrips))
+                    if self.visualize >= self.VIS_ALL:
+                        radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+                        self.projRoot.attachNewNode(makeSimpleGeom(radU,color,GeomLinestrips))
 
             hit = None
             if test:
@@ -489,11 +495,12 @@ class BoxSel(HasSelectables,DirectObject):
 
                 #if not contained:
                 if 0:
-                    if self.visualize >= self.VIS_ALL:
+                    if self.visualize >= self.VIS_CENTERS:
                         l2points.append(point3d)
-                        radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
-                        n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
-                        n.setBin('unsorted',0)
+                        if self.visualize >= self.VIS_ALL:
+                            radU = [point2projection+(Point3(cos(theta)*projNodeRadius, 0, sin(theta)*projNodeRadius*cfz)) for theta in arange(0,pi*2.126,pi/32)]
+                            n = self.projRoot.attachNewNode(makeSimpleGeom(radU,[0,1,0,1],GeomLinestrips))
+                            n.setBin('unsorted',0)
             return hit
 
         def tests(d1, r3, radius, p2p, lX, uX, lZ, uZ, cfz):
@@ -585,7 +592,7 @@ class BoxSel(HasSelectables,DirectObject):
             p3n = self.selRoot.attachNewNode(pts3)
             p3n.setRenderModeThickness(3)  # render order >_<
 
-            if self.visualize >= self.VIS_ALL:
+            if self.visualize >= self.VIS_CENTERS:
                 l2s = makeSimpleGeom(l2points,[0,1,0,1])
                 l2n = self.selRoot.attachNewNode(l2s)
                 l2n.setRenderModeThickness(8)
@@ -699,6 +706,13 @@ def main():
         #data_tuple = pickle.load(f)
     #r.cache['edgecase'] = False
     #r.set_nodes('edgecase',data_tuple)
+
+    sgn = GeomNode('srct')
+    sgn.addGeom(makeSelectRect())
+    sn = render.attachNewNode(sgn)
+    sn.setSx(10)
+    sn.setSy(10)
+    sn.setColor(.5,.5,.5,.5)
 
     ut = ui_text()
     dt = BoxSel(visualize = BoxSel.VIS_ALL)

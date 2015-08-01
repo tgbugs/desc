@@ -125,7 +125,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
     if center == None:  # must use equality due to id changing across interpreters
         center = np.mean(positions, axis=0)
         norms = np.linalg.norm(positions - center, axis = 1)
-        radius = np.max(norms) * .5
+        radius = np.max(norms) * .75  # align points to center of oct node
         side = ((4/3) * radius**2) ** .5
         if parent == None:
             l2Node = NodePath(CollisionNode('ObjectRoot for %s 0'%request_hash))  # TODO naming for search
@@ -158,7 +158,9 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
 
     #This method can also greatly accelerate the neighbor traversal because it reduces the total number of nodes needed
     if num_points < TREE_MAX_POINTS:
-        leaf_max = np.max([len(tup[1]) for tup in next_leaves])
+        leaf_max = np.max([len(leaf[1]) for leaf in next_leaves])
+        max_leaf = next_leaves[np.where([len(leaf[1]) for leaf in next_leaves] == leaf_max)[0][:1]]
+        ml_center = np.mean(max_leaf[1],axis=0)
         if num_points < 4:
             c = np.mean(positions, axis=0)
             dists = []
@@ -171,7 +173,7 @@ def treeMe(parent, positions, uuids, geomCollide, center = None, side = None, ra
             #l2Node.setName('leaf %s.%s. %s'%(request_hash, c, int(parent.getName()[-2:]) + 1))
             l2Node.node().addSolid(CollisionSphere(c[0],c[1],c[2],r))
             l2Node.node().setIntoCollideMask(BitMask32.bit(BITMASK_COLL_MOUSE))
-        elif leaf_max > num_points * .90:  # if any leaf has > half the points
+        elif leaf_max > num_points * .90 and np.linalg.norm(ml_center - center) < radius * 2:  # FIXME something is VERY wrong, we should NEVER be generating cases where there are leaves outside the radius!!
             for leaf in next_leaves:
                 treeMe(*leaf)
             #[treeMe(*leaf) for leaf in next_leaves]

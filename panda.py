@@ -109,6 +109,9 @@ python makepanda/installpanda.py --destdir=/home/tgillesp/.local/ --prefix=/
 mv ~/.local/usr/lib64/python3.4/site-packages/panda3d ~/.local/lib64/python3.4/site-packages/panda3d 
 mv ~/.local/lib/panda3d ~/.local/lib64
 
+#first time only edit panda3d.pth to match and
+mv ~/.local/usr/lib64/python3.4/site-packages/panda3d.pth ~/.local/lib64/python3.4/site-packages/
+
 The right way to do this is as follows:
 1) run makepanda/makepanda.py with the version of python you want panda3d to use
 2) run python makepanda/installpanda.py --destdir=/home/user/.local/ --prefix=/

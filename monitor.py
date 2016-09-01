@@ -18,6 +18,8 @@ def lin():
     #return the highest ppmm found
     for line in size_lines:
         fields = line.rstrip().split(' ')
+        if fields[xrandr_indexes[0]] == 'primary':
+            fields.pop(xrandr_indexes[0])
         res, width, height = [fields[i] for i in xrandr_indexes]
         x, y = [int(r) for r in res.split('+')[0].split('x')]
         w, h = [int(v.rstrip('mm')) for v in (width, height)]

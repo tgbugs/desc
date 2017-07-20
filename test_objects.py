@@ -802,8 +802,8 @@ class dond(DirectObject, HasKeybinds):
         #n_tokens = 99999  # 100k not so bad...
         n_tokens = 9999
         n_props = 6
-        data1 = np.random.uniform(-100,100,(n_props/2,n_tokens))
-        data2 = np.random.normal(0,100,(n_props/2,n_tokens))
+        data1 = np.random.uniform(-100., 100., (int(n_props/2), n_tokens))
+        data2 = np.random.normal(0., 100., (int(n_props/2), n_tokens))
         data = np.vstack([data2, data1])
         self.names = ['%s'%uuid4() for _ in range(n_props)]
         self.no = nObject(data, self.names)
@@ -905,8 +905,8 @@ def main():
     frames = {'data':GuiFrame('data','f')}
     bs = BoxSel(frames) # FIXME must be started after renderManager >_<
 
-    #dnd = dond()
-    d4d = do4d()
+    dnd = dond()
+    #d4d = do4d()
 
     ec = exit_cleanup()
     ac = AcceptKeys()

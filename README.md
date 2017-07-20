@@ -16,7 +16,7 @@ environment and a fix to ProcessPoolExecutor that prevents KeyboardInterrupt fro
 
 # requirements
  1. Linux, tested on Debian and Gentoo. (may work on Windows)
- 2. python3.4
+ 2. >= python3.4
  3. panda3d compiled for python3 (documentation is in panda.py, but that may be out of date).
  	Alternately, run [install.sh](install.sh).
 

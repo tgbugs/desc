@@ -110,6 +110,7 @@ mv ~/.local/usr/lib64/python3.4/site-packages/panda3d ~/.local/lib64/python3.4/s
 mv ~/.local/lib/panda3d ~/.local/lib64
 
 #first time only edit panda3d.pth to match and
+#eg /home/${USER}/.local/share/panda3d and /home/${USER}/.local/lib64/panda3d
 mv ~/.local/usr/lib64/python3.4/site-packages/panda3d.pth ~/.local/lib64/python3.4/site-packages/
 
 The right way to do this is as follows:

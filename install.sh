@@ -1,4 +1,4 @@
-PYTHON=python3.4
+PYTHON=python3.5
 TEMP_DIR=/tmp/panda_magic/
 INSTALL_DIR=/home/tom/.local/
 mkdir $TEMP_DIR
@@ -10,7 +10,7 @@ mv usr/lib64 .  # WARNING only works for an empty directory
 rmdir usr
 mv lib/panda3d lib64/ 
 rmdir lib
-sed -i "s|^/|${INSTALL_DIR}|" lib64/python3.4/site-packages/panda3d.pth
+sed -i "s|^/|${INSTALL_DIR}|" lib64/${PYTHON}/site-packages/panda3d.pth
 # install something in env.d for LD_LIBRARY_PATH=${INSTALL_PATH}/lib64/panda3d ??
 
 cp -a . $INSTALL_DIR

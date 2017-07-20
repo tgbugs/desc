@@ -6,6 +6,7 @@ from panda3d.core import Texture, TextureStage, TexGenAttrib
 from panda3d.core import PNMImage
 from panda3d.core import GeomNode
 from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
+from panda3d.core import Vec3, Vec4
 
 from panda3d.core import Geom, GeomVertexWriter, GeomVertexFormat, GeomVertexData
 #from panda3d.core import loader
@@ -98,7 +99,7 @@ def main():
     startup_data()
     frame_rate()
     uit = ui_text()
-    con = console()
+    con = console({})
     ec = exit_cleanup()
     cc = CameraControl()
     ax = Axis3d()
@@ -142,14 +143,25 @@ def main():
     #nodePath.setTexGen(TextureStage.getDefault(), 0, 0, 0)  #bug?
 
     #"""
-    myShader = Shader.load(Shader.SL_GLSL, "my_vert.glsl", "my_frag.glsl")#, "my_geom.glsl")
+    #myShader = Shader.load(Shader.SL_GLSL, "my_vert.glsl", "my_frag.glsl")#, "my_geom.glsl")
 
     # wow, this actually... turns the box black or something, probably shound't attach the texture to the nodepath if we do it this way
-    nodePath.set_shader(myShader)
     #nodePath.set_shader_input("my_param",(1,1,1))
-    nodePath.set_shader_input("tex",tex2)
-    nodePath.set_shader_input("volume_tex",tex)
-    nodePath.set_shader_input("stepsize",.5)
+    #nodePath.set_shader_input('color.bgra', 10)  # bad
+    #myvec = Vec4(.2, 1.0, 1.0, .4)
+    #embed()
+
+    myShader = Shader.load(Shader.SL_GLSL, "simple_vert.glsl", "simple_frag.glsl")
+    nodePath.set_shader(myShader)
+    nodePath.set_shader_input('camera', camera)
+    con.locals_['myShader'] = myShader
+    con.locals_['nodePath'] = nodePath
+
+    #nodePath.set_shader_input('textcoord', (1.0, .5))
+
+    #nodePath.set_shader_input("tex", tex2)
+    #nodePath.set_shader_input("volume_tex", tex)
+    #nodePath.set_shader_input("stepsize", .5)
     #"""
 
     base.run()

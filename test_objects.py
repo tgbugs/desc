@@ -579,13 +579,17 @@ def make4d(array4, ctup, geomType = GeomPoints):
     #out = []
     a = pool.map(WRAP_PROC, zipped)
     #out = [i[0](i[1][0],i[1][1]) for i in a]  # for whatever reason this thinks pickle...
-    out = [i for i in a]
-    out = [nt.decodeFromBamStream(data) for f,(nt,data) in out]
+    wat = [i for i in a]
+    out = []
+    #for f,(nt,data) in wat:
+        #print(nt)
+        #print(data)
+        #out.append(nt.decodeFromBamStream(str(data)))  # broken in newer versions
     
     #embed()
     
-    """
-    for array3, ctup__ in zip(array4,ctup):  # FIXME ppe?
+    #"""
+    for array3, ctup__ in zip(array4, ctup):  # FIXME ppe?
     #for array3 in array4:
         g = makeSimpleGeom(array3, ctup__, geomType)  # FIXME fmt slow
         out.append(g)

@@ -4,7 +4,6 @@
 """
 import cProfile, pstats, io
 from functools import wraps, partial
-from .util.ipython import embed
 
 class Prof:
     def __init__(self,sortby = 'cumulative'):

@@ -15,9 +15,8 @@ UITEXT_UUID = 3
 
 #Transport stuff, ports for network comm
 
-CONNECTION_PORT = 55555  # GEROOF MAH PORT
-#CONNECTION_PORT = 55557  # wat
-DATA_PORT = 55556
+CONNECTION_PORT = 55565  # for racket-mode I will move my ports
+DATA_PORT = 55566
 
 #TODO local ports!
 
